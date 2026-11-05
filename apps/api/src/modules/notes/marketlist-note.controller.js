@@ -23,3 +23,4 @@ class MarketlistNoteController {
 }
 
 module.exports = new MarketlistNoteController();
+

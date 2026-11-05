@@ -23,3 +23,4 @@ class KpiController {
 }
 
 module.exports = new KpiController();
+

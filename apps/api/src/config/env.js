@@ -9,3 +9,4 @@ module.exports = {
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET || 'purchasing_refresh_secret_key_2026',
   REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
 };
+

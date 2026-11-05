@@ -30,3 +30,4 @@ const MarketlistApprovalSchema = new mongoose.Schema({
 MarketlistApprovalSchema.index({ marketlist_id: 1, created_at: -1 });
 
 module.exports = mongoose.model('MarketlistApproval', MarketlistApprovalSchema);
+

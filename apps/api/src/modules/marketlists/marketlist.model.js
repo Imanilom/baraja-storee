@@ -65,3 +65,4 @@ MarketlistSchema.index({ status: 1, date: -1 });
 MarketlistSchema.index({ assigned_to: 1, status: 1 });
 
 module.exports = mongoose.model('Marketlist', MarketlistSchema);
+

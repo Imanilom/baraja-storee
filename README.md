@@ -117,3 +117,4 @@ npm run test:api
 - [x] Invoice tidak berubah ketika master harga atau Marketlist berubah (`immutable snapshot`).
 - [x] Marketlist tidak dapat ditutup jika masih ada penerimaan yang belum selesai.
 - [x] Sinkronisasi offline tidak membuat penerimaan ganda (`client_request_id` idempotency).
+

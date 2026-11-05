@@ -36,3 +36,4 @@ module.exports = {
   generateInvoiceNumber,
   generatePurchaseNumber
 };
+

@@ -7,3 +7,4 @@ router.use(authenticate);
 router.get('/', dashboardController.getMetrics);
 
 module.exports = router;
+

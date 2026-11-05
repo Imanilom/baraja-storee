@@ -108,3 +108,4 @@ class InvoicePdfService {
 }
 
 module.exports = new InvoicePdfService();
+

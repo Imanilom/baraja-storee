@@ -72,3 +72,4 @@ module.exports = {
   PURCHASE_STATUS,
   PRICE_SOURCES
 };
+

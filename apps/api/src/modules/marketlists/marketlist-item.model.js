@@ -49,3 +49,4 @@ MarketlistItemSchema.index({ marketlist_id: 1, product_id: 1 });
 MarketlistItemSchema.index({ marketlist_id: 1, supplier_id: 1 });
 
 module.exports = mongoose.model('MarketlistItem', MarketlistItemSchema);
+

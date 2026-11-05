@@ -93,3 +93,4 @@ InvoiceSchema.index({ marketlist_id: 1, supplier_id: 1, marketlist_version: 1 },
 InvoiceSchema.index({ status: 1, invoice_date: -1 });
 
 module.exports = mongoose.model('Invoice', InvoiceSchema);
+

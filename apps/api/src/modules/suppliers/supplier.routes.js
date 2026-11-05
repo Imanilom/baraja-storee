@@ -15,3 +15,4 @@ router.post('/', authorize(ROLES.ADMIN, ROLES.PURCHASING), validate(supplierSche
 router.patch('/:id', authorize(ROLES.ADMIN), supplierController.update);
 
 module.exports = router;
+

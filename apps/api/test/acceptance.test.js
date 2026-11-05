@@ -25,7 +25,11 @@ let adminUser, purchasingUser, receiverUser;
 let loc, unitKg, cat1, productBeras, productAyam, supplierA, supplierB;
 
 async function setup() {
-  mongod = await MongoMemoryServer.create();
+  mongod = await MongoMemoryServer.create({
+    binary: {
+      version: '7.0.11'
+    }
+  });
   const uri = mongod.getUri();
   await mongoose.connect(uri);
 

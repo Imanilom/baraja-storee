@@ -66,11 +66,11 @@ class KpiService {
         metrics,
         admin_evaluation: adminUserId
           ? {
-              score: adminEval.score,
-              comment: adminEval.comment,
-              evaluated_by: adminUserId,
-              evaluated_at: new Date()
-            }
+            score: adminEval.score,
+            comment: adminEval.comment,
+            evaluated_by: adminUserId,
+            evaluated_at: new Date()
+          }
           : undefined,
         final_score,
         calculated_at: new Date()
@@ -109,3 +109,4 @@ class KpiService {
 }
 
 module.exports = new KpiService();
+

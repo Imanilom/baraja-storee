@@ -52,3 +52,4 @@ class MarketlistNoteService {
 }
 
 module.exports = new MarketlistNoteService();
+

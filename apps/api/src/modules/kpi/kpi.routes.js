@@ -11,3 +11,4 @@ router.get('/summary', authorize(ROLES.ADMIN, ROLES.MANAGEMENT), kpiController.g
 router.post('/evaluate/:marketlistId', authorize(ROLES.ADMIN), kpiController.calculateForMarketlist);
 
 module.exports = router;
+

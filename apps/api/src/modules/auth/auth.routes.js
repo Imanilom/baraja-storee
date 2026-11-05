@@ -10,3 +10,4 @@ router.post('/refresh-token', authController.refreshToken);
 router.get('/me', authenticate, authController.getProfile);
 
 module.exports = router;
+

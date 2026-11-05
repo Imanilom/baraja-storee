@@ -42,3 +42,4 @@ const KpiRecordSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('KpiRecord', KpiRecordSchema);
+

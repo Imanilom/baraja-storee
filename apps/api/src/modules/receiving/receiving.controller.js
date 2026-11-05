@@ -34,3 +34,4 @@ class ReceivingController {
 }
 
 module.exports = new ReceivingController();
+

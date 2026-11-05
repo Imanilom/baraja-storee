@@ -11,3 +11,4 @@ router.get('/overview', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTIN
 router.get('/products/:id', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT), priceController.getProductPrices);
 
 module.exports = router;
+

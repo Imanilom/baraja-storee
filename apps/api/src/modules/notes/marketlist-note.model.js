@@ -21,3 +21,4 @@ const MarketlistNoteSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('MarketlistNote', MarketlistNoteSchema);
+

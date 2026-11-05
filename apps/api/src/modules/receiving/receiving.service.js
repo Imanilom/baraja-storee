@@ -207,3 +207,4 @@ class ReceivingService {
 }
 
 module.exports = new ReceivingService();
+

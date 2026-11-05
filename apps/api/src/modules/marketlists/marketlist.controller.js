@@ -82,3 +82,4 @@ class MarketlistController {
 }
 
 module.exports = new MarketlistController();
+

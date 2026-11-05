@@ -41,3 +41,4 @@ const PurchaseSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Purchase', PurchaseSchema);
+

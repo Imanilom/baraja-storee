@@ -60,3 +60,4 @@ const GoodsReceiptItemSchema = new mongoose.Schema(
 GoodsReceiptItemSchema.index({ receipt_id: 1, marketlist_item_id: 1 });
 
 module.exports = mongoose.model('GoodsReceiptItem', GoodsReceiptItemSchema);
+

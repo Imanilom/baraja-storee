@@ -44,3 +44,4 @@ class PriceService {
 }
 
 module.exports = new PriceService();
+

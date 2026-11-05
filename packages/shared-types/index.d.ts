@@ -123,3 +123,4 @@ export interface Invoice {
   generated_by?: string;
   generated_at?: string;
 }
+

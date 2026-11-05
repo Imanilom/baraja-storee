@@ -15,3 +15,4 @@ router.post('/', authorize(ROLES.ADMIN), validate(registerUserSchema), userContr
 router.patch('/:id', authorize(ROLES.ADMIN), userController.update);
 
 module.exports = router;
+

@@ -49,3 +49,4 @@ UserSchema.statics.hashPassword = async function (plainPassword) {
 };
 
 module.exports = mongoose.model('User', UserSchema);
+

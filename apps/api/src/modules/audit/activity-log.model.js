@@ -30,3 +30,4 @@ const ActivityLogSchema = new mongoose.Schema({
 ActivityLogSchema.index({ entity_type: 1, entity_id: 1, created_at: -1 });
 
 module.exports = mongoose.model('ActivityLog', ActivityLogSchema);
+

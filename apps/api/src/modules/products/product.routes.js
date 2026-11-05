@@ -23,3 +23,4 @@ router.post('/', authorize(ROLES.ADMIN, ROLES.PURCHASING), validate(productSchem
 router.patch('/:id', authorize(ROLES.ADMIN), productController.update);
 
 module.exports = router;
+
