@@ -101,3 +101,4 @@ router.get('/external-pos/sales', verifyOAuth2Bearer, (req, res) => {
 });
 
 module.exports = router;
+

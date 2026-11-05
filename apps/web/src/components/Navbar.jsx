@@ -37,3 +37,4 @@ export default function Navbar({ title = 'Dashboard' }) {
     </header>
   );
 }
+

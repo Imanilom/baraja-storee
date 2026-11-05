@@ -129,3 +129,4 @@ export const api = {
   // Profit & Loss (Laba Rugi) with OAuth 2
   getProfitLoss: (params = '') => fetchApi(`/finance/profit-loss${params}`)
 };
+
