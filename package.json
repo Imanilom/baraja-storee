@@ -1,0 +1,23 @@
+{
+  "name": "purchasing-management-system",
+  "version": "1.0.0",
+  "description": "Integrated Purchasing Management System (Web Next.js, Mobile React Native/Expo, Backend Node.js Express)",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "start:api": "npm run start --workspace=apps/api",
+    "test:api": "npm run test --workspace=apps/api"
+  },
+  "keywords": [
+    "purchasing",
+    "marketlist",
+    "receiving",
+    "modular-monolith"
+  ],
+  "author": "",
+  "license": "ISC"
+}
