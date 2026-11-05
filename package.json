@@ -10,7 +10,13 @@
   "scripts": {
     "dev:api": "npm run dev --workspace=apps/api",
     "start:api": "npm run start --workspace=apps/api",
-    "test:api": "npm run test --workspace=apps/api"
+    "test:api": "npm run test --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "keywords": [
     "purchasing",

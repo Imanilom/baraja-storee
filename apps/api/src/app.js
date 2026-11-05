@@ -16,6 +16,8 @@ const { invoiceRouter, marketlistInvoiceRouter } = require('./modules/invoices/i
 const priceRoutes = require('./modules/prices/prices.routes');
 const kpiRoutes = require('./modules/kpi/kpi.routes');
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
+const financeRoutes = require('./modules/finance/profit-loss.routes');
+const externalPosRoutes = require('./modules/external-pos/external-pos.routes');
 
 const app = express();
 
@@ -49,6 +51,8 @@ apiRouter.use('/receipts', receivingRouter);
 apiRouter.use('/invoices', invoiceRouter);
 apiRouter.use('/prices', priceRoutes);
 apiRouter.use('/kpi', kpiRoutes);
+apiRouter.use('/finance', financeRoutes);
+apiRouter.use('/', externalPosRoutes); // provides /oauth2/token and /external-pos/sales
 
 app.use('/api/v1', apiRouter);
 
