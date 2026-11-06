@@ -10,7 +10,9 @@
   "scripts": {
     "dev:api": "npm run dev --workspace=apps/api",
     "start:api": "npm run start --workspace=apps/api",
+    "seed:api": "npm run seed --workspace=apps/api",
     "test:api": "npm run test --workspace=apps/api",
+    "test:api:atlas": "npm run test:atlas --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "build:web": "npm run build --workspace=apps/web",
     "dev:mobile": "npm run start --workspace=apps/mobile",

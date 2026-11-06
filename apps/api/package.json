@@ -6,7 +6,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node src/database/seed.js",
-    "test": "node test/acceptance.test.js"
+    "test": "node test/acceptance.test.js",
+    "test:atlas": "node -e \"process.env.USE_REAL_DB='true'; require('./test/acceptance.test.js')\""
   },
   "dependencies": {
     "@purchasing/constants": "*",

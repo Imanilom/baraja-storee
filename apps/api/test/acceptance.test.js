@@ -25,13 +25,32 @@ let adminUser, purchasingUser, receiverUser;
 let loc, unitKg, cat1, productBeras, productAyam, supplierA, supplierB;
 
 async function setup() {
-  mongod = await MongoMemoryServer.create({
-    binary: {
-      version: '7.0.11'
-    }
-  });
-  const uri = mongod.getUri();
-  await mongoose.connect(uri);
+  if (process.env.USE_REAL_DB === 'true') {
+    const { MONGODB_URI } = require('../src/config/env');
+    console.log(`[Test] Connecting to real database: ${MONGODB_URI.replace(/:([^:@]+)@/, ':****@')}`);
+    await mongoose.connect(MONGODB_URI);
+    await Promise.all([
+      User.deleteMany(),
+      Location.deleteMany(),
+      Category.deleteMany(),
+      Unit.deleteMany(),
+      Product.deleteMany(),
+      Supplier.deleteMany(),
+      Marketlist.deleteMany(),
+      MarketlistItem.deleteMany(),
+      MarketlistNote.deleteMany(),
+      Invoice.deleteMany(),
+      ActivityLog.deleteMany()
+    ]);
+  } else {
+    mongod = await MongoMemoryServer.create({
+      binary: {
+        version: '7.0.11'
+      }
+    });
+    const uri = mongod.getUri();
+    await mongoose.connect(uri);
+  }
 
   // Seed baseline
   loc = await Location.create({ name: 'Central Warehouse', code: 'LOC-01' });
@@ -65,7 +84,9 @@ async function setup() {
 
 async function teardown() {
   await mongoose.disconnect();
-  await mongod.stop();
+  if (mongod) {
+    await mongod.stop();
+  }
 }
 
 async function runTests() {
