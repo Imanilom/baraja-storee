@@ -50,6 +50,7 @@ apiRouter.use('/marketlists', marketlistRoutes);
 apiRouter.use('/marketlists/:marketlistId/receipts', marketlistReceiptRouter);
 apiRouter.use('/marketlists/:marketlistId/invoices', marketlistInvoiceRouter);
 apiRouter.use('/receipts', receivingRouter);
+apiRouter.use('/receiving', receivingRouter);
 apiRouter.use('/invoices', invoiceRouter);
 apiRouter.use('/purchases', purchaseRoutes);
 apiRouter.use('/prices', priceRoutes);

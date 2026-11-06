@@ -51,7 +51,7 @@ class OfflineService {
         final payload = Map<String, dynamic>.from(item['payload']);
         payload['client_request_id'] = item['client_request_id'];
 
-        await ApiService.post('/receiving/receipts/$mlId', payload);
+        await ApiService.post('/marketlists/$mlId/receipts', payload);
         syncedCount++;
       } catch (err) {
         failedCount++;

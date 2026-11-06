@@ -12,6 +12,15 @@ router.use(authenticate);
 // Receipt endpoints
 router.get('/:id', receivingController.getById);
 
+// Support direct /receiving/receipts/:marketlistId or /receipts/marketlist/:marketlistId
+router.get('/receipts/:marketlistId', receivingController.getByMarketlist);
+router.post(
+  '/receipts/:marketlistId',
+  authorize(ROLES.ADMIN, ROLES.RECEIVER),
+  validate(createGoodsReceiptSchema),
+  receivingController.create
+);
+
 // Mounted under /api/v1/marketlists/:marketlistId/receipts in app.js
 const marketlistReceiptRouter = express.Router({ mergeParams: true });
 marketlistReceiptRouter.use(authenticate);

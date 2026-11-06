@@ -137,9 +137,10 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
     final mlId = widget.marketlist['_id'];
     setState(() => _isSaving = true);
 
+    final firstSuppId = _checkItems.isNotEmpty ? _checkItems.first.supplierId : null;
     final payload = {
       'client_request_id': const Uuid().v4(),
-      'supplier_id': _checkItems.first.supplierId,
+      if (firstSuppId != null && firstSuppId.isNotEmpty) 'supplier_id': firstSuppId,
       'items': _checkItems.map((ci) => {
         'marketlist_item_id': ci.itemId,
         'received_qty': ci.receivedQty,
@@ -162,8 +163,8 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
         }).catchError((_) {});
       }
 
-      // 2. Submit Goods Receipt
-      await ApiService.post('/receiving/receipts/$mlId', payload);
+      // 2. Submit Goods Receipt (menggunakan /marketlists/$mlId/receipts)
+      await ApiService.post('/marketlists/$mlId/receipts', payload);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

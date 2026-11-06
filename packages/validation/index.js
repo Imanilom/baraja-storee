@@ -98,7 +98,7 @@ const goodsReceiptItemInputSchema = z.object({
 });
 
 const createGoodsReceiptSchema = z.object({
-  supplier_id: zObjectId.optional(),
+  supplier_id: zObjectId.optional().nullable().or(z.literal('')),
   client_request_id: z.string().optional(),
   general_condition: z.string().optional(),
   attachments: z.array(z.object({
