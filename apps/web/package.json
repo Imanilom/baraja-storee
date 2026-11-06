@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev",
     "build": "node -e \"process.env.NEXT_IGNORE_INCORRECT_LOCKFILE='1'; require('child_process').execSync('npx next build', {stdio:'inherit'})\"",
-    "start": "next start -p 3000"
+    "start": "next start"
   },
   "dependencies": {
     "@next/swc-win32-x64-msvc": "^14.2.33",
