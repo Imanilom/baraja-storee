@@ -32,15 +32,37 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadDashboardData();
   }
 
+  List<dynamic> _parseMarketlists(dynamic res) {
+    if (res == null) return [];
+    if (res['data'] is List) {
+      return res['data'] as List<dynamic>;
+    }
+    if (res['data'] is Map && res['data']['items'] is List) {
+      return res['data']['items'] as List<dynamic>;
+    }
+    if (res['items'] is List) {
+      return res['items'] as List<dynamic>;
+    }
+    return [];
+  }
+
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService.get('/marketlists?status=approved');
-      final allRes = await ApiService.get('/marketlists?limit=1');
+      final res = await ApiService.get('/marketlists?status=approved&limit=20');
+      final allRes = await ApiService.get('/marketlists?limit=1&all=true');
       if (mounted) {
         setState(() {
-          _approvedMarketlists = res['data'] ?? [];
-          _totalMarketlists = allRes['total'] ?? _approvedMarketlists.length;
+          _approvedMarketlists = _parseMarketlists(res);
+          int total = 0;
+          if (allRes != null && allRes['data'] is Map && allRes['data']['pagination'] != null) {
+            total = allRes['data']['pagination']['total'] ?? 0;
+          } else if (allRes != null && allRes['total'] != null) {
+            total = allRes['total'];
+          } else {
+            total = _approvedMarketlists.length;
+          }
+          _totalMarketlists = total;
         });
       }
     } catch (_) {
@@ -272,10 +294,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     final dateStr = ml['date'] != null
                         ? ml['date'].toString().split('T')[0]
                         : '-';
-                    final itemsCount = ml['items'] is List ? (ml['items'] as List).length : 0;
-                    final totalEst = ml['estimated_total'] != null
-                        ? currencyFormat.format(ml['estimated_total'])
-                        : 'Rp 0';
+                    final itemsCount = ml['totals'] != null && ml['totals']['total_items'] != null
+                        ? ml['totals']['total_items']
+                        : (ml['items'] is List ? (ml['items'] as List).length : 0);
+                    final totalVal = ml['totals'] != null && ml['totals']['estimated_amount'] != null
+                        ? ml['totals']['estimated_amount']
+                        : (ml['estimated_total'] ?? 0);
+                    final totalEst = currencyFormat.format(totalVal);
+                    final code = ml['marketlist_number'] ?? ml['code'] ?? 'ML-UNTITLED';
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -314,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        ml['code'] ?? 'ML-UNTITLED',
+                                        code,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 14,

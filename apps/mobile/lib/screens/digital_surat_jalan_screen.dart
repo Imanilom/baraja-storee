@@ -50,7 +50,46 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
   void initState() {
     super.initState();
     _initItems();
+    if (_checkItems.isEmpty) {
+      _loadMarketlistDetail();
+    }
     _loadMarketlistNote();
+  }
+
+  Future<void> _loadMarketlistDetail() async {
+    final mlId = widget.marketlist['_id'];
+    try {
+      final res = await ApiService.get('/marketlists/$mlId');
+      final data = res['data'] ?? res;
+      if (data != null && data['items'] is List && (data['items'] as List).isNotEmpty) {
+        setState(() {
+          _checkItems.clear();
+          for (final it in (data['items'] as List)) {
+            final p = it['product_id'];
+            final pName = p is Map ? p['name'] : (it['product_snapshot']?['name'] ?? it['product_name'] ?? 'Barang');
+            final uName = p is Map && p['unit_id'] is Map
+                ? p['unit_id']['name']
+                : (it['product_snapshot']?['unit_name'] ?? 'Satuan');
+            final reqQty = (it['requested_qty'] as num?)?.toDouble() ?? 1.0;
+
+            _checkItems.add(_ItemReceivingState(
+              itemId: it['_id']?.toString() ?? '',
+              productName: pName,
+              unitName: uName,
+              requestedQty: reqQty,
+              supplierId: it['supplier_id'] is Map
+                  ? it['supplier_id']['_id']
+                  : it['supplier_id']?.toString(),
+              receivedQty: reqQty,
+              acceptedQty: reqQty,
+              rejectedQty: 0,
+              condition: 'good',
+              isChecked: true,
+            ));
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _initItems() {
@@ -158,7 +197,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
   @override
   Widget build(BuildContext context) {
     final ml = widget.marketlist;
-    final code = ml['code'] ?? 'SURAT-JALAN';
+    final code = ml['marketlist_number'] ?? ml['code'] ?? 'SURAT-JALAN';
     final dateStr = ml['date'] != null ? ml['date'].toString().split('T')[0] : '-';
 
     return Scaffold(

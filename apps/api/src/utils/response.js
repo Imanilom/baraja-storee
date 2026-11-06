@@ -18,6 +18,8 @@ const sendPaginated = (res, message, items, total, page = 1, limit = 10) => {
   return res.status(200).json({
     success: true,
     message,
+    items,
+    total,
     data: {
       items,
       pagination: {

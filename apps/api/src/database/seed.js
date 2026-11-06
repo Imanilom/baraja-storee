@@ -79,7 +79,7 @@ const seedData = async () => {
     ]);
 
     console.log('[Seed] Inserting Products...');
-    await Product.insertMany([
+    const products = await Product.insertMany([
       {
         name: 'Beras Ramos Super',
         sku: 'BRS-001',
@@ -134,7 +134,7 @@ const seedData = async () => {
     const accountingPass = await User.hashPassword('accounting123');
     const managementPass = await User.hashPassword('management123');
 
-    await User.insertMany([
+    const users = await User.insertMany([
       {
         name: 'Super Admin',
         email: 'admin@baraja.com',
@@ -171,6 +171,121 @@ const seedData = async () => {
         location_id: locations[0]._id
       }
     ]);
+
+    console.log('[Seed] Inserting Sample Marketlists & Items...');
+    const Marketlist = require('../modules/marketlists/marketlist.model');
+    const MarketlistItem = require('../modules/marketlists/marketlist-item.model');
+    const MarketlistNote = require('../modules/notes/marketlist-note.model');
+    const { MARKETLIST_STATUS } = require('@purchasing/constants');
+
+    await Promise.all([
+      Marketlist.deleteMany(),
+      MarketlistItem.deleteMany(),
+      MarketlistNote.deleteMany()
+    ]);
+
+    // 1. Approved Marketlist (Ready for Surat Jalan / Receiving)
+    const mlApproved = await Marketlist.create({
+      marketlist_number: 'ML-20261101-0001',
+      date: new Date('2026-11-01'),
+      required_date: new Date('2026-11-02'),
+      location_id: locations[0]._id,
+      created_by: users[1]._id,
+      assigned_to: [users[2]._id],
+      status: MARKETLIST_STATUS.APPROVED,
+      totals: {
+        total_items: 3,
+        total_quantity: 17,
+        estimated_amount: 1250000
+      },
+      approval: {
+        approved_by: users[0]._id,
+        approved_at: new Date('2026-11-01T10:00:00Z'),
+        approval_note: 'Disetujui untuk pemenuhan stok mingguan.'
+      },
+      current_version: 1
+    });
+
+    await MarketlistItem.insertMany([
+      {
+        marketlist_id: mlApproved._id,
+        product_id: products[0]._id,
+        supplier_id: suppliers[0]._id,
+        requested_qty: 2,
+        unit_price: 325000,
+        subtotal: 650000,
+        notes: 'Beras kemasan 25kg utuh'
+      },
+      {
+        marketlist_id: mlApproved._id,
+        product_id: products[1]._id,
+        supplier_id: suppliers[1]._id,
+        requested_qty: 10,
+        unit_price: 38000,
+        subtotal: 380000,
+        notes: 'Karkas segar dingin'
+      },
+      {
+        marketlist_id: mlApproved._id,
+        product_id: products[2]._id,
+        supplier_id: suppliers[2]._id,
+        requested_qty: 5,
+        unit_price: 44000,
+        subtotal: 220000,
+        notes: 'Bawang kering grade A'
+      }
+    ]);
+
+    await MarketlistNote.create({
+      marketlist_id: mlApproved._id,
+      note: 'Pengiriman via mobil pickup supplier langsung ke gudang belakang.',
+      updated_by: users[1]._id
+    });
+
+    // 2. Submitted Marketlist (Waiting for Admin Approval)
+    const mlSubmitted = await Marketlist.create({
+      marketlist_number: 'ML-20261105-0002',
+      date: new Date('2026-11-05'),
+      required_date: new Date('2026-11-07'),
+      location_id: locations[0]._id,
+      created_by: users[1]._id,
+      assigned_to: [users[2]._id],
+      status: MARKETLIST_STATUS.SUBMITTED,
+      totals: {
+        total_items: 2,
+        total_quantity: 15,
+        estimated_amount: 542500
+      },
+      current_version: 1,
+      submitted_at: new Date('2026-11-05T08:30:00Z')
+    });
+
+    await MarketlistItem.insertMany([
+      {
+        marketlist_id: mlSubmitted._id,
+        product_id: products[3]._id,
+        supplier_id: suppliers[0]._id,
+        requested_qty: 5,
+        unit_price: 78000,
+        subtotal: 390000,
+        notes: 'Jerigen 5 Liter'
+      },
+      {
+        marketlist_id: mlSubmitted._id,
+        product_id: products[4]._id,
+        supplier_id: suppliers[0]._id,
+        requested_qty: 10,
+        unit_price: 15250,
+        subtotal: 152500,
+        notes: 'Gula pasir kristal 1kg'
+      }
+    ]);
+
+    await MarketlistNote.create({
+      marketlist_id: mlSubmitted._id,
+      note: 'Menunggu konfirmasi admin untuk jadwal pengiriman.',
+      updated_by: users[1]._id
+    });
 
     console.log('----------------------------------------------------');
     console.log('✅ SEED COMPLETED SUCCESSFULLY!');

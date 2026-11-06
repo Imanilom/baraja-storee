@@ -14,24 +14,21 @@ class MarketlistService {
     const filter = {};
     if (query.status) {
       filter.status = query.status;
-    }
-    if (query.location_id) {
-      filter.location_id = query.location_id;
-    }
-    // If receiver role, filter to assigned or approved marketlists
-    if (user && user.role === ROLES.RECEIVER) {
+    } else if (user && user.role === ROLES.RECEIVER && query.all !== 'true') {
       filter.status = { $in: [MARKETLIST_STATUS.APPROVED, MARKETLIST_STATUS.IN_PROGRESS, MARKETLIST_STATUS.PARTIALLY_RECEIVED] };
-      // If receiver is assigned explicitly or general
       if (query.only_assigned === 'true') {
         filter.assigned_to = user._id;
       }
     }
+    if (query.location_id) {
+      filter.location_id = query.location_id;
+    }
 
     const page = parseInt(query.page) || 1;
-    const limit = parseInt(query.limit) || 20;
+    const limit = parseInt(query.limit) || 50;
     const skip = (page - 1) * limit;
 
-    const [items, total] = await Promise.all([
+    const [rawItems, total] = await Promise.all([
       Marketlist.find(filter)
         .populate('created_by', 'name email role')
         .populate('assigned_to', 'name email role')
@@ -42,6 +39,18 @@ class MarketlistService {
         .limit(limit),
       Marketlist.countDocuments(filter)
     ]);
+
+    const items = await Promise.all(
+      rawItems.map(async (ml) => {
+        const mlItems = await MarketlistItem.find({ marketlist_id: ml._id })
+          .populate('product_id', 'name unit_id sku')
+          .populate('supplier_id', 'name code')
+          .lean();
+        const obj = ml.toObject ? ml.toObject() : ml;
+        obj.items = mlItems;
+        return obj;
+      })
+    );
 
     return { items, total, page, limit };
   }

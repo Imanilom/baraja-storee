@@ -64,5 +64,14 @@ const MarketlistSchema = new mongoose.Schema(
 MarketlistSchema.index({ status: 1, date: -1 });
 MarketlistSchema.index({ assigned_to: 1, status: 1 });
 
+MarketlistSchema.virtual('code').get(function () {
+  return this.marketlist_number;
+});
+MarketlistSchema.virtual('estimated_total').get(function () {
+  return this.totals?.estimated_amount || 0;
+});
+MarketlistSchema.set('toJSON', { virtuals: true });
+MarketlistSchema.set('toObject', { virtuals: true });
+
 module.exports = mongoose.model('Marketlist', MarketlistSchema);
 

@@ -34,13 +34,27 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
     _fetchMarketlists();
   }
 
+  List<dynamic> _parseMarketlists(dynamic res) {
+    if (res == null) return [];
+    if (res['data'] is List) {
+      return res['data'] as List<dynamic>;
+    }
+    if (res['data'] is Map && res['data']['items'] is List) {
+      return res['data']['items'] as List<dynamic>;
+    }
+    if (res['items'] is List) {
+      return res['items'] as List<dynamic>;
+    }
+    return [];
+  }
+
   Future<void> _fetchMarketlists() async {
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService.get('/marketlists?limit=50');
+      final res = await ApiService.get('/marketlists?limit=50&all=true');
       if (mounted) {
         setState(() {
-          _allMarketlists = res['data'] ?? [];
+          _allMarketlists = _parseMarketlists(res);
         });
       }
     } catch (e) {
@@ -56,9 +70,15 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
 
   List<dynamic> get _filteredList {
     if (_filter == 'approved') {
-      return _allMarketlists.where((m) => m['status'] == 'approved' || m['status'] == 'in_receiving' || m['status'] == 'completed').toList();
+      return _allMarketlists.where((m) {
+        final st = (m['status'] ?? '').toString().toLowerCase();
+        return st == 'approved' || st == 'in_receiving' || st == 'in_progress' || st == 'completed';
+      }).toList();
     } else if (_filter == 'pending') {
-      return _allMarketlists.where((m) => m['status'] == 'draft' || m['status'] == 'submitted' || m['status'] == 'revision').toList();
+      return _allMarketlists.where((m) {
+        final st = (m['status'] ?? '').toString().toLowerCase();
+        return st == 'draft' || st == 'submitted' || st == 'revision';
+      }).toList();
     }
     return _allMarketlists;
   }
@@ -198,11 +218,14 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                             ? ml['required_date'].toString().split('T')[0]
                             : '-';
                         final items = ml['items'] is List ? (ml['items'] as List) : [];
-                        final total = ml['estimated_total'] != null
-                            ? currencyFormat.format(ml['estimated_total'])
-                            : 'Rp 0';
+                        final totalVal = ml['totals'] != null && ml['totals']['estimated_amount'] != null
+                            ? ml['totals']['estimated_amount']
+                            : (ml['estimated_total'] ?? 0);
+                        final total = currencyFormat.format(totalVal);
+                        final code = ml['marketlist_number'] ?? ml['code'] ?? 'ML-UNTITLED';
                         final isApproved = status == 'approved' ||
                             status == 'in_receiving' ||
+                            status == 'in_progress' ||
                             status == 'completed';
 
                         return Card(
@@ -238,7 +261,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                                         MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        ml['code'] ?? 'ML-UNTITLED',
+                                        code,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 15,
