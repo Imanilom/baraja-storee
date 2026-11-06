@@ -18,6 +18,15 @@ const PurchaseSchema = new mongoose.Schema(
       ref: 'Supplier',
       required: true
     },
+    invoice_ref: {
+      type: String,
+      default: ''
+    },
+    payment_method: {
+      type: String,
+      enum: ['cash', 'transfer', 'tempo'],
+      default: 'cash'
+    },
     purchased_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
@@ -30,15 +39,21 @@ const PurchaseSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
-    receipt_attachment: String,
+    receipt_attachment: {
+      type: String,
+      default: ''
+    },
+    notes: {
+      type: String,
+      default: ''
+    },
     status: {
       type: String,
       enum: Object.values(PURCHASE_STATUS),
-      default: PURCHASE_STATUS.DRAFT
+      default: PURCHASE_STATUS.VERIFIED
     }
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model('Purchase', PurchaseSchema);
-

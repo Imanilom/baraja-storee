@@ -54,3 +54,4 @@ class AuthService {
     await prefs.remove(_userKey);
   }
 }
+

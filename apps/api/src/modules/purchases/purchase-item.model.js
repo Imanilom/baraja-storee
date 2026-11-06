@@ -12,6 +12,18 @@ const PurchaseItemSchema = new mongoose.Schema(
       ref: 'MarketlistItem',
       required: true
     },
+    product_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product'
+    },
+    product_name: {
+      type: String,
+      default: ''
+    },
+    unit_name: {
+      type: String,
+      default: ''
+    },
     actual_qty: {
       type: Number,
       required: true
@@ -24,10 +36,12 @@ const PurchaseItemSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
-    notes: String
+    notes: {
+      type: String,
+      default: ''
+    }
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model('PurchaseItem', PurchaseItemSchema);
-

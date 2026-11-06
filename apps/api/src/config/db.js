@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { MONGODB_URI } = require('./env');
+require('../database/registerModels');
 
 const connectDB = async () => {
   try {

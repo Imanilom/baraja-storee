@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const errorHandler = require('./middleware/errorHandler');
+require('./database/registerModels');
 
 // Route imports
 const authRoutes = require('./modules/auth/auth.routes');
@@ -14,6 +15,7 @@ const marketlistRoutes = require('./modules/marketlists/marketlist.routes');
 const { receivingRouter, marketlistReceiptRouter } = require('./modules/receiving/receiving.routes');
 const { invoiceRouter, marketlistInvoiceRouter } = require('./modules/invoices/invoice.routes');
 const priceRoutes = require('./modules/prices/prices.routes');
+const purchaseRoutes = require('./modules/purchases/purchase.routes');
 const kpiRoutes = require('./modules/kpi/kpi.routes');
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const financeRoutes = require('./modules/finance/profit-loss.routes');
@@ -49,6 +51,7 @@ apiRouter.use('/marketlists/:marketlistId/receipts', marketlistReceiptRouter);
 apiRouter.use('/marketlists/:marketlistId/invoices', marketlistInvoiceRouter);
 apiRouter.use('/receipts', receivingRouter);
 apiRouter.use('/invoices', invoiceRouter);
+apiRouter.use('/purchases', purchaseRoutes);
 apiRouter.use('/prices', priceRoutes);
 apiRouter.use('/kpi', kpiRoutes);
 apiRouter.use('/finance', financeRoutes);

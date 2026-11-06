@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
-  static const String _defaultAndroidEmulator = 'http://10.0.2.2:5000/api';
-  static const String _defaultGeneral = 'http://localhost:5000/api';
+  static const String _defaultAndroidEmulator = 'http://10.0.2.2:5000/api/v1';
+  static const String _defaultGeneral = 'http://localhost:5000/api/v1';
   static const String _keyBaseUrl = 'custom_base_url';
 
   static Future<String> getBaseUrl() async {
@@ -30,3 +30,4 @@ class ApiConfig {
     await prefs.remove(_keyBaseUrl);
   }
 }
+

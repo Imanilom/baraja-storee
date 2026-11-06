@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Truck,
   Receipt,
+  ShoppingCart,
   TrendingUp,
   DollarSign,
   Package,
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Marketlist', href: '/marketlists', icon: ClipboardList },
   { name: 'Admin Approval', href: '/approvals', icon: CheckCircle2 },
   { name: 'Surat Jalan / Receiving', href: '/receiving', icon: Truck },
+  { name: 'Transaksi Pembelian', href: '/transactions', icon: ShoppingCart },
   { name: 'Invoices', href: '/invoices', icon: Receipt },
   { name: 'Laba Rugi (OAuth 2)', href: '/laba-rugi', icon: DollarSign, highlight: true }
 ];

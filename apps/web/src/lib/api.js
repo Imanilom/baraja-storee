@@ -127,6 +127,15 @@ export const api = {
   getInvoicePdfUrl: (id) => `${API_BASE}/invoices/${id}/pdf`,
 
   // Profit & Loss (Laba Rugi) with OAuth 2
-  getProfitLoss: (params = '') => fetchApi(`/finance/profit-loss${params}`)
+  getProfitLoss: (params = '') => fetchApi(`/finance/profit-loss${params}`),
+
+  // Purchase Transactions (Pencatatan Pembelian ke Supplier)
+  getPurchases: (params = '') => fetchApi(`/purchases${params}`),
+  getPurchaseById: (id) => fetchApi(`/purchases/${id}`),
+  createPurchase: (data) =>
+    fetchApi('/purchases', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
 };
 
