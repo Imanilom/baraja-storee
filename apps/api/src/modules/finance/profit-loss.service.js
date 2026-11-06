@@ -1,10 +1,11 @@
 const Invoice = require('../invoices/invoice.model');
 const Marketlist = require('../marketlists/marketlist.model');
+const Overhead = require('../overheads/overhead.model');
 const oauth2ClientService = require('./oauth2-client.service');
 
 class ProfitLossService {
   async calculateProfitLoss(query = {}) {
-    const { period = 'monthly', startDate, endDate, operating_expense = 2500000 } = query;
+    const { period = 'monthly', startDate, endDate, operating_expense } = query;
 
     // 1. Fetch sales & revenue from external API via OAuth 2
     const salesReport = await oauth2ClientService.fetchExternalSalesData(period, startDate, endDate);
@@ -38,11 +39,42 @@ class ProfitLossService {
       }
     }
 
-    // 3. Profit Calculations
+    // 3. Fetch Real Overhead Expenses from database
+    const overheadFilter = {};
+    if (startDate || endDate) {
+      overheadFilter.expense_date = {};
+      if (startDate) overheadFilter.expense_date.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        overheadFilter.expense_date.$lte = end;
+      }
+    }
+
+    const recordedOverheads = await Overhead.find(overheadFilter);
+    let totalRealOverhead = 0;
+    const overheadByCategory = {};
+
+    recordedOverheads.forEach((item) => {
+      totalRealOverhead += item.amount || 0;
+      const cat = item.category || 'lain_lain';
+      overheadByCategory[cat] = (overheadByCategory[cat] || 0) + item.amount;
+    });
+
+    // Determine operating expense: use simulated value if explicitly sent, else use real DB total (or fallback)
+    let opExpenses = totalRealOverhead;
+    let isRealData = totalRealOverhead > 0;
+    if (operating_expense !== undefined && operating_expense !== null && operating_expense !== '') {
+      opExpenses = Number(operating_expense);
+      isRealData = false;
+    } else if (totalRealOverhead === 0) {
+      opExpenses = 2500000; // default baseline
+    }
+
+    // 4. Profit Calculations
     const grossProfit = totalRevenue - totalPurchasingHPP;
     const grossMarginPercent = totalRevenue > 0 ? Number(((grossProfit / totalRevenue) * 100).toFixed(2)) : 0;
 
-    const opExpenses = Number(operating_expense) || 2500000;
     const netProfit = grossProfit - opExpenses;
     const netMarginPercent = totalRevenue > 0 ? Number(((netProfit / totalRevenue) * 100).toFixed(2)) : 0;
 
@@ -59,6 +91,8 @@ class ProfitLossService {
         gross_profit: grossProfit,
         gross_margin_percentage: grossMarginPercent,
         operating_expenses: opExpenses,
+        is_real_overhead: isRealData,
+        total_recorded_overhead: totalRealOverhead,
         net_profit: netProfit,
         net_margin_percentage: netMarginPercent
       },
@@ -68,10 +102,15 @@ class ProfitLossService {
         supplier,
         amount
       })),
+      overhead_breakdown: Object.entries(overheadByCategory).map(([category, amount]) => ({
+        category,
+        amount
+      })),
       calculated_at: new Date().toISOString()
     };
   }
 }
 
 module.exports = new ProfitLossService();
+
 

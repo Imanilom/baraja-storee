@@ -12,6 +12,7 @@ import {
   TrendingUp,
   DollarSign,
   Package,
+  Wallet,
   LogOut
 } from 'lucide-react';
 import { clearStoredAuth, getStoredUser } from '../lib/api';
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Admin Approval', href: '/approvals', icon: CheckCircle2 },
   { name: 'Surat Jalan / Receiving', href: '/receiving', icon: Truck },
   { name: 'Transaksi Pembelian', href: '/transactions', icon: ShoppingCart },
+  { name: 'Kelola Overhead', href: '/overhead', icon: Wallet },
   { name: 'Invoices', href: '/invoices', icon: Receipt },
   { name: 'Laba Rugi (OAuth 2)', href: '/laba-rugi', icon: DollarSign, highlight: true }
 ];

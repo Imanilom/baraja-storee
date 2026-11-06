@@ -140,6 +140,40 @@ export const api = {
     fetchApi('/purchases', {
       method: 'POST',
       body: JSON.stringify(data)
-    })
+    }),
+  // Debt management (Purchases / Supplier)
+  getDebts: (params = '') => fetchApi(`/purchases/debts${params}`),
+  getPurchasePayments: (id) => fetchApi(`/purchases/${id}/payments`),
+  recordDebtPayment: (id, data) =>
+    fetchApi(`/purchases/${id}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+  // Kelola Biaya Overhead & Hutang Operasional
+  getOverheads: (params = '') => fetchApi(`/overheads${params}`),
+  getOverheadSummary: (params = '') => fetchApi(`/overheads/summary${params}`),
+  getOverheadDebts: (params = '') => fetchApi(`/overheads/debts${params}`),
+  getOverheadById: (id) => fetchApi(`/overheads/${id}`),
+  createOverhead: (data) =>
+    fetchApi('/overheads', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  updateOverhead: (id, data) =>
+    fetchApi(`/overheads/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  deleteOverhead: (id) =>
+    fetchApi(`/overheads/${id}`, {
+      method: 'DELETE'
+    }),
+  recordOverheadPayment: (id, data) =>
+    fetchApi(`/overheads/${id}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getOverheadPayments: (id) => fetchApi(`/overheads/${id}/payments`)
 };
 

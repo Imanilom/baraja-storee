@@ -175,14 +175,27 @@ export default function LabaRugiPage() {
 
           {/* Beban Operasional */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              4. Biaya Operasional
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                4. Biaya Operasional (Overhead)
+              </span>
+              {summary.is_real_overhead ? (
+                <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                  Real DB
+                </span>
+              ) : (
+                <span className="text-[9px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                  Simulasi
+                </span>
+              )}
+            </div>
             <div className="text-xl font-black text-slate-900">
               Rp {summary.operating_expenses.toLocaleString('id-ID')}
             </div>
             <p className="text-[10px] text-slate-500 font-medium">
-              Logistik, utilitas, sewa
+              {summary.is_real_overhead
+                ? 'Akumulasi real biaya overhead'
+                : 'Logistik, utilitas, sewa'}
             </p>
           </div>
 
@@ -261,17 +274,38 @@ export default function LabaRugiPage() {
             </div>
           </div>
 
-          {/* Operating Expense Simulator */}
+          {/* Operating Expense Section & Simulator */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-sm text-slate-800">Simulasi Biaya Operasional</h3>
-              <Info className="w-4 h-4 text-slate-400" />
+              <h3 className="font-bold text-sm text-slate-800">Biaya Overhead Operasional</h3>
+              <a
+                href="/overhead"
+                className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+              >
+                Kelola &rarr;
+              </a>
             </div>
 
-            <form onSubmit={handleRecalculate} className="space-y-4">
+            {report?.overhead_breakdown?.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Realisasi Overhead Tercatat:
+                </p>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {report.overhead_breakdown.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-xs py-1 border-b border-slate-50">
+                      <span className="text-slate-600 capitalize">{item.category.replace(/_/g, ' ')}</span>
+                      <span className="font-bold text-slate-800">Rp {item.amount.toLocaleString('id-ID')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <form onSubmit={handleRecalculate} className="space-y-3 pt-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Biaya Operasional (Rp)
+                  Simulasi Biaya Operasional (Rp)
                 </label>
                 <input
                   type="number"
@@ -279,16 +313,13 @@ export default function LabaRugiPage() {
                   onChange={(e) => setOperatingExpense(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-800"
                 />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Contoh: Biaya bensin/ekspedisi, gaji operasional, listrik gudang.
-                </p>
               </div>
 
               <button
                 type="submit"
                 className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs transition-colors"
               >
-                Hitung Ulang Laba Bersih
+                Simulasi Ulang Laba Bersih
               </button>
             </form>
 

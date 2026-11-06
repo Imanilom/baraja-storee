@@ -41,7 +41,49 @@ class PurchaseController {
       next(error);
     }
   }
+
+  // GET /purchases/debts — Daftar hutang aktif
+  async listDebts(req, res, next) {
+    try {
+      const result = await purchaseService.getDebtList(req.query);
+      return res.status(200).json({
+        success: true,
+        data: result.data,
+        total: result.total,
+        page: result.page,
+        limit: result.limit
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /purchases/:id/payments — Bayar hutang
+  async recordPayment(req, res, next) {
+    try {
+      const result = await purchaseService.recordDebtPayment(req.params.id, req.body, req.user);
+      return res.status(201).json({
+        success: true,
+        message: 'Pembayaran hutang berhasil dicatat.',
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // GET /purchases/:id/payments — Riwayat pembayaran hutang
+  async getPayments(req, res, next) {
+    try {
+      const payments = await purchaseService.getDebtPayments(req.params.id);
+      return res.status(200).json({
+        success: true,
+        data: payments
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new PurchaseController();
-

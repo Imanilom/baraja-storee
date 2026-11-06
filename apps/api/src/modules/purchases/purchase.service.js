@@ -1,11 +1,12 @@
 const Purchase = require('./purchase.model');
 const PurchaseItem = require('./purchase-item.model');
+const DebtPayment = require('./debt-payment.model');
 const Marketlist = require('../marketlists/marketlist.model');
 const MarketlistItem = require('../marketlists/marketlist-item.model');
 const Supplier = require('../suppliers/supplier.model');
 const Product = require('../products/product.model');
 const ActivityLog = require('../audit/activity-log.model');
-const { PURCHASE_STATUS } = require('@purchasing/constants');
+const { PURCHASE_STATUS, PAYMENT_STATUS } = require('@purchasing/constants');
 
 class PurchaseService {
   async generatePurchaseNumber() {
@@ -28,28 +29,21 @@ class PurchaseService {
       purchased_at = new Date(),
       receipt_attachment = '',
       notes = '',
-      items = []
+      items = [],
+      // Debt / tempo fields
+      due_date = null,
+      amount_paid: amountPaidInput
     } = data;
 
-    if (!marketlist_id) {
-      throw new Error('Marketlist ID wajib diisi.');
-    }
-    if (!supplier_id) {
-      throw new Error('Supplier wajib dipilih.');
-    }
-    if (!items || items.length === 0) {
-      throw new Error('Minimal harus ada 1 barang transaksi pembelian.');
-    }
+    if (!marketlist_id) throw new Error('Marketlist ID wajib diisi.');
+    if (!supplier_id) throw new Error('Supplier wajib dipilih.');
+    if (!items || items.length === 0) throw new Error('Minimal harus ada 1 barang transaksi pembelian.');
 
     const marketlist = await Marketlist.findById(marketlist_id);
-    if (!marketlist) {
-      throw new Error('Marketlist tidak ditemukan.');
-    }
+    if (!marketlist) throw new Error('Marketlist tidak ditemukan.');
 
     const supplier = await Supplier.findById(supplier_id);
-    if (!supplier) {
-      throw new Error('Supplier tidak ditemukan.');
-    }
+    if (!supplier) throw new Error('Supplier tidak ditemukan.');
 
     const purchaseNumber = await this.generatePurchaseNumber();
 
@@ -80,12 +74,48 @@ class PurchaseService {
       });
     }
 
+    // Determine payment status
+    let paymentStatus;
+    let amountPaid = 0;
+
+    if (payment_method === 'tempo') {
+      // Hutang: bisa belum bayar sama sekali, atau bayar sebagian
+      amountPaid = Number(amountPaidInput) || 0;
+      if (amountPaid <= 0) {
+        paymentStatus = PAYMENT_STATUS.UNPAID;
+      } else if (amountPaid >= totalActual) {
+        paymentStatus = PAYMENT_STATUS.PAID;
+        amountPaid = totalActual;
+      } else {
+        paymentStatus = PAYMENT_STATUS.PARTIAL;
+      }
+    } else {
+      // Cash / transfer: langsung lunas
+      paymentStatus = PAYMENT_STATUS.PAID;
+      amountPaid = totalActual;
+    }
+
+    const amountRemaining = totalActual - amountPaid;
+
+    // Check if already overdue on creation
+    if (
+      due_date &&
+      paymentStatus !== PAYMENT_STATUS.PAID &&
+      new Date() > new Date(due_date)
+    ) {
+      paymentStatus = PAYMENT_STATUS.OVERDUE;
+    }
+
     const purchase = await Purchase.create({
       purchase_number: purchaseNumber,
       marketlist_id,
       supplier_id,
       invoice_ref,
       payment_method,
+      payment_status: paymentStatus,
+      due_date: payment_method === 'tempo' && due_date ? new Date(due_date) : null,
+      amount_paid: amountPaid,
+      amount_remaining: amountRemaining,
       purchased_by: user?._id,
       purchased_at: new Date(purchased_at),
       total_actual: totalActual,
@@ -100,6 +130,18 @@ class PurchaseService {
         purchase_id: purchase._id
       }))
     );
+
+    // If tempo & uang muka dibayar, record first debt payment
+    if (payment_method === 'tempo' && amountPaid > 0 && amountPaid < totalActual) {
+      await DebtPayment.create({
+        purchase_id: purchase._id,
+        amount: amountPaid,
+        payment_method: 'cash',
+        paid_at: new Date(purchased_at),
+        notes: 'Uang muka / DP saat transaksi',
+        recorded_by: user?._id
+      }).catch(() => null);
+    }
 
     // Update each product's last_purchase_price and last_supplier_id
     const ProductPrice = require('../prices/product-price.model');
@@ -133,6 +175,11 @@ class PurchaseService {
         supplier_id,
         supplier_name: supplier.name,
         total_actual: totalActual,
+        payment_method,
+        payment_status: paymentStatus,
+        amount_paid: amountPaid,
+        amount_remaining: amountRemaining,
+        due_date,
         items_count: items.length
       }
     }).catch(() => null);
@@ -145,12 +192,125 @@ class PurchaseService {
     };
   }
 
+  // Record a debt payment (bayar hutang / cicilan)
+  async recordDebtPayment(purchaseId, paymentData, user) {
+    const purchase = await Purchase.findById(purchaseId).populate('supplier_id');
+    if (!purchase) throw new Error('Transaksi pembelian tidak ditemukan.');
+
+    if (purchase.payment_status === PAYMENT_STATUS.PAID) {
+      throw new Error('Transaksi ini sudah lunas.');
+    }
+
+    const { amount, payment_method = 'transfer', paid_at, reference_number, attachment, notes } = paymentData;
+    const payAmount = Number(amount);
+    if (!payAmount || payAmount <= 0) throw new Error('Jumlah pembayaran harus lebih dari 0.');
+    if (payAmount > purchase.amount_remaining) {
+      throw new Error(
+        `Jumlah pembayaran (Rp ${payAmount.toLocaleString('id-ID')}) melebihi sisa hutang (Rp ${purchase.amount_remaining.toLocaleString('id-ID')}).`
+      );
+    }
+
+    const debtPayment = await DebtPayment.create({
+      purchase_id: purchaseId,
+      amount: payAmount,
+      payment_method,
+      paid_at: paid_at ? new Date(paid_at) : new Date(),
+      reference_number: reference_number || '',
+      attachment: attachment || '',
+      notes: notes || '',
+      recorded_by: user?._id
+    });
+
+    const newAmountPaid = purchase.amount_paid + payAmount;
+    const newAmountRemaining = purchase.total_actual - newAmountPaid;
+    let newStatus;
+    if (newAmountRemaining <= 0) {
+      newStatus = PAYMENT_STATUS.PAID;
+    } else {
+      newStatus = PAYMENT_STATUS.PARTIAL;
+    }
+
+    await Purchase.findByIdAndUpdate(purchaseId, {
+      amount_paid: newAmountPaid,
+      amount_remaining: Math.max(0, newAmountRemaining),
+      payment_status: newStatus
+    });
+
+    await ActivityLog.create({
+      user_id: user?._id,
+      action: 'DEBT_PAYMENT_RECORDED',
+      entity: 'Purchase',
+      entity_id: purchaseId,
+      meta_data: {
+        purchase_number: purchase.purchase_number,
+        supplier_name: purchase.supplier_id?.name || '',
+        amount_paid: payAmount,
+        new_total_paid: newAmountPaid,
+        new_remaining: Math.max(0, newAmountRemaining),
+        payment_status: newStatus
+      }
+    }).catch(() => null);
+
+    const updatedPurchase = await Purchase.findById(purchaseId)
+      .populate('supplier_id', 'name code')
+      .populate('purchased_by', 'name');
+
+    return {
+      debt_payment: debtPayment,
+      purchase: updatedPurchase
+    };
+  }
+
+  // Get debt payments for a purchase
+  async getDebtPayments(purchaseId) {
+    const payments = await DebtPayment.find({ purchase_id: purchaseId })
+      .populate('recorded_by', 'name')
+      .sort({ paid_at: 1 });
+    return payments;
+  }
+
+  // Get list of outstanding debts (unpaid/partial/overdue)
+  async getDebtList(query = {}) {
+    const { supplier_id, status, page = 1, limit = 20 } = query;
+    const filter = {
+      payment_method: 'tempo',
+      payment_status: { $ne: PAYMENT_STATUS.PAID }
+    };
+    if (supplier_id) filter.supplier_id = supplier_id;
+    if (status) filter.payment_status = status;
+
+    // Auto-update overdue status
+    await Purchase.updateMany(
+      {
+        payment_method: 'tempo',
+        payment_status: { $in: [PAYMENT_STATUS.UNPAID, PAYMENT_STATUS.PARTIAL] },
+        due_date: { $lt: new Date() }
+      },
+      { $set: { payment_status: PAYMENT_STATUS.OVERDUE } }
+    );
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [debts, total] = await Promise.all([
+      Purchase.find(filter)
+        .populate('supplier_id', 'name code contact_person phone')
+        .populate('marketlist_id', 'marketlist_number date required_date')
+        .populate('purchased_by', 'name email')
+        .sort({ due_date: 1, purchased_at: -1 })
+        .skip(skip)
+        .limit(Number(limit)),
+      Purchase.countDocuments(filter)
+    ]);
+
+    return { data: debts, total, page: Number(page), limit: Number(limit) };
+  }
+
   async getPurchases(query = {}) {
     const {
       marketlist_id,
       supplier_id,
       startDate,
       endDate,
+      payment_status,
       page = 1,
       limit = 20
     } = query;
@@ -158,6 +318,7 @@ class PurchaseService {
     const filter = {};
     if (marketlist_id) filter.marketlist_id = marketlist_id;
     if (supplier_id) filter.supplier_id = supplier_id;
+    if (payment_status) filter.payment_status = payment_status;
 
     if (startDate || endDate) {
       filter.purchased_at = {};
@@ -173,7 +334,7 @@ class PurchaseService {
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
         .populate('supplier_id', 'name code contact_person phone')
-        .populate('marketlist_id', 'code date status required_date')
+        .populate('marketlist_id', 'marketlist_number date status required_date')
         .populate('purchased_by', 'name email role')
         .sort({ purchased_at: -1, createdAt: -1 })
         .skip(skip)
@@ -196,18 +357,19 @@ class PurchaseService {
       .populate('marketlist_id')
       .populate('purchased_by', 'name email role');
 
-    if (!purchase) {
-      throw new Error('Transaksi pembelian tidak ditemukan.');
-    }
+    if (!purchase) throw new Error('Transaksi pembelian tidak ditemukan.');
 
     const items = await PurchaseItem.find({ purchase_id: id }).populate('product_id');
+    const debtPayments = await DebtPayment.find({ purchase_id: id })
+      .populate('recorded_by', 'name')
+      .sort({ paid_at: 1 });
 
     return {
       ...purchase.toObject(),
-      items
+      items,
+      debt_payments: debtPayments
     };
   }
 }
 
 module.exports = new PurchaseService();
-

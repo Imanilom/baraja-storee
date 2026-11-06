@@ -16,6 +16,7 @@ const { receivingRouter, marketlistReceiptRouter } = require('./modules/receivin
 const { invoiceRouter, marketlistInvoiceRouter } = require('./modules/invoices/invoice.routes');
 const priceRoutes = require('./modules/prices/prices.routes');
 const purchaseRoutes = require('./modules/purchases/purchase.routes');
+const overheadRoutes = require('./modules/overheads/overhead.routes');
 const kpiRoutes = require('./modules/kpi/kpi.routes');
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const financeRoutes = require('./modules/finance/profit-loss.routes');
@@ -53,6 +54,7 @@ apiRouter.use('/receipts', receivingRouter);
 apiRouter.use('/receiving', receivingRouter);
 apiRouter.use('/invoices', invoiceRouter);
 apiRouter.use('/purchases', purchaseRoutes);
+apiRouter.use('/overheads', overheadRoutes);
 apiRouter.use('/prices', priceRoutes);
 apiRouter.use('/kpi', kpiRoutes);
 apiRouter.use('/finance', financeRoutes);
