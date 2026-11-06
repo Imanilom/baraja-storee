@@ -6,7 +6,10 @@ class AuthController {
     try {
       const { email, password } = req.body;
       const result = await authService.login(email, password);
-      return sendSuccess(res, 'Login successful', result);
+      return sendSuccess(res, 'Login successful', {
+        ...result,
+        token: result.tokens?.accessToken
+      });
     } catch (error) {
       return sendError(res, error.message, null, 401);
     }

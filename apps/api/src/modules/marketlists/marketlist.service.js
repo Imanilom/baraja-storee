@@ -135,6 +135,16 @@ class MarketlistService {
     const itemDocs = preparedItems.map((pi) => ({ ...pi, marketlist_id: marketlist._id }));
     await MarketlistItem.insertMany(itemDocs);
 
+    // Update last_purchase_price & last_supplier_id on products if provided
+    for (const pi of preparedItems) {
+      if (pi.unit_price > 0 && pi.supplier_id) {
+        await Product.findByIdAndUpdate(pi.product_id, {
+          last_purchase_price: pi.unit_price,
+          last_supplier_id: pi.supplier_id
+        }).catch(() => null);
+      }
+    }
+
     // Initialize single note document
     await MarketlistNote.create({
       marketlist_id: marketlist._id,

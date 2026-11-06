@@ -13,9 +13,18 @@ class AuthService {
       'password': password.trim(),
     });
 
-    final data = res['data'];
-    final token = data['token'];
-    final userJson = data['user'];
+    final data = res['data'] ?? {};
+    final String token = (data['tokens'] != null && data['tokens']['accessToken'] != null)
+        ? data['tokens']['accessToken'].toString()
+        : (data['token']?.toString() ?? data['accessToken']?.toString() ?? '');
+
+    if (token.isEmpty) {
+      throw Exception('Gagal mendapatkan token autentikasi dari respons server.');
+    }
+
+    final userJson = data['user'] is Map<String, dynamic>
+        ? data['user'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
     final user = UserModel.fromJson(userJson, token: token);
 

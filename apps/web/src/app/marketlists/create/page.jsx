@@ -54,6 +54,22 @@ export default function CreateMarketlistPage() {
     setItems(updated);
   };
 
+  const handleProductSelect = (index, productId) => {
+    const updated = [...items];
+    const selectedProd = products.find((p) => p._id === productId);
+    updated[index].product_id = productId;
+    if (selectedProd) {
+      if (selectedProd.last_purchase_price && Number(selectedProd.last_purchase_price) > 0) {
+        updated[index].unit_price = Number(selectedProd.last_purchase_price);
+      }
+      const lastSuppId = selectedProd.last_supplier_id?._id || selectedProd.last_supplier_id;
+      if (lastSuppId) {
+        updated[index].supplier_id = lastSuppId;
+      }
+    }
+    setItems(updated);
+  };
+
   const calculateTotal = () => {
     return items.reduce((sum, item) => {
       const q = parseFloat(item.requested_qty) || 0;
@@ -185,7 +201,7 @@ export default function CreateMarketlistPage() {
                     </label>
                     <select
                       value={row.product_id}
-                      onChange={(e) => handleItemChange(idx, 'product_id', e.target.value)}
+                      onChange={(e) => handleProductSelect(idx, e.target.value)}
                       className="w-full text-xs p-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
                       <option value="">-- Pilih Barang --</option>

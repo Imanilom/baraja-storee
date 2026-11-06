@@ -101,6 +101,26 @@ class PurchaseService {
       }))
     );
 
+    // Update each product's last_purchase_price and last_supplier_id
+    const ProductPrice = require('../prices/product-price.model');
+    for (const item of itemsToInsert) {
+      if (item.product_id && item.actual_unit_price > 0) {
+        await Product.findByIdAndUpdate(item.product_id, {
+          last_purchase_price: item.actual_unit_price,
+          last_supplier_id: supplier_id
+        }).catch(() => null);
+
+        await ProductPrice.create({
+          product_id: item.product_id,
+          supplier_id,
+          price: item.actual_unit_price,
+          source: 'purchase',
+          reference_id: purchase._id,
+          recorded_at: new Date(purchased_at)
+        }).catch(() => null);
+      }
+    }
+
     // Audit log
     await ActivityLog.create({
       user_id: user?._id,

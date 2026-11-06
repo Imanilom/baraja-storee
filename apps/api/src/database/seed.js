@@ -85,35 +85,45 @@ const seedData = async () => {
         sku: 'BRS-001',
         category_id: categories[0]._id,
         unit_id: unitKg._id,
-        specification: 'Beras putih bersih kemasan karung 25kg'
+        specification: 'Beras putih bersih kemasan karung 25kg',
+        last_purchase_price: 325000,
+        last_supplier_id: suppliers[0]._id
       },
       {
         name: 'Ayam Potong Broiler',
         sku: 'AYM-001',
         category_id: categories[1]._id,
         unit_id: unitKg._id,
-        specification: 'Karkas ayam segar ukuran 1.0 - 1.2 kg'
+        specification: 'Karkas ayam segar ukuran 1.0 - 1.2 kg',
+        last_purchase_price: 38000,
+        last_supplier_id: suppliers[1]._id
       },
       {
         name: 'Bawang Merah Brebes',
         sku: 'BWG-001',
         category_id: categories[2]._id,
         unit_id: unitKg._id,
-        specification: 'Bawang merah super kering pilihan'
+        specification: 'Bawang merah super kering pilihan',
+        last_purchase_price: 45000,
+        last_supplier_id: suppliers[2]._id
       },
       {
         name: 'Minyak Goreng Sawit',
         sku: 'MYK-001',
         category_id: categories[0]._id,
         unit_id: unitLtr._id,
-        specification: 'Minyak goreng kemasan jerigen 5 Liter'
+        specification: 'Minyak goreng kemasan jerigen 5 Liter',
+        last_purchase_price: 78000,
+        last_supplier_id: suppliers[0]._id
       },
       {
         name: 'Gula Pasir Kristal Putih',
         sku: 'GLA-001',
         category_id: categories[0]._id,
         unit_id: unitKg._id,
-        specification: 'Gula kristal putih grade A'
+        specification: 'Gula kristal putih grade A',
+        last_purchase_price: 17500,
+        last_supplier_id: suppliers[0]._id
       }
     ]);
 

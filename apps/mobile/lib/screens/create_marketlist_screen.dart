@@ -376,8 +376,13 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                 if (p != null) {
                                   it.productName = p['name'];
                                   it.unitName = p['unit_id'] is Map ? p['unit_id']['name'] : '';
-                                  if (p['last_purchase_price'] != null && it.price == 0) {
+                                  if (p['last_purchase_price'] != null && (p['last_purchase_price'] as num) > 0) {
                                     it.price = (p['last_purchase_price'] as num).toDouble();
+                                  }
+                                  if (p['last_supplier_id'] != null) {
+                                    final lastSupp = p['last_supplier_id'];
+                                    final suppId = lastSupp is Map ? lastSupp['_id'] : lastSupp;
+                                    it.supplierId = suppId?.toString();
                                   }
                                 }
                               });
@@ -389,6 +394,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                               Expanded(
                                 flex: 2,
                                 child: TextFormField(
+                                  key: ValueKey('qty_${idx}_${it.productId}'),
                                   initialValue: it.qty.toString(),
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
@@ -407,6 +413,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                               Expanded(
                                 flex: 3,
                                 child: TextFormField(
+                                  key: ValueKey('price_${idx}_${it.productId}_${it.price}'),
                                   initialValue: it.price.toInt().toString(),
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
@@ -426,6 +433,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                           const SizedBox(height: 10),
                           // Dropdown Supplier
                           DropdownButtonFormField<String>(
+                            key: ValueKey('supp_${idx}_${it.productId}_${it.supplierId}'),
                             value: it.supplierId,
                             isExpanded: true,
                             hint: const Text('Pilih Supplier (Opsional)'),
