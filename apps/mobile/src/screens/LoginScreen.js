@@ -107,14 +107,21 @@ export default function LoginScreen({ onLoginSuccess }) {
             )}
           </TouchableOpacity>
 
-          {/* Quick Demo Receiver Login */}
+          {/* Quick Demo Receiver & Purchasing Login */}
           <View style={styles.demoSection}>
-            <Text style={styles.demoLabel}>AKSES CEPAT PETUGAS (RECEIVER):</Text>
+            <Text style={styles.demoLabel}>AKSES CEPAT PETUGAS & PURCHASING:</Text>
             <TouchableOpacity
               style={styles.demoBtn}
               onPress={() => handleLogin('receiver@baraja.com', 'receiver123')}
             >
               <Text style={styles.demoBtnText}>⚡ Masuk sebagai Receiver Gudang</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.demoBtn, { marginTop: 8, borderColor: '#cbd5e1', backgroundColor: '#f8fafc' }]}
+              onPress={() => handleLogin('purchasing@baraja.com', 'purchasing123')}
+            >
+              <Text style={[styles.demoBtnText, { color: '#0f172a' }]}>📝 Masuk sebagai Purchasing Staff</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -303,3 +310,4 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   }
 });
+

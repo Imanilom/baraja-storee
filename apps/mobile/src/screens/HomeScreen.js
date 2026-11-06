@@ -12,7 +12,7 @@ import Header from '../components/Header';
 import { fetchWithAuth } from '../config/api';
 import offlineService from '../services/offline.service';
 
-export default function HomeScreen({ user, onNavigateToReceiving, onNavigateToMarketlist }) {
+export default function HomeScreen({ user, onNavigateToReceiving, onNavigateToMarketlist, onCreateMarketlist }) {
   const [marketlists, setMarketlists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,6 +74,15 @@ export default function HomeScreen({ user, onNavigateToReceiving, onNavigateToMa
             Aplikasi ini berfungsi sebagai Surat Jalan Digital. Periksa kuantitas fisik barang yang datang sesuai Marketlist yang telah disetujui Admin.
           </Text>
         </View>
+
+        {/* Quick Action Button */}
+        <TouchableOpacity
+          style={styles.createMarketlistActionBtn}
+          onPress={onCreateMarketlist}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.createMarketlistActionBtnText}>📝 + Buat Marketlist Belanja Baru</Text>
+        </TouchableOpacity>
 
         {/* 2 Big Stat Cards */}
         <View style={styles.statGrid}>
@@ -176,6 +185,23 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 12,
     lineHeight: 18
+  },
+  createMarketlistActionBtn: {
+    backgroundColor: '#16a34a',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4
+  },
+  createMarketlistActionBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800'
   },
   statGrid: {
     flexDirection: 'row',
@@ -310,3 +336,4 @@ const styles = StyleSheet.create({
     color: '#16a34a'
   }
 });
+

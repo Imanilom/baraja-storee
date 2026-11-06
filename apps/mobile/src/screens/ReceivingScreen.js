@@ -132,7 +132,7 @@ export default function ReceivingScreen({ marketlistId, user, onFinish }) {
             method: 'PUT',
             body: JSON.stringify({ note: marketlistNote })
           });
-        } catch {}
+        } catch { }
       }
 
       if (receiptRes.isOffline) {
@@ -481,3 +481,4 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   }
 });
+

@@ -54,3 +54,4 @@ export async function fetchWithAuth(endpoint, options = {}) {
     throw error;
   }
 }
+

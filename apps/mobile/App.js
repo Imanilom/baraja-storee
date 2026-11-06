@@ -7,6 +7,7 @@ import BottomNav from './src/components/BottomNav';
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import MarketlistScreen from './src/screens/MarketlistScreen';
+import CreateMarketlistScreen from './src/screens/CreateMarketlistScreen';
 import ReceivingScreen from './src/screens/ReceivingScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -16,6 +17,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const [selectedMarketlistId, setSelectedMarketlistId] = useState(null);
+  const [isCreatingMarketlist, setIsCreatingMarketlist] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -52,24 +54,42 @@ export default function App() {
   }
 
   const navigateToReceivingWithMl = (mlId) => {
+    setIsCreatingMarketlist(false);
     setSelectedMarketlistId(mlId);
     setActiveTab('receiving');
   };
 
   const renderActiveScreen = () => {
+    if (isCreatingMarketlist) {
+      return (
+        <CreateMarketlistScreen
+          onBack={() => setIsCreatingMarketlist(false)}
+          onSuccess={() => {
+            setIsCreatingMarketlist(false);
+            setActiveTab('marketlist');
+          }}
+        />
+      );
+    }
+
     switch (activeTab) {
       case 'home':
         return (
           <HomeScreen
             user={currentUser}
             onNavigateToReceiving={navigateToReceivingWithMl}
-            onNavigateToMarketlist={() => setActiveTab('marketlist')}
+            onNavigateToMarketlist={() => {
+              setIsCreatingMarketlist(false);
+              setActiveTab('marketlist');
+            }}
+            onCreateMarketlist={() => setIsCreatingMarketlist(true)}
           />
         );
       case 'marketlist':
         return (
           <MarketlistScreen
             onSelectMarketlist={(mlId) => navigateToReceivingWithMl(mlId)}
+            onCreateMarketlist={() => setIsCreatingMarketlist(true)}
           />
         );
       case 'receiving':
@@ -101,7 +121,13 @@ export default function App() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
       <View style={styles.container}>{renderActiveScreen()}</View>
-      <BottomNav activeTab={activeTab} onSelectTab={(tab) => setActiveTab(tab)} />
+      <BottomNav
+        activeTab={isCreatingMarketlist ? 'marketlist' : activeTab}
+        onSelectTab={(tab) => {
+          setIsCreatingMarketlist(false);
+          setActiveTab(tab);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -122,3 +148,4 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   }
 });
+

@@ -115,3 +115,4 @@ class OfflineReceivingService {
 }
 
 export default new OfflineReceivingService();
+

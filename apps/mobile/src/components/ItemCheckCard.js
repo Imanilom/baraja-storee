@@ -315,3 +315,4 @@ const styles = StyleSheet.create({
     color: '#7f1d1d'
   }
 });
+
