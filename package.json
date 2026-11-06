@@ -1,11 +1,12 @@
 {
   "name": "purchasing-management-system",
   "version": "1.0.0",
-  "description": "Integrated Purchasing Management System (Web Next.js, Mobile React Native/Expo, Backend Node.js Express)",
+  "description": "Integrated Purchasing Management System (Web Next.js, Mobile Flutter, Backend Node.js Express)",
   "private": true,
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/api",
+    "apps/web"
   ],
   "scripts": {
     "dev:api": "npm run dev --workspace=apps/api",
@@ -15,8 +16,7 @@
     "test:api:atlas": "npm run test:atlas --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "build:web": "npm run build --workspace=apps/web",
-    "dev:mobile": "npm run start --workspace=apps/mobile",
-    "android:mobile": "npm run android --workspace=apps/mobile"
+    "dev:mobile": "flutter run -d android --directory=apps/mobile"
   },
   "dependencies": {
     "react": "18.3.1",
