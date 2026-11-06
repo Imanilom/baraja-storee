@@ -92,7 +92,24 @@ npm run dev:api
 Health check: `http://localhost:5000/health`  
 Base API: `http://localhost:5000/api/v1`
 
-### 6. Menjalankan Automated Acceptance Test (16/16 Skenario)
+### 6. Menjalankan Web Dashboard (Next.js)
+```bash
+npm run dev:web
+```
+- Akses di browser: `http://localhost:3000`
+- Fitur Laba Rugi OAuth 2.0: `http://localhost:3000/laba-rugi`
+
+### 7. Menjalankan Mobile App Android (React Native / Expo)
+```bash
+npm run dev:mobile
+```
+- Buka aplikasi **Expo Go** pada perangkat Android lalu pindai (scan) QR code di terminal, atau tekan `a` pada terminal untuk membuka Android Emulator.
+- Di layar login tersedia tombol akses cepat atau masukkan:
+  - **Email**: `receiver@baraja.com`
+  - **Password**: `receiver123`
+- Mendukung mode offline: jika koneksi internet di gudang terputus, data verifikasi tersimpan di antrean lokal dengan idempotent key `client_request_id` dan dapat disinkronkan saat terhubung kembali.
+
+### 8. Menjalankan Automated Acceptance Test (16/16 Skenario)
 ```bash
 npm run test:api
 ```

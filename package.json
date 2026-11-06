@@ -12,7 +12,9 @@
     "start:api": "npm run start --workspace=apps/api",
     "test:api": "npm run test --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
-    "build:web": "npm run build --workspace=apps/web"
+    "build:web": "npm run build --workspace=apps/web",
+    "dev:mobile": "npm run start --workspace=apps/mobile",
+    "android:mobile": "npm run android --workspace=apps/mobile"
   },
   "dependencies": {
     "react": "18.3.1",
