@@ -7,12 +7,14 @@ const validate = require('../../middleware/validate');
 const { generateInvoiceSchema } = require('@purchasing/validation');
 const { ROLES } = require('@purchasing/constants');
 
+// PDF download route allows direct viewing/downloading in browser (window.open or direct URL)
+router.get('/:id/pdf', invoiceController.downloadPdf);
+
 router.use(authenticate);
 
 // List & view invoices
 router.get('/', invoiceController.list);
 router.get('/:id', invoiceController.getById);
-router.get('/:id/pdf', invoiceController.downloadPdf);
 router.post('/:id/verify', authorize(ROLES.ACCOUNTING), invoiceController.verify);
 
 // Mounted under /api/v1/marketlists/:marketlistId/invoices

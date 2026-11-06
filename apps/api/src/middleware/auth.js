@@ -5,12 +5,17 @@ const { sendError } = require('../utils/response');
 
 const authenticate = async (req, res, next) => {
   try {
+    let token;
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return sendError(res, 'Authentication required', 'No Bearer token provided in Authorization header', 401);
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.query && req.query.token) {
+      token = req.query.token;
     }
 
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return sendError(res, 'Authentication required', 'No Bearer token provided in Authorization header or query parameter', 401);
+    }
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const user = await User.findById(decoded.id).select('-password_hash');

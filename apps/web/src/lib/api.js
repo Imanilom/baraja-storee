@@ -74,6 +74,7 @@ export const api = {
 
   // Master Data
   getProducts: () => fetchApi('/products'),
+  getCategories: () => fetchApi('/products/categories'),
   getSuppliers: () => fetchApi('/suppliers'),
 
   // Marketlists
@@ -124,7 +125,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(options)
     }),
-  getInvoicePdfUrl: (id) => `${API_BASE}/invoices/${id}/pdf`,
+  getInvoicePdfUrl: (id) => {
+    const token = getStoredToken();
+    return `${API_BASE}/invoices/${id}/pdf${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  },
 
   // Profit & Loss (Laba Rugi) with OAuth 2
   getProfitLoss: (params = '') => fetchApi(`/finance/profit-loss${params}`),

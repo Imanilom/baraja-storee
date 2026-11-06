@@ -13,7 +13,8 @@ class _MarketlistFormItem {
   String? productId;
   String? productName;
   String? unitName;
-  String? supplierId;
+  String? categoryId;
+  String? categoryName;
   double qty = 1;
   double price = 0;
   String notes = '';
@@ -27,7 +28,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
   final _notesController = TextEditingController();
 
   List<dynamic> _products = [];
-  List<dynamic> _suppliers = [];
+  List<Map<String, String>> _categories = [];
   bool _isLoadingMaster = true;
   bool _isSubmitting = false;
 
@@ -42,12 +43,41 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
   Future<void> _loadMasterData() async {
     setState(() => _isLoadingMaster = true);
     try {
-      final pRes = await ApiService.get('/products?limit=50').catchError((_) => {'data': []});
-      final sRes = await ApiService.get('/suppliers?limit=50').catchError((_) => {'data': []});
+      final pRes = await ApiService.get('/products?limit=100').catchError((_) => {'data': []});
+      final cRes = await ApiService.get('/products/categories').catchError((_) => {'data': []});
+
+      final products = (pRes['data'] is List) ? (pRes['data'] as List) : [];
+
+      // Extract unique categories
+      final catMap = <String, String>{};
+      if (cRes['data'] is List) {
+        for (var c in cRes['data']) {
+          final id = c['_id']?.toString() ?? '';
+          final name = c['name']?.toString() ?? '';
+          if (id.isNotEmpty && name.isNotEmpty) {
+            catMap[id] = name;
+          }
+        }
+      }
+      for (var p in products) {
+        if (p['category_id'] is Map) {
+          final id = p['category_id']['_id']?.toString() ?? '';
+          final name = p['category_id']['name']?.toString() ?? '';
+          if (id.isNotEmpty && name.isNotEmpty) {
+            catMap[id] = name;
+          }
+        }
+      }
+
+      final categoryList = catMap.entries
+          .map((e) => {'id': e.key, 'name': e.value})
+          .toList()
+        ..sort((a, b) => a['name']!.compareTo(b['name']!));
+
       if (mounted) {
         setState(() {
-          _products = pRes['data'] ?? [];
-          _suppliers = sRes['data'] ?? [];
+          _products = products;
+          _categories = categoryList;
         });
       }
     } catch (_) {}
@@ -73,6 +103,304 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
     });
   }
 
+  void _applyProductToItem(_MarketlistFormItem item, dynamic p) {
+    item.productId = p['_id']?.toString();
+    item.productName = p['name'];
+    item.unitName = p['unit_id'] is Map ? p['unit_id']['name'] : 'Satuan';
+    if (p['category_id'] is Map) {
+      item.categoryId = p['category_id']['_id']?.toString();
+      item.categoryName = p['category_id']['name']?.toString();
+    }
+
+    // Price strictly follows last transaction purchase price
+    if (p['last_purchase_price'] != null && (p['last_purchase_price'] as num) > 0) {
+      item.price = (p['last_purchase_price'] as num).toDouble();
+    } else {
+      item.price = 0.0;
+    }
+  }
+
+  void _openProductCategoryPicker({int? targetIndex}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String selectedCategory = 'ALL';
+        String searchQuery = '';
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = _products.filterCategory(selectedCategory, searchQuery);
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.category_outlined, color: Color(0xFFD97706), size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              targetIndex != null
+                                  ? 'Pilih Barang (#${targetIndex + 1})'
+                                  : 'Katalog Barang per Kategori',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Search input
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Cari nama barang...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setSheetState(() => searchQuery = val);
+                      },
+                    ),
+                  ),
+
+                  // Horizontal Category Chips
+                  Container(
+                    height: 46,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text('Semua (${_products.length})'),
+                            selected: selectedCategory == 'ALL',
+                            selectedColor: const Color(0xFFD97706),
+                            labelStyle: TextStyle(
+                              color: selectedCategory == 'ALL' ? Colors.white : const Color(0xFF475569),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                            onSelected: (_) {
+                              setSheetState(() => selectedCategory = 'ALL');
+                            },
+                          ),
+                        ),
+                        ..._categories.map((cat) {
+                          final count = _products.where((p) {
+                            if (p['category_id'] is Map) {
+                              return p['category_id']['_id'] == cat['id'] ||
+                                  p['category_id']['name'] == cat['name'];
+                            }
+                            return false;
+                          }).length;
+
+                          final isSelected = selectedCategory == cat['id'];
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text('${cat['name']} ($count)'),
+                              selected: isSelected,
+                              selectedColor: const Color(0xFFD97706),
+                              labelStyle: TextStyle(
+                                color: isSelected ? Colors.white : const Color(0xFF475569),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                              onSelected: (_) {
+                                setSheetState(() => selectedCategory = cat['id']!);
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+
+                  const Divider(height: 1),
+
+                  // Product list
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Tidak ada barang ditemukan di kategori ini.',
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, i) {
+                              final p = filtered[i];
+                              final pName = p['name'] ?? 'Barang';
+                              final catName = p['category_id'] is Map
+                                  ? p['category_id']['name']
+                                  : 'Tanpa Kategori';
+                              final uName = p['unit_id'] is Map
+                                  ? p['unit_id']['name']
+                                  : 'Satuan';
+                              final price = (p['last_purchase_price'] != null)
+                                  ? (p['last_purchase_price'] as num).toDouble()
+                                  : 0.0;
+
+                              return ListTile(
+                                dense: true,
+                                leading: CircleAvatar(
+                                  backgroundColor: const Color(0xFFFEF3C7),
+                                  child: const Icon(
+                                    Icons.inventory_2_outlined,
+                                    color: Color(0xFFD97706),
+                                    size: 18,
+                                  ),
+                                ),
+                                title: Text(
+                                  pName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF1F5F9),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            catName,
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: Color(0xFF475569),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Satuan: $uName',
+                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.lock_outline, size: 11, color: Color(0xFFB45309)),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            price > 0
+                                                ? 'Harga Terakhir: Rp ${NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(price)}'
+                                                : 'Harga Terakhir: Rp 0 (Belum ada transaksi)',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFFB45309),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                trailing: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFD97706),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      if (targetIndex != null) {
+                                        _applyProductToItem(_items[targetIndex], p);
+                                      } else {
+                                        if (_items.length == 1 && _items[0].productId == null) {
+                                          _applyProductToItem(_items[0], p);
+                                        } else {
+                                          final newItem = _MarketlistFormItem();
+                                          _applyProductToItem(newItem, p);
+                                          _items.add(newItem);
+                                        }
+                                      }
+                                    });
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                      SnackBar(
+                                        duration: const Duration(seconds: 1),
+                                        content: Text('✅ $pName ditambahkan'),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text('Pilih', style: TextStyle(fontSize: 11)),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _handleSubmit(bool submitDirectlyToAdmin) async {
     for (int i = 0; i < _items.length; i++) {
       if (_items[i].productId == null || _items[i].qty <= 0) {
@@ -93,7 +421,6 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
           'product_id': it.productId,
           'requested_qty': it.qty,
           'unit_price': it.price,
-          'supplier_id': it.supplierId,
           'notes': it.notes,
         }).toList(),
         'notes': _notesController.text.trim(),
@@ -103,7 +430,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
       final mlId = res['data']['_id'];
 
       if (submitDirectlyToAdmin && mlId != null) {
-        await ApiService.put('/marketlists/$mlId/submit', {});
+        await ApiService.post('/marketlists/$mlId/submit', {});
       }
 
       if (mounted) {
@@ -289,7 +616,97 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+
+                  // Info Supplier & Harga Terkunci Notice
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Supplier akan ditentukan oleh Tim Purchasing saat transaksi belanja. Harga satuan otomatis terkunci mengikuti transaksi terakhir.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF1E40AF),
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Quick Category Catalog Banner
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFEF3C7), Color(0xFFFDE68A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFCD34D)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD97706),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.category, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Pilih Barang per Kategori',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Color(0xFF78350F),
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Kelompokkan barang per kategori agar cepat ditemukan.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF92400E),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _openProductCategoryPicker(),
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Katalog'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD97706),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
                   // Section Title & Add Item Button
                   Row(
@@ -306,7 +723,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                       TextButton.icon(
                         onPressed: _addItem,
                         icon: const Icon(Icons.add_circle_outline, size: 18),
-                        label: const Text('+ Tambah Baris'),
+                        label: const Text('+ Baris Baru'),
                       ),
                     ],
                   ),
@@ -316,6 +733,17 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                   ..._items.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final it = entry.value;
+
+                    // Filter products for this item if categoryId is set
+                    final availableProds = (it.categoryId == null || it.categoryId!.isEmpty)
+                        ? _products
+                        : _products.where((p) {
+                            if (p['category_id'] is Map) {
+                              return p['category_id']['_id'] == it.categoryId;
+                            }
+                            return false;
+                          }).toList();
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(14),
@@ -330,23 +758,107 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Barang #${idx + 1}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF475569),
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Barang #${idx + 1}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                  if (it.categoryName != null) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEF3C7),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        it.categoryName!,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                              if (_items.length > 1)
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                  onPressed: () => _removeItem(idx),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                ),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.search, color: Color(0xFFD97706), size: 20),
+                                    tooltip: 'Cari dari Katalog Kategori',
+                                    onPressed: () => _openProductCategoryPicker(targetIndex: idx),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                  if (_items.length > 1) ...[
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                      onPressed: () => _removeItem(idx),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
+
+                          // Dropdown Filter Kategori Baris Ini
+                          DropdownButtonFormField<String>(
+                            value: it.categoryId,
+                            isExpanded: true,
+                            hint: const Text('Semua Kategori (Filter)'),
+                            decoration: const InputDecoration(
+                              labelText: 'Filter Kategori',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              prefixIcon: Icon(Icons.filter_list, size: 18),
+                            ),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('Semua Kategori'),
+                              ),
+                              ..._categories.map((c) {
+                                return DropdownMenuItem<String>(
+                                  value: c['id'],
+                                  child: Text(c['name']!),
+                                );
+                              }),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                it.categoryId = val;
+                                if (val != null) {
+                                  final matchCat = _categories.firstWhere(
+                                    (c) => c['id'] == val,
+                                    orElse: () => {'name': ''},
+                                  );
+                                  it.categoryName = matchCat['name'];
+                                } else {
+                                  it.categoryName = null;
+                                }
+                                // Reset selected product if not in this category
+                                if (it.productId != null) {
+                                  final exists = availableProds.any((p) => p['_id'] == it.productId);
+                                  if (!exists) {
+                                    it.productId = null;
+                                    it.price = 0;
+                                  }
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 10),
+
                           // Dropdown Produk
                           DropdownButtonFormField<String>(
                             value: it.productId,
@@ -357,33 +869,25 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                               border: OutlineInputBorder(),
                               isDense: true,
                             ),
-                            items: _products.map((p) {
+                            items: availableProds.map((p) {
                               final pId = p['_id']?.toString() ?? '';
                               final pName = p['name'] ?? 'Item';
                               final uName = p['unit_id'] is Map ? p['unit_id']['name'] : 'Satuan';
+                              final cName = p['category_id'] is Map ? p['category_id']['name'] : '';
+                              final label = cName.isNotEmpty ? '[$cName] $pName ($uName)' : '$pName ($uName)';
                               return DropdownMenuItem<String>(
                                 value: pId,
                                 child: Text(
-                                  '$pName ($uName)',
+                                  label,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               );
                             }).toList(),
                             onChanged: (val) {
                               setState(() {
-                                it.productId = val;
                                 final p = _products.firstWhere((prod) => prod['_id'] == val, orElse: () => null);
                                 if (p != null) {
-                                  it.productName = p['name'];
-                                  it.unitName = p['unit_id'] is Map ? p['unit_id']['name'] : '';
-                                  if (p['last_purchase_price'] != null && (p['last_purchase_price'] as num) > 0) {
-                                    it.price = (p['last_purchase_price'] as num).toDouble();
-                                  }
-                                  if (p['last_supplier_id'] != null) {
-                                    final lastSupp = p['last_supplier_id'];
-                                    final suppId = lastSupp is Map ? lastSupp['_id'] : lastSupp;
-                                    it.supplierId = suppId?.toString();
-                                  }
+                                  _applyProductToItem(it, p);
                                 }
                               });
                             },
@@ -391,6 +895,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                           const SizedBox(height: 10),
                           Row(
                             children: [
+                              // Kuantitas
                               Expanded(
                                 flex: 2,
                                 child: TextFormField(
@@ -410,49 +915,30 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
+                              // Harga Satuan Terakhir (Read-Only / Terkunci)
                               Expanded(
                                 flex: 3,
-                                child: TextFormField(
-                                  key: ValueKey('price_${idx}_${it.productId}_${it.price}'),
-                                  initialValue: it.price.toInt().toString(),
-                                  keyboardType: TextInputType.number,
+                                child: InputDecorator(
                                   decoration: const InputDecoration(
-                                    labelText: 'Harga Satuan (Rp)',
+                                    labelText: 'Harga Satuan Terakhir',
+                                    helperText: 'Terkunci dari transaksi',
                                     border: OutlineInputBorder(),
                                     isDense: true,
+                                    filled: true,
+                                    fillColor: Color(0xFFF1F5F9),
+                                    suffixIcon: Icon(Icons.lock, size: 16, color: Colors.grey),
                                   ),
-                                  onChanged: (val) {
-                                    setState(() {
-                                      it.price = double.tryParse(val) ?? 0;
-                                    });
-                                  },
+                                  child: Text(
+                                    it.price > 0 ? currencyFormat.format(it.price) : 'Rp 0',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF334155),
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 10),
-                          // Dropdown Supplier
-                          DropdownButtonFormField<String>(
-                            key: ValueKey('supp_${idx}_${it.productId}_${it.supplierId}'),
-                            value: it.supplierId,
-                            isExpanded: true,
-                            hint: const Text('Pilih Supplier (Opsional)'),
-                            decoration: const InputDecoration(
-                              labelText: 'Pemasok / Supplier',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            items: _suppliers.map((s) {
-                              final sId = s['_id']?.toString() ?? '';
-                              final sName = s['name'] ?? 'Supplier';
-                              return DropdownMenuItem<String>(
-                                value: sId,
-                                child: Text(sName, overflow: TextOverflow.ellipsis),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              setState(() => it.supplierId = val);
-                            },
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -509,3 +995,28 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
   }
 }
 
+extension ProductListFilter on List<dynamic> {
+  List<dynamic> filterCategory(String categoryId, String query) {
+    return where((p) {
+      bool catMatch = true;
+      if (categoryId != 'ALL') {
+        if (p['category_id'] is Map) {
+          catMatch = p['category_id']['_id'] == categoryId ||
+              p['category_id']['name'] == categoryId;
+        } else {
+          catMatch = false;
+        }
+      }
+
+      bool queryMatch = true;
+      if (query.trim().isNotEmpty) {
+        final name = (p['name'] ?? '').toString().toLowerCase();
+        final sku = (p['sku'] ?? '').toString().toLowerCase();
+        final q = query.toLowerCase().trim();
+        queryMatch = name.contains(q) || sku.contains(q);
+      }
+
+      return catMatch && queryMatch;
+    }).toList();
+  }
+}

@@ -101,7 +101,12 @@ class MarketlistService {
         throw new Error(`Product ID ${item.product_id} not found`);
       }
 
-      const subtotal = Number((item.requested_qty * item.unit_price).toFixed(2));
+      const finalUnitPrice =
+        prod.last_purchase_price && Number(prod.last_purchase_price) > 0
+          ? Number(prod.last_purchase_price)
+          : Number(item.unit_price) || 0;
+
+      const subtotal = Number((item.requested_qty * finalUnitPrice).toFixed(2));
       totalQuantity += item.requested_qty;
       estimatedAmount += subtotal;
 
@@ -115,7 +120,7 @@ class MarketlistService {
         },
         supplier_id: item.supplier_id || null,
         requested_qty: item.requested_qty,
-        unit_price: item.unit_price,
+        unit_price: finalUnitPrice,
         subtotal,
         notes: item.notes || '',
         version: 1
