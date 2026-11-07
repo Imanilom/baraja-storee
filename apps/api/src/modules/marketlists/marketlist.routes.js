@@ -19,6 +19,7 @@ router.use(authenticate);
 
 // List & Read Marketlist
 router.get('/', marketlistController.list);
+router.get('/aggregate', marketlistController.getAggregate);
 router.get('/:id', marketlistController.getById);
 
 // Create & Edit Marketlist

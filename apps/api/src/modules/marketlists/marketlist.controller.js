@@ -11,6 +11,15 @@ class MarketlistController {
     }
   }
 
+  async getAggregate(req, res) {
+    try {
+      const data = await marketlistService.getMarketlistAggregate(req.query);
+      return sendSuccess(res, 'Marketlist aggregate retrieved', data);
+    } catch (error) {
+      return sendError(res, 'Failed to fetch aggregate', error.message, 500);
+    }
+  }
+
   async getById(req, res) {
     try {
       const marketlist = await marketlistService.getMarketlistById(req.params.id);

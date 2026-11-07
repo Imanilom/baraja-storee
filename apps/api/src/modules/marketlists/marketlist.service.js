@@ -403,6 +403,102 @@ class MarketlistService {
 
     return marketlist;
   }
+
+  async getMarketlistAggregate(query = {}) {
+    const { period = 'day' } = query;
+    const now = new Date();
+    let startDate = new Date();
+
+    if (period === 'week') {
+      startDate.setDate(now.getDate() - 7);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      // Default: today (1 hari ini)
+      startDate.setHours(0, 0, 0, 0);
+    }
+
+    const marketlists = await Marketlist.find({
+      date: { $gte: startDate, $lte: now }
+    }).select('_id marketlist_number status date totals');
+
+    const mlIds = marketlists.map((m) => m._id);
+
+    if (mlIds.length === 0) {
+      return {
+        period,
+        date_range: { start: startDate, end: now },
+        total_marketlists: 0,
+        total_items: 0,
+        total_estimated_amount: 0,
+        items: []
+      };
+    }
+
+    const items = await MarketlistItem.find({
+      marketlist_id: { $in: mlIds }
+    }).populate({
+      path: 'product_id',
+      populate: [
+        { path: 'category_id', select: 'name type' },
+        { path: 'unit_id', select: 'name abbreviation' }
+      ]
+    });
+
+    const itemMap = new Map();
+    let grandTotalAmount = 0;
+
+    for (const it of items) {
+      const prod = it.product_id;
+      const prodId = prod?._id?.toString() || it.product_name || 'unknown';
+      const prodName = prod?.name || it.product_snapshot?.name || it.product_name || 'Barang';
+      const catName = prod?.category_id?.name || 'Tanpa Kategori';
+      const itemType = prod?.item_type || 'groceries';
+      const unit = prod?.unit_id?.abbreviation || it.product_snapshot?.unit_name || 'KG';
+      const qty = Number(it.requested_qty) || 0;
+      const price = Number(it.unit_price) || 0;
+      const subtotal = qty * price;
+
+      grandTotalAmount += subtotal;
+
+      if (!itemMap.has(prodId)) {
+        itemMap.set(prodId, {
+          product_id: prodId,
+          name: prodName,
+          category: catName,
+          item_type: itemType,
+          unit: unit,
+          total_requested_qty: 0,
+          total_received_qty: 0,
+          marketlist_count: 0,
+          marketlist_ids: new Set(),
+          estimated_amount: 0
+        });
+      }
+
+      const entry = itemMap.get(prodId);
+      entry.total_requested_qty += qty;
+      entry.total_received_qty += Number(it.received_qty) || 0;
+      entry.estimated_amount += subtotal;
+      entry.marketlist_ids.add(it.marketlist_id.toString());
+    }
+
+    const resultItems = Array.from(itemMap.values())
+      .map((entry) => ({
+        ...entry,
+        marketlist_count: entry.marketlist_ids.size,
+        marketlist_ids: undefined
+      }))
+      .sort((a, b) => b.total_requested_qty - a.total_requested_qty);
+
+    return {
+      period,
+      date_range: { start: startDate, end: now },
+      total_marketlists: marketlists.length,
+      total_items: resultItems.length,
+      total_estimated_amount: grandTotalAmount,
+      items: resultItems
+    };
+  }
 }
 
 module.exports = new MarketlistService();

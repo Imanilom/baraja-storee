@@ -93,7 +93,9 @@ class ReceivingService {
       received_by: user._id,
       supplier_id: data.supplier_id || null,
       general_condition: data.general_condition,
-      attachments: data.attachments || [],
+      attachments: (data.attachments && data.attachments.length > 0)
+        ? data.attachments
+        : (data.photos ? data.photos.map(p => (typeof p === 'string' ? { url: p, type: 'photo' } : p)) : []),
       status: GOODS_RECEIPT_STATUS.SUBMITTED
     });
 
