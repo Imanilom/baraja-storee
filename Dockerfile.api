@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies needed for compiling or native modules
+RUN apk add --no-cache libc6-compat
+
+# Copy workspace configuration and packages
+COPY package.json package-lock.json ./
+COPY packages ./packages
+COPY apps/api ./apps/api
+
+# Install production dependencies
+RUN npm ci --workspace=apps/api --workspace=packages/* --omit=dev
+
+WORKDIR /app/apps/api
+
+ENV NODE_ENV=production
+ENV PORT=5000
+
+EXPOSE 5000
+
+CMD ["node", "src/server.js"]

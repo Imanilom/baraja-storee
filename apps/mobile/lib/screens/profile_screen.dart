@@ -42,7 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Gunakan http://10.0.2.2:5000/api untuk Emulator Android, atau http://[IP_PC]:5000/api untuk HP fisik.',
+              'Default production: https://api.barajastore.my.id/api/v1\nUntuk Emulator lokal: http://10.0.2.2:5000/api/v1',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),

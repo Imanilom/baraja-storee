@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Gunakan http://10.0.2.2:5000/api untuk Emulator, atau IP lokal PC (contoh http://192.168.1.5:5000/api) jika pakai HP fisik.',
+              'Default production: https://api.barajastore.my.id/api/v1\nUntuk Emulator lokal: http://10.0.2.2:5000/api/v1',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),

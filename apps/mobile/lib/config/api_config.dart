@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
-  static const String _defaultAndroidEmulator = 'http://10.0.2.2:5000/api/v1';
-  static const String _defaultGeneral = 'http://localhost:5000/api/v1';
+  static const String defaultProduction = 'https://api.barajastore.my.id/api/v1';
+  static const String defaultAndroidEmulator = 'http://10.0.2.2:5000/api/v1';
   static const String _keyBaseUrl = 'custom_base_url';
 
   static Future<String> getBaseUrl() async {
@@ -12,12 +12,7 @@ class ApiConfig {
     if (custom != null && custom.isNotEmpty) {
       return custom;
     }
-    try {
-      if (Platform.isAndroid) {
-        return _defaultAndroidEmulator;
-      }
-    } catch (_) {}
-    return _defaultGeneral;
+    return defaultProduction;
   }
 
   static Future<void> setBaseUrl(String url) async {
