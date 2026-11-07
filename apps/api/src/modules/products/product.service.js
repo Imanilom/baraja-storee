@@ -6,6 +6,7 @@ class ProductService {
   async getAllProducts(query = {}) {
     const filter = { is_active: true };
     if (query.category_id) filter.category_id = query.category_id;
+    if (query.item_type) filter.item_type = query.item_type;
     if (query.search) {
       filter.$or = [
         { name: { $regex: query.search, $options: 'i' } },
@@ -14,7 +15,7 @@ class ProductService {
     }
 
     const products = await Product.find(filter)
-      .populate('category_id', 'name')
+      .populate('category_id', 'name type')
       .populate('unit_id', 'name abbreviation')
       .populate('last_supplier_id', 'name code')
       .sort({ name: 1 })

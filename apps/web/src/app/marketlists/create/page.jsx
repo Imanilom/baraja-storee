@@ -24,6 +24,7 @@ export default function CreateMarketlistPage() {
   const [loading, setLoading] = useState(false);
 
   // Quick Catalog / Category Browser state
+  const [selectedItemType, setSelectedItemType] = useState('ALL'); // 'ALL' | 'perishable' | 'groceries'
   const [selectedCatalogCat, setSelectedCatalogCat] = useState('ALL');
   const [catalogSearch, setCatalogSearch] = useState('');
   const [showCatalog, setShowCatalog] = useState(true);
@@ -75,18 +76,27 @@ export default function CreateMarketlistPage() {
   // Extract unique category list from products + categories API
   const categoryList = useMemo(() => {
     const map = new Map();
-    categories.forEach((c) => map.set(c._id, c.name));
-    products.forEach((p) => {
-      if (p.category_id?._id && p.category_id?.name) {
-        map.set(p.category_id._id, p.category_id.name);
+    categories.forEach((c) => {
+      if (selectedItemType === 'ALL' || c.type === selectedItemType || c.type === 'all' || !c.type) {
+        map.set(c._id, { id: c._id, name: c.name, type: c.type });
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categories, products]);
+    products.forEach((p) => {
+      if (selectedItemType === 'ALL' || p.item_type === selectedItemType) {
+        if (p.category_id?._id && p.category_id?.name) {
+          if (!map.has(p.category_id._id)) {
+            map.set(p.category_id._id, { id: p.category_id._id, name: p.category_id.name, type: p.item_type });
+          }
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [categories, products, selectedItemType]);
 
   // Catalog filtered items
   const filteredCatalogProducts = useMemo(() => {
     return products.filter((p) => {
+      const typeMatch = selectedItemType === 'ALL' || p.item_type === selectedItemType;
       const catMatch =
         selectedCatalogCat === 'ALL' ||
         p.category_id?._id === selectedCatalogCat ||
@@ -95,9 +105,9 @@ export default function CreateMarketlistPage() {
         !catalogSearch.trim() ||
         p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
         (p.sku && p.sku.toLowerCase().includes(catalogSearch.toLowerCase()));
-      return catMatch && searchMatch;
+      return typeMatch && catMatch && searchMatch;
     });
-  }, [products, selectedCatalogCat, catalogSearch]);
+  }, [products, selectedItemType, selectedCatalogCat, catalogSearch]);
 
   const handleAddItem = (initialProduct = null) => {
     if (initialProduct) {
@@ -325,7 +335,47 @@ export default function CreateMarketlistPage() {
 
             {showCatalog && (
               <div className="space-y-3 pt-2">
-                {/* Search & Category Filter Pills */}
+                {/* 1. Filter Tipe Barang: Perishable vs Groceries */}
+                <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-amber-200/60">
+                  <span className="text-xs font-bold text-slate-700">Tipe Barang:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedItemType('ALL'); setSelectedCatalogCat('ALL'); }}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      selectedItemType === 'ALL'
+                        ? 'bg-slate-800 text-white shadow-sm'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    Semua ({products.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedItemType('perishable'); setSelectedCatalogCat('ALL'); }}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                      selectedItemType === 'perishable'
+                        ? 'bg-rose-600 text-white shadow-sm'
+                        : 'bg-white text-rose-700 hover:bg-rose-50 border border-rose-200'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                    Perishable / Basah ({products.filter(p => p.item_type === 'perishable').length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedItemType('groceries'); setSelectedCatalogCat('ALL'); }}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                      selectedItemType === 'groceries'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    Groceries / Kering ({products.filter(p => p.item_type === 'groceries').length})
+                  </button>
+                </div>
+
+                {/* 2. Search & Category Filter Pills */}
                 <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
                   {/* Category Pills */}
                   <div className="flex flex-wrap gap-1.5 items-center w-full sm:w-auto">
@@ -338,13 +388,15 @@ export default function CreateMarketlistPage() {
                           : 'bg-white text-slate-600 hover:bg-amber-100 border border-slate-200'
                       }`}
                     >
-                      Semua Kategori ({products.length})
+                      Semua Kategori ({
+                        products.filter(p => selectedItemType === 'ALL' || p.item_type === selectedItemType).length
+                      })
                     </button>
                     {categoryList.map((cat) => {
                       const count = products.filter(
                         (p) =>
-                          p.category_id?._id === cat.id ||
-                          p.category_id?.name === cat.name
+                          (selectedItemType === 'ALL' || p.item_type === selectedItemType) &&
+                          (p.category_id?._id === cat.id || p.category_id?.name === cat.name)
                       ).length;
                       return (
                         <button
@@ -394,8 +446,19 @@ export default function CreateMarketlistPage() {
                           className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-200 hover:border-amber-400 hover:shadow-xs transition-all text-xs"
                         >
                           <div className="min-w-0 pr-2">
-                            <div className="font-semibold text-slate-800 truncate">
-                              {p.name}
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              {p.item_type === 'perishable' ? (
+                                <span className="bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.2 rounded text-[9px] font-bold">
+                                  Perishable
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded text-[9px] font-bold">
+                                  Groceries
+                                </span>
+                              )}
+                              <span className="font-semibold text-slate-800 truncate">
+                                {p.name}
+                              </span>
                             </div>
                             <div className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                               <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[9px] font-medium text-slate-600">
@@ -517,6 +580,19 @@ export default function CreateMarketlistPage() {
                           ))
                         )}
                       </select>
+                      {row.product_id && (
+                        <div className="mt-1 flex items-center gap-1">
+                          {products.find((p) => p._id === row.product_id)?.item_type === 'perishable' ? (
+                            <span className="text-[9px] font-bold text-rose-700 bg-rose-100/70 border border-rose-200 px-1.5 py-0.5 rounded">
+                              ● Perishable (Barang Basah)
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-1.5 py-0.5 rounded">
+                              ● Groceries (Barang Kering)
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Quantity (Col 2) */}

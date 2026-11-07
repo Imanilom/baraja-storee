@@ -8,6 +8,12 @@ const CategorySchema = new mongoose.Schema(
       unique: true,
       trim: true
     },
+    type: {
+      type: String,
+      enum: ['perishable', 'groceries', 'all'],
+      default: 'all',
+      index: true
+    },
     description: String,
     is_active: {
       type: Boolean,

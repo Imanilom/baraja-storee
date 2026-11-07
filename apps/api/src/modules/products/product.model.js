@@ -17,6 +17,12 @@ const ProductSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category'
     },
+    item_type: {
+      type: String,
+      enum: ['perishable', 'groceries'],
+      default: 'groceries',
+      index: true
+    },
     unit_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Unit',
@@ -24,6 +30,10 @@ const ProductSchema = new mongoose.Schema(
     },
     specification: String,
     last_purchase_price: {
+      type: Number,
+      default: 0
+    },
+    current_stock: {
       type: Number,
       default: 0
     },

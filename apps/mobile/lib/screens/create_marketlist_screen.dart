@@ -43,7 +43,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
   Future<void> _loadMasterData() async {
     setState(() => _isLoadingMaster = true);
     try {
-      final pRes = await ApiService.get('/products?limit=100').catchError((_) => {'data': []});
+      final pRes = await ApiService.get('/products?limit=500').catchError((_) => {'data': []});
       final cRes = await ApiService.get('/products/categories').catchError((_) => {'data': []});
 
       final products = (pRes['data'] is List) ? (pRes['data'] as List) : [];
@@ -126,12 +126,13 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        String selectedItemType = 'ALL';
         String selectedCategory = 'ALL';
         String searchQuery = '';
 
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final filtered = _products.filterCategory(selectedCategory, searchQuery);
+            final filtered = _products.filterCategory(selectedCategory, searchQuery, itemType: selectedItemType);
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
@@ -209,9 +210,69 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                     ),
                   ),
 
+                  // Tipe Barang Chips (Perishable vs Groceries)
+                  Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: Text('Semua (${_products.length})'),
+                          selected: selectedItemType == 'ALL',
+                          selectedColor: const Color(0xFF1E293B),
+                          labelStyle: TextStyle(
+                            color: selectedItemType == 'ALL' ? Colors.white : const Color(0xFF475569),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                          onSelected: (_) {
+                            setSheetState(() {
+                              selectedItemType = 'ALL';
+                              selectedCategory = 'ALL';
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: Text('Perishable (${_products.where((p) => p['item_type'] == 'perishable').length})'),
+                          selected: selectedItemType == 'perishable',
+                          selectedColor: const Color(0xFFE11D48),
+                          labelStyle: TextStyle(
+                            color: selectedItemType == 'perishable' ? Colors.white : const Color(0xFFBE123C),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                          onSelected: (_) {
+                            setSheetState(() {
+                              selectedItemType = 'perishable';
+                              selectedCategory = 'ALL';
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: Text('Groceries (${_products.where((p) => p['item_type'] == 'groceries').length})'),
+                          selected: selectedItemType == 'groceries',
+                          selectedColor: const Color(0xFF059669),
+                          labelStyle: TextStyle(
+                            color: selectedItemType == 'groceries' ? Colors.white : const Color(0xFF047857),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                          onSelected: (_) {
+                            setSheetState(() {
+                              selectedItemType = 'groceries';
+                              selectedCategory = 'ALL';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
                   // Horizontal Category Chips
                   Container(
-                    height: 46,
+                    height: 44,
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: ListView(
                       scrollDirection: Axis.horizontal,
@@ -220,13 +281,15 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: ChoiceChip(
-                            label: Text('Semua (${_products.length})'),
+                            label: Text('Semua Kategori (${
+                              _products.where((p) => selectedItemType == 'ALL' || p['item_type'] == selectedItemType).length
+                            })'),
                             selected: selectedCategory == 'ALL',
                             selectedColor: const Color(0xFFD97706),
                             labelStyle: TextStyle(
                               color: selectedCategory == 'ALL' ? Colors.white : const Color(0xFF475569),
                               fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                              fontSize: 11,
                             ),
                             onSelected: (_) {
                               setSheetState(() => selectedCategory = 'ALL');
@@ -235,12 +298,16 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                         ),
                         ..._categories.map((cat) {
                           final count = _products.where((p) {
+                            final matchType = selectedItemType == 'ALL' || p['item_type'] == selectedItemType;
+                            bool matchCat = false;
                             if (p['category_id'] is Map) {
-                              return p['category_id']['_id'] == cat['id'] ||
+                              matchCat = p['category_id']['_id'] == cat['id'] ||
                                   p['category_id']['name'] == cat['name'];
                             }
-                            return false;
+                            return matchType && matchCat;
                           }).length;
+
+                          if (count == 0 && selectedItemType != 'ALL') return const SizedBox.shrink();
 
                           final isSelected = selectedCategory == cat['id'];
                           return Padding(
@@ -252,7 +319,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                               labelStyle: TextStyle(
                                 color: isSelected ? Colors.white : const Color(0xFF475569),
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 11,
                               ),
                               onSelected: (_) {
                                 setSheetState(() => selectedCategory = cat['id']!);
@@ -314,6 +381,26 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                     const SizedBox(height: 2),
                                     Row(
                                       children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: p['item_type'] == 'perishable'
+                                                ? const Color(0xFFFFE4E6)
+                                                : const Color(0xFFDCFCE7),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            p['item_type'] == 'perishable' ? 'Perishable' : 'Groceries',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              color: p['item_type'] == 'perishable'
+                                                  ? const Color(0xFFBE123C)
+                                                  : const Color(0xFF15803D),
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                           decoration: BoxDecoration(
@@ -996,8 +1083,13 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
 }
 
 extension ProductListFilter on List<dynamic> {
-  List<dynamic> filterCategory(String categoryId, String query) {
+  List<dynamic> filterCategory(String categoryId, String query, {String itemType = 'ALL'}) {
     return where((p) {
+      bool typeMatch = true;
+      if (itemType != 'ALL') {
+        typeMatch = (p['item_type']?.toString().toLowerCase() == itemType.toLowerCase());
+      }
+
       bool catMatch = true;
       if (categoryId != 'ALL') {
         if (p['category_id'] is Map) {
@@ -1016,7 +1108,7 @@ extension ProductListFilter on List<dynamic> {
         queryMatch = name.contains(q) || sku.contains(q);
       }
 
-      return catMatch && queryMatch;
+      return typeMatch && catMatch && queryMatch;
     }).toList();
   }
 }

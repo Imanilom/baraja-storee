@@ -37,6 +37,10 @@ export default function Sidebar() {
     setUser(getStoredUser());
   }, []);
 
+  if (pathname === '/login') {
+    return null;
+  }
+
   const handleLogout = () => {
     clearStoredAuth();
     window.location.href = '/login';
