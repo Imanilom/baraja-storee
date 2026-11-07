@@ -13,8 +13,14 @@ echo "========================================================"
 echo "🚀 MEMULAI SETUP VPS BARAJA STORE"
 echo "========================================================"
 
-# 1. Update system packages
-echo "📦 1. Mengupdate paket sistem Ubuntu..."
+# 1. Wait for any background apt process to release lock (unattended-upgrades)
+echo "📦 1. Memeriksa ketersediaan apt lock..."
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+    echo "⏳ Sistem Ubuntu sedang menjalankan background auto-update, menunggu 5 detik..."
+    sleep 5
+done
+
+echo "📦 Mengupdate paket sistem Ubuntu..."
 sudo apt-get update -y
 sudo apt-get install -y curl wget git nginx certbot python3-certbot-nginx ufw build-essential
 
