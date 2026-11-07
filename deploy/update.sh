@@ -16,3 +16,4 @@ pm2 save
 
 echo "✅ Aplikasi berhasil diupdate dan aktif kembali!"
 pm2 status
+

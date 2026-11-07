@@ -108,3 +108,4 @@ echo "Web URL : https://barajastore.my.id"
 echo "API URL : https://api.barajastore.my.id/api/v1"
 echo "========================================================"
 pm2 status
+

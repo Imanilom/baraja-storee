@@ -105,3 +105,4 @@ cd apps/mobile
 flutter build apk --release
 ```
 File APK siap didistribusikan ke staf outlet/gudang dan langsung terhubung ke server produksi.
+
