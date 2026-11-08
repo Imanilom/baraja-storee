@@ -347,11 +347,15 @@ class MarketlistService {
     return this.getMarketlistById(id);
   }
 
-  async approveItems(marketlistId, itemDecisions, user) {
+  async approveItems(marketlistId, itemDecisions = [], user) {
     const marketlist = await Marketlist.findById(marketlistId);
     if (!marketlist) throw new Error('Marketlist not found');
-    if (![MARKETLIST_STATUS.SUBMITTED, MARKETLIST_STATUS.REVISION].includes(marketlist.status)) {
-      throw new Error('Marketlist tidak dalam status yang bisa di-review per item');
+    if (![MARKETLIST_STATUS.SUBMITTED, MARKETLIST_STATUS.REVISION, MARKETLIST_STATUS.APPROVED].includes(marketlist.status)) {
+      throw new Error(`Marketlist berstatus '${marketlist.status}' tidak dalam status yang dapat di-review per item`);
+    }
+
+    if (!Array.isArray(itemDecisions) || itemDecisions.length === 0) {
+      return { success: true, updated: 0 };
     }
 
     const bulkOps = itemDecisions.map(({ id, approved, reason }) => ({
@@ -360,7 +364,7 @@ class MarketlistService {
         update: {
           $set: {
             item_status: approved ? 'approved' : 'rejected',
-            rejection_reason: approved ? undefined : (reason || 'Ditolak oleh leader'),
+            rejection_reason: approved ? '' : (reason || 'Ditolak oleh leader'),
             reviewed_by: user._id,
             reviewed_at: new Date()
           }
@@ -372,13 +376,17 @@ class MarketlistService {
       await MarketlistItem.bulkWrite(bulkOps);
     }
 
-    await auditService.log({
-      action: 'APPROVE_ITEMS',
-      model: 'Marketlist',
-      document_id: marketlistId,
-      user_id: user._id,
-      details: { item_count: itemDecisions.length }
-    });
+    try {
+      await auditService.log({
+        entity_type: 'marketlist',
+        entity_id: marketlist._id,
+        action: 'marketlist_items_reviewed',
+        performed_by: user._id,
+        description: `Review ${itemDecisions.length} item marketlist oleh ${user.name || 'Leader'}`
+      });
+    } catch (auditErr) {
+      console.warn('Gagal mencatat audit log review items:', auditErr.message);
+    }
 
     return { success: true, updated: bulkOps.length };
   }

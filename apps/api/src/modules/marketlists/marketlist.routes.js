@@ -29,13 +29,14 @@ router.patch('/:id', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.LEADER, ROLE
 // Workflow Actions (support both POST and PUT)
 router.post('/:id/submit', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.LEADER, ROLES.STAFF), marketlistController.submit);
 router.put('/:id/submit', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.LEADER, ROLES.STAFF), marketlistController.submit);
-router.post('/:id/approve', authorize(ROLES.ADMIN, ROLES.LEADER), validate(approveMarketlistSchema), marketlistController.approve);
-router.put('/:id/approve', authorize(ROLES.ADMIN, ROLES.LEADER), validate(approveMarketlistSchema), marketlistController.approve);
-router.post('/:id/reject', authorize(ROLES.ADMIN, ROLES.LEADER), validate(rejectMarketlistSchema), marketlistController.reject);
-router.put('/:id/reject', authorize(ROLES.ADMIN, ROLES.LEADER), validate(rejectMarketlistSchema), marketlistController.reject);
-router.post('/:id/revision', authorize(ROLES.ADMIN, ROLES.LEADER), validate(revisionMarketlistSchema), marketlistController.requestRevision);
-router.put('/:id/revision', authorize(ROLES.ADMIN, ROLES.LEADER), validate(revisionMarketlistSchema), marketlistController.requestRevision);
-router.post('/:id/approve-items', authorize(ROLES.ADMIN, ROLES.LEADER), marketlistController.approveItems);
+router.post('/:id/approve', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(approveMarketlistSchema), marketlistController.approve);
+router.put('/:id/approve', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(approveMarketlistSchema), marketlistController.approve);
+router.post('/:id/reject', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(rejectMarketlistSchema), marketlistController.reject);
+router.put('/:id/reject', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(rejectMarketlistSchema), marketlistController.reject);
+router.post('/:id/revision', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(revisionMarketlistSchema), marketlistController.requestRevision);
+router.put('/:id/revision', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(revisionMarketlistSchema), marketlistController.requestRevision);
+router.post('/:id/approve-items', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), marketlistController.approveItems);
+router.put('/:id/approve-items', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), marketlistController.approveItems);
 
 // Notes per Marketlist
 router.get('/:id/notes', noteController.get);

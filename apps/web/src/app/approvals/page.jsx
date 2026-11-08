@@ -137,15 +137,19 @@ export default function ApprovalsPage() {
     if (!selectedMl) return;
     setActionLoading(true);
     try {
-      // 1. Simpan review item per item terlebih dahulu jika ada API approveItems
+      // 1. Simpan review item per item terlebih dahulu
       const itemsPayload = Object.entries(itemDecisions).map(([id, val]) => ({
         id,
-        approved: val.approved,
-        reason: val.reason
+        approved: !!val.approved,
+        reason: val.reason || (val.approved ? '' : 'Ditolak oleh leader')
       }));
 
-      if (api.approveItems && itemsPayload.length > 0) {
-        await api.approveItems(selectedMl._id, { items: itemsPayload });
+      if (itemsPayload.length > 0) {
+        try {
+          await api.approveItems(selectedMl._id, { items: itemsPayload });
+        } catch (itemErr) {
+          console.warn('Review per item warning:', itemErr);
+        }
       }
 
       // 2. Setujui marketlist
