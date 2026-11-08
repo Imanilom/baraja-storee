@@ -13,6 +13,7 @@ router.get('/', authorize(ROLES.ADMIN, ROLES.MANAGEMENT), userController.list);
 router.get('/:id', authorize(ROLES.ADMIN, ROLES.MANAGEMENT), userController.getById);
 router.post('/', authorize(ROLES.ADMIN), validate(registerUserSchema), userController.create);
 router.patch('/:id', authorize(ROLES.ADMIN), userController.update);
+router.put('/:id', authorize(ROLES.ADMIN), userController.update);
+router.delete('/:id', authorize(ROLES.ADMIN), userController.delete);
 
 module.exports = router;
-

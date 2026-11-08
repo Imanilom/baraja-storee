@@ -174,6 +174,27 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
-  getOverheadPayments: (id) => fetchApi(`/overheads/${id}/payments`)
+  getOverheadPayments: (id) => fetchApi(`/overheads/${id}/payments`),
+
+  // User Management & RBAC
+  getUsers: (params = '') => fetchApi(`/users${params}`),
+  getUserById: (id) => fetchApi(`/users/${id}`),
+  createUser: (data) =>
+    fetchApi('/users', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  updateUser: (id, data) =>
+    fetchApi(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
+  deleteUser: (id) =>
+    fetchApi(`/users/${id}`, {
+      method: 'DELETE'
+    }),
+
+  // Locations
+  getLocations: () => fetchApi('/locations')
 };
 

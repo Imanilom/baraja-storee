@@ -492,3 +492,4 @@ class _MarketlistAggregateScreenState extends State<MarketlistAggregateScreen> {
     );
   }
 }
+

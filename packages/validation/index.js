@@ -15,7 +15,8 @@ const registerUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   role: z.enum(Object.values(ROLES)),
-  location_id: zObjectId.optional()
+  location_id: z.string().regex(objectIdRegex, 'Invalid ObjectId').optional().nullable().or(z.literal('')),
+  is_active: z.boolean().optional()
 });
 
 // Master Data schemas

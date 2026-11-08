@@ -4,7 +4,7 @@ const { sendSuccess, sendError } = require('../../utils/response');
 class UserController {
   async list(req, res) {
     try {
-      const users = await userService.getAllUsers();
+      const users = await userService.getAllUsers(req.query);
       return sendSuccess(res, 'Users retrieved successfully', users);
     } catch (error) {
       return sendError(res, 'Failed to retrieve users', error.message, 500);
@@ -43,7 +43,15 @@ class UserController {
       return sendError(res, 'Failed to update user', error.message, 400);
     }
   }
+
+  async delete(req, res) {
+    try {
+      const result = await userService.deleteUser(req.params.id, req.user._id);
+      return sendSuccess(res, 'User deleted successfully', result);
+    } catch (error) {
+      return sendError(res, 'Failed to delete user', error.message, 400);
+    }
+  }
 }
 
 module.exports = new UserController();
-
