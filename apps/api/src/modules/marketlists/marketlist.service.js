@@ -135,7 +135,7 @@ class MarketlistService {
       marketlist_number,
       date,
       required_date,
-      location_id,
+      location_id: location_id || null,
       created_by: user._id,
       assigned_to,
       status: MARKETLIST_STATUS.DRAFT,

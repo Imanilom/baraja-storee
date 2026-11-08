@@ -19,7 +19,8 @@ const MarketlistSchema = new mongoose.Schema(
     location_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Location',
-      required: true
+      required: false,
+      default: null
     },
     created_by: {
       type: mongoose.Schema.Types.ObjectId,

@@ -53,7 +53,7 @@ const marketlistItemInputSchema = z.object({
 const createMarketlistSchema = z.object({
   date: z.string().or(z.date()),
   required_date: z.string().or(z.date()),
-  location_id: zObjectId,
+  location_id: zObjectId.optional().nullable().or(z.literal('')).optional(),
   assigned_to: z.array(zObjectId).optional(),
   items: z.array(marketlistItemInputSchema).min(1, 'Marketlist must have at least one item'),
   notes: z.string().optional()
