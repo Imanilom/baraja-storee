@@ -210,6 +210,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  updateProduct: (id, data) =>
+    fetchApi(`/products/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
+  deleteProduct: (id) =>
+    fetchApi(`/products/${id}`, {
+      method: 'DELETE'
+    }),
   getUnits: () => fetchApi('/products/units'),
   getCategories: () => fetchApi('/products/categories')
 };

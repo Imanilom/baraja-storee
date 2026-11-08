@@ -4,7 +4,13 @@ const Unit = require('./unit.model');
 
 class ProductService {
   async getAllProducts(query = {}) {
-    const filter = { is_active: true };
+    const filter = {};
+    if (query.status === 'inactive') {
+      filter.is_active = false;
+    } else if (query.status === 'active' || (!query.status && query.include_inactive !== 'true')) {
+      filter.is_active = true;
+    }
+
     if (query.category_id) filter.category_id = query.category_id;
     if (query.item_type) filter.item_type = query.item_type;
     if (query.search) {
@@ -77,6 +83,10 @@ class ProductService {
 
   async updateProduct(id, data) {
     return Product.findByIdAndUpdate(id, data, { new: true });
+  }
+
+  async deleteProduct(id) {
+    return Product.findByIdAndUpdate(id, { is_active: false }, { new: true });
   }
 
   // Categories & Units helpers

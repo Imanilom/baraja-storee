@@ -44,6 +44,18 @@ class ProductController {
     }
   }
 
+  async delete(req, res) {
+    try {
+      const product = await productService.deleteProduct(req.params.id);
+      if (!product) {
+        return sendError(res, 'Product not found', null, 404);
+      }
+      return sendSuccess(res, 'Product deactivated successfully', product);
+    } catch (error) {
+      return sendError(res, 'Failed to deactivate product', error.message, 400);
+    }
+  }
+
   async listCategories(req, res) {
     try {
       const categories = await productService.getCategories();
