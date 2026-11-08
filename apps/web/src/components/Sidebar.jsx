@@ -23,26 +23,26 @@ const navigation = [
     name: 'Dashboard',
     href: '/',
     icon: LayoutDashboard,
-    roles: ['admin', 'management', 'purchasing', 'receiver', 'accounting']
+    roles: ['admin', 'management', 'purchasing', 'receiver', 'accounting', 'leader', 'staff']
   },
   {
     name: 'Marketlist',
     href: '/marketlists',
     icon: ClipboardList,
-    roles: ['admin', 'management', 'purchasing', 'receiver', 'accounting']
+    roles: ['admin', 'management', 'purchasing', 'receiver', 'accounting', 'leader', 'staff']
   },
   {
-    name: 'Admin Approval',
+    name: 'Approval Marketlist',
     href: '/approvals',
     icon: CheckCircle2,
-    roles: ['admin', 'management'],
-    badge: 'Admin'
+    roles: ['admin', 'management', 'leader'],
+    badge: 'Leader'
   },
   {
     name: 'Surat Jalan / Receiving',
     href: '/receiving',
     icon: Truck,
-    roles: ['admin', 'management', 'receiver', 'purchasing']
+    roles: ['admin', 'management', 'receiver', 'purchasing', 'leader', 'staff']
   },
   {
     name: 'Transaksi Pembelian',
@@ -143,6 +143,11 @@ export default function Sidebar() {
               {item.adminOnly && (
                 <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
                   RBAC
+                </span>
+              )}
+              {item.badge && !item.adminOnly && !item.highlight && (
+                <span className="ml-auto text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                  {item.badge}
                 </span>
               )}
             </Link>

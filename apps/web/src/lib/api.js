@@ -195,6 +195,22 @@ export const api = {
     }),
 
   // Locations
-  getLocations: () => fetchApi('/locations')
+  getLocations: () => fetchApi('/locations'),
+
+  // Marketlist per-item approval
+  approveItems: (id, data) =>
+    fetchApi(`/marketlists/${id}/approve-items`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+  // Products & Master Data
+  createProduct: (data) =>
+    fetchApi('/products', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getUnits: () => fetchApi('/products/units'),
+  getCategories: () => fetchApi('/products/categories')
 };
 

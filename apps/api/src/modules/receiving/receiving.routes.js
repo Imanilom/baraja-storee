@@ -16,7 +16,7 @@ router.get('/:id', receivingController.getById);
 router.get('/receipts/:marketlistId', receivingController.getByMarketlist);
 router.post(
   '/receipts/:marketlistId',
-  authorize(ROLES.ADMIN, ROLES.RECEIVER),
+  authorize(ROLES.ADMIN, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF),
   validate(createGoodsReceiptSchema),
   receivingController.create
 );
@@ -28,7 +28,7 @@ marketlistReceiptRouter.use(authenticate);
 marketlistReceiptRouter.get('/', receivingController.getByMarketlist);
 marketlistReceiptRouter.post(
   '/',
-  authorize(ROLES.ADMIN, ROLES.RECEIVER),
+  authorize(ROLES.ADMIN, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF),
   validate(createGoodsReceiptSchema),
   receivingController.create
 );

@@ -22,9 +22,11 @@ const registerUserSchema = z.object({
 // Master Data schemas
 const productSchema = z.object({
   name: z.string().min(1),
-  sku: z.string().optional(),
-  category_id: zObjectId.optional(),
-  unit_id: zObjectId,
+  sku: z.string().optional().nullable().or(z.literal('')),
+  category_id: z.string().regex(objectIdRegex, 'Invalid ObjectId').optional().nullable().or(z.literal('')),
+  unit_id: z.string().regex(objectIdRegex, 'Invalid ObjectId').optional().nullable().or(z.literal('')),
+  item_type: z.enum(['perishable', 'groceries']).optional(),
+  last_purchase_price: z.number().min(0).optional(),
   specification: z.string().optional(),
   is_active: z.boolean().optional()
 });

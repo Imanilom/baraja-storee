@@ -59,6 +59,18 @@ class ProductService {
   }
 
   async createProduct(data) {
+    if (!data.unit_id) {
+      let defaultUnit = await Unit.findOne({ is_active: true });
+      if (!defaultUnit) {
+        defaultUnit = await Unit.create({ name: 'Pieces', abbreviation: 'pcs', is_active: true });
+      }
+      data.unit_id = defaultUnit._id;
+    }
+    if (!data.sku) {
+      const count = await Product.countDocuments();
+      data.sku = `PRD-${Date.now().toString().slice(-4)}-${count + 1}`;
+    }
+    if (data.category_id === '') delete data.category_id;
     const product = new Product(data);
     return product.save();
   }

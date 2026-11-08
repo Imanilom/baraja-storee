@@ -19,7 +19,7 @@ router.post('/units', authorize(ROLES.ADMIN), productController.createUnit);
 // Product endpoints
 router.get('/', productController.list);
 router.get('/:id', productController.getById);
-router.post('/', authorize(ROLES.ADMIN, ROLES.PURCHASING), validate(productSchema), productController.create);
+router.post('/', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.LEADER, ROLES.STAFF), validate(productSchema), productController.create);
 router.patch('/:id', authorize(ROLES.ADMIN), productController.update);
 
 module.exports = router;

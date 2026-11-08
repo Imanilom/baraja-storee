@@ -88,6 +88,15 @@ class MarketlistController {
       return sendError(res, 'Failed to request revision', error.message, 400);
     }
   }
+
+  async approveItems(req, res) {
+    try {
+      const result = await marketlistService.approveItems(req.params.id, req.body.items || [], req.user);
+      return sendSuccess(res, 'Item review berhasil disimpan', result);
+    } catch (error) {
+      return sendError(res, 'Gagal mereview item', error.message, 400);
+    }
+  }
 }
 
 module.exports = new MarketlistController();

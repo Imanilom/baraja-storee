@@ -3,7 +3,9 @@ const ROLES = {
   PURCHASING: 'purchasing',
   RECEIVER: 'receiver',
   ACCOUNTING: 'accounting',
-  MANAGEMENT: 'management'
+  MANAGEMENT: 'management',
+  LEADER: 'leader',
+  STAFF: 'staff'
 };
 
 const MARKETLIST_STATUS = {

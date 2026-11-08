@@ -9,11 +9,20 @@ import {
   Plus,
   Send,
   Eye,
-  CheckCircle,
+  CheckCircle2,
   Clock,
   Filter,
-  FileText
+  FileText,
+  AlertCircle
 } from 'lucide-react';
+
+const STATUS_TABS = [
+  { id: '', label: 'Semua' },
+  { id: 'submitted', label: 'Menunggu Approval' },
+  { id: 'approved', label: 'Disetujui' },
+  { id: 'in_progress', label: 'In Progress' },
+  { id: 'draft', label: 'Draft' }
+];
 
 export default function MarketlistPage() {
   const [marketlists, setMarketlists] = useState([]);
@@ -22,6 +31,12 @@ export default function MarketlistPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const fetchMarketlists = async () => {
     setLoading(true);
@@ -33,6 +48,7 @@ export default function MarketlistPage() {
       }
     } catch (err) {
       console.error(err);
+      showToast('Gagal memuat daftar marketlist', 'error');
     } finally {
       setLoading(false);
     }
@@ -44,18 +60,17 @@ export default function MarketlistPage() {
   }, [statusFilter]);
 
   const handleSubmitToAdmin = async (id) => {
-    if (!confirm('Kirim Marketlist ini ke Admin untuk approval?')) return;
     setActionLoading(true);
     try {
       await api.submitMarketlist(id);
-      alert('Marketlist berhasil disubmit ke Admin!');
+      showToast('Marketlist berhasil diajukan untuk approval!');
       fetchMarketlists();
       if (selectedMl?._id === id) {
         const detail = await api.getMarketlistById(id);
         setSelectedMl(detail.data);
       }
     } catch (err) {
-      alert(err.message || 'Gagal submit marketlist');
+      showToast(err.message || 'Gagal mengajukan marketlist', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -66,41 +81,37 @@ export default function MarketlistPage() {
       const res = await api.getMarketlistById(id);
       setSelectedMl(res.data);
     } catch (err) {
-      alert('Gagal memuat detail marketlist');
+      showToast('Gagal memuat detail marketlist', 'error');
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-w-0">
       <Navbar title="Manajemen Marketlist" />
 
-      <main className="p-8 space-y-6 max-w-7xl">
-        {/* Top Action Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      {/* Floating Notification */}
+      {toast && (
+        <div
+          className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg text-xs font-semibold flex items-center gap-2 border transition-all ${
+            toast.type === 'error'
+              ? 'bg-rose-50 text-rose-700 border-rose-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          }`}
+        >
+          {toast.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      <main className="p-4 sm:p-6 md:p-8 space-y-5 max-w-7xl w-full">
+        {/* Top Header Card (Responsive) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div>
-            <h1 className="text-lg font-bold text-slate-800">Daftar Marketlist</h1>
+            <h1 className="text-base sm:text-lg font-bold text-slate-800">Daftar Marketlist</h1>
             <p className="text-xs text-slate-500">Perencanaan pengadaan barang dan single source of truth belanja</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">Semua Status</option>
-                <option value="draft">Draft</option>
-                <option value="submitted">Submitted (Menunggu Admin)</option>
-                <option value="approved">Approved</option>
-                <option value="in_progress">In Progress</option>
-                <option value="partially_received">Partially Received</option>
-                <option value="received">Received</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-
+          <div className="flex items-center gap-2 self-start sm:self-auto">
             <Link
               href="/marketlists/create"
               className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
@@ -111,10 +122,50 @@ export default function MarketlistPage() {
           </div>
         </div>
 
-        {/* Table Content */}
+        {/* Responsive Tabs & Filter: Tabs hidden on mobile to give maximum room */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Desktop Tabs (hidden on small screens) */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  statusFilter === tab.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile Select Filter (shown on small screens only) */}
+          <div className="flex sm:hidden items-center gap-2 w-full">
+            <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 font-medium text-slate-700 focus:outline-none"
+            >
+              <option value="">Semua Status</option>
+              <option value="submitted">Menunggu Approval</option>
+              <option value="approved">Disetujui</option>
+              <option value="in_progress">In Progress</option>
+              <option value="draft">Draft</option>
+              <option value="partially_received">Partially Received</option>
+              <option value="received">Received</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Content Section: Desktop Table vs Mobile Cards */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[700px]">
               <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-3.5">Nomor ML</th>
@@ -137,7 +188,7 @@ export default function MarketlistPage() {
                 ) : (
                   marketlists.map((ml) => (
                     <tr key={ml._id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-900">{ml.marketlist_number}</td>
+                      <td className="px-6 py-4 font-bold text-slate-900 font-mono">{ml.marketlist_number}</td>
                       <td className="px-6 py-4 text-slate-600">
                         {new Date(ml.required_date || ml.date).toLocaleDateString('id-ID')}
                       </td>
@@ -160,7 +211,7 @@ export default function MarketlistPage() {
                             className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition-colors inline-flex items-center gap-1"
                           >
                             <Send className="w-3 h-3" />
-                            Submit Admin
+                            Submit
                           </button>
                         )}
                         <button
@@ -168,7 +219,7 @@ export default function MarketlistPage() {
                           className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors inline-flex items-center gap-1"
                         >
                           <Eye className="w-3 h-3" />
-                          Lihat Detail
+                          Detail
                         </button>
                       </td>
                     </tr>
@@ -177,93 +228,147 @@ export default function MarketlistPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card View */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {marketlists.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                {loading ? 'Memuat data...' : 'Tidak ada Marketlist dengan kriteria ini.'}
+              </div>
+            ) : (
+              marketlists.map((ml) => (
+                <div key={ml._id} className="p-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold font-mono text-slate-900 text-xs">{ml.marketlist_number}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
+                      {ml.status}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-600">
+                    <span>Pemohon: <strong>{ml.created_by?.name || '-'}</strong></span>
+                    <span className="font-bold text-emerald-700">
+                      Rp {(ml.totals?.estimated_amount || 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                    <span>Dibutuhkan: {new Date(ml.required_date || ml.date).toLocaleDateString('id-ID')} ({ml.totals?.total_items || 0} item)</span>
+                    <div className="flex items-center gap-1.5">
+                      {['draft', 'revision'].includes(ml.status) && (
+                        <button
+                          onClick={() => handleSubmitToAdmin(ml._id)}
+                          disabled={actionLoading}
+                          className="px-2.5 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded"
+                        >
+                          Submit
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleOpenDetail(ml._id)}
+                        className="px-2.5 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded"
+                      >
+                        Detail
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Modal Detail Drawer */}
         {selectedMl && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in duration-150">
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
               {/* Modal Header */}
-              <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-base">Detail Marketlist {selectedMl.marketlist_number}</h3>
+                  <h3 className="font-bold text-base">Detail {selectedMl.marketlist_number}</h3>
                   <p className="text-xs text-slate-300">Status: {selectedMl.status?.toUpperCase()}</p>
                 </div>
                 <button
                   onClick={() => setSelectedMl(null)}
                   className="text-slate-400 hover:text-white text-lg font-bold"
                 >
-                  &times;
+                  ✕
                 </button>
               </div>
 
               {/* Modal Body */}
-              <div className="p-6 overflow-y-auto space-y-5 text-xs">
-                {/* Meta Summary */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="p-5 overflow-y-auto space-y-4 text-xs">
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl">
                   <div>
-                    <span className="text-slate-400 font-semibold">Tanggal Butuh:</span>
-                    <p className="font-bold text-slate-800 text-sm">
+                    <span className="text-slate-400 text-[11px]">Tanggal Kebutuhan:</span>
+                    <p className="font-semibold text-slate-800">
                       {new Date(selectedMl.required_date || selectedMl.date).toLocaleDateString('id-ID')}
                     </p>
                   </div>
                   <div>
-                    <span className="text-slate-400 font-semibold">Total Nilai Estimasi:</span>
-                    <p className="font-bold text-emerald-700 text-sm">
+                    <span className="text-slate-400 text-[11px]">Dibuat Oleh:</span>
+                    <p className="font-semibold text-slate-800">{selectedMl.created_by?.name || '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px]">Gudang Tujuan:</span>
+                    <p className="font-semibold text-slate-800">{selectedMl.location_id?.name || 'Pusat'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px]">Total Estimasi:</span>
+                    <p className="font-bold text-emerald-700">
                       Rp {(selectedMl.totals?.estimated_amount || 0).toLocaleString('id-ID')}
                     </p>
                   </div>
-                  <div>
-                    <span className="text-slate-400 font-semibold">Versi Aktif:</span>
-                    <p className="font-bold text-slate-800 text-sm">Versi {selectedMl.current_version || 1}</p>
-                  </div>
                 </div>
 
-                {/* Items Table */}
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-2">Daftar Barang Belanja:</h4>
-                  <table className="w-full text-left border border-slate-200 rounded-lg overflow-hidden">
-                    <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
-                      <tr>
-                        <th className="p-2.5">Barang</th>
-                        <th className="p-2.5">Kuantitas</th>
-                        <th className="p-2.5">Harga Pengajuan</th>
-                        <th className="p-2.5">Subtotal</th>
-                        <th className="p-2.5">Supplier Pilihan</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {selectedMl.items?.map((item) => (
-                        <tr key={item._id} className="hover:bg-slate-50">
-                          <td className="p-2.5 font-bold text-slate-800">
-                            {item.product_snapshot?.name || item.product_id?.name}
-                          </td>
-                          <td className="p-2.5 text-slate-700">
-                            {item.requested_qty} {item.product_snapshot?.unit_name || ''}
-                          </td>
-                          <td className="p-2.5 text-slate-700">Rp {item.unit_price?.toLocaleString('id-ID')}</td>
-                          <td className="p-2.5 font-bold text-slate-900">Rp {item.subtotal?.toLocaleString('id-ID')}</td>
-                          <td className="p-2.5 text-slate-600">{item.supplier_id?.name || 'Belum ditentukan'}</td>
+                  <h4 className="font-bold text-slate-800 mb-2">Item Belanja:</h4>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
+                        <tr>
+                          <th className="p-2.5">Barang</th>
+                          <th className="p-2.5">Qty</th>
+                          <th className="p-2.5">Harga Satuan</th>
+                          <th className="p-2.5">Subtotal</th>
+                          <th className="p-2.5">Status Review</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Single Note Section */}
-                <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl space-y-1">
-                  <h4 className="font-bold text-amber-900 text-xs">Catatan Marketlist (Single Note):</h4>
-                  <p className="text-slate-700 italic">
-                    {selectedMl.note || 'Tidak ada catatan untuk Marketlist ini.'}
-                  </p>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedMl.items?.map((it) => (
+                          <tr key={it._id}>
+                            <td className="p-2.5 font-bold text-slate-800">
+                              {it.product_snapshot?.name || it.product_id?.name}
+                            </td>
+                            <td className="p-2.5">{it.requested_qty} {it.product_snapshot?.unit_name}</td>
+                            <td className="p-2.5">Rp {(it.unit_price || 0).toLocaleString('id-ID')}</td>
+                            <td className="p-2.5 font-bold text-slate-900">
+                              Rp {(it.subtotal || 0).toLocaleString('id-ID')}
+                            </td>
+                            <td className="p-2.5">
+                              {it.item_status === 'rejected' ? (
+                                <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-[10px]">
+                                  Ditolak ({it.rejection_reason || 'Leader'})
+                                </span>
+                              ) : (
+                                <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded text-[10px]">
+                                  Disetujui
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
               {/* Modal Footer */}
-              <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
                 <button
                   onClick={() => setSelectedMl(null)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-xs font-semibold"
+                  className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold"
                 >
                   Tutup
                 </button>
@@ -275,4 +380,3 @@ export default function MarketlistPage() {
     </div>
   );
 }
-

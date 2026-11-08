@@ -14,8 +14,12 @@ class MarketlistService {
     const filter = {};
     if (query.status) {
       filter.status = query.status;
-    } else if (user && user.role === ROLES.RECEIVER && query.all !== 'true') {
-      filter.status = { $in: [MARKETLIST_STATUS.APPROVED, MARKETLIST_STATUS.IN_PROGRESS, MARKETLIST_STATUS.PARTIALLY_RECEIVED] };
+    } else if (user && [ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF].includes(user.role) && query.all !== 'true') {
+      if (user.role === ROLES.LEADER) {
+        filter.status = { $in: [MARKETLIST_STATUS.SUBMITTED, MARKETLIST_STATUS.APPROVED, MARKETLIST_STATUS.IN_PROGRESS, MARKETLIST_STATUS.PARTIALLY_RECEIVED] };
+      } else {
+        filter.status = { $in: [MARKETLIST_STATUS.APPROVED, MARKETLIST_STATUS.IN_PROGRESS, MARKETLIST_STATUS.PARTIALLY_RECEIVED] };
+      }
       if (query.only_assigned === 'true') {
         filter.assigned_to = user._id;
       }
@@ -341,6 +345,42 @@ class MarketlistService {
     });
 
     return this.getMarketlistById(id);
+  }
+
+  async approveItems(marketlistId, itemDecisions, user) {
+    const marketlist = await Marketlist.findById(marketlistId);
+    if (!marketlist) throw new Error('Marketlist not found');
+    if (![MARKETLIST_STATUS.SUBMITTED, MARKETLIST_STATUS.REVISION].includes(marketlist.status)) {
+      throw new Error('Marketlist tidak dalam status yang bisa di-review per item');
+    }
+
+    const bulkOps = itemDecisions.map(({ id, approved, reason }) => ({
+      updateOne: {
+        filter: { _id: id, marketlist_id: marketlistId },
+        update: {
+          $set: {
+            item_status: approved ? 'approved' : 'rejected',
+            rejection_reason: approved ? undefined : (reason || 'Ditolak oleh leader'),
+            reviewed_by: user._id,
+            reviewed_at: new Date()
+          }
+        }
+      }
+    }));
+
+    if (bulkOps.length > 0) {
+      await MarketlistItem.bulkWrite(bulkOps);
+    }
+
+    await auditService.log({
+      action: 'APPROVE_ITEMS',
+      model: 'Marketlist',
+      document_id: marketlistId,
+      user_id: user._id,
+      details: { item_count: itemDecisions.length }
+    });
+
+    return { success: true, updated: bulkOps.length };
   }
 
   async rejectMarketlist(id, adminUser, reason) {

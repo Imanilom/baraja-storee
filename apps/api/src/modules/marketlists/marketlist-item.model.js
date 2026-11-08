@@ -40,7 +40,15 @@ const MarketlistItemSchema = new mongoose.Schema(
     version: {
       type: Number,
       default: 1
-    }
+    },
+    item_status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending'
+    },
+    rejection_reason: { type: String },
+    reviewed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    reviewed_at: { type: Date }
   },
   { timestamps: true }
 );

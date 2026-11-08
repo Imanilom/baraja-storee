@@ -48,6 +48,18 @@ const ROLE_CONFIG = {
     label: 'Accounting / Finance',
     badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     description: 'Kelola invoices, overhead operasional, pelunasan hutang, dan laporan laba rugi'
+  },
+  leader: {
+    label: 'Leader',
+    badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    description: 'Kepala Tim: Approve marketlist, review per-item, terima barang',
+    permissions: ['Lihat Marketlist', 'Ajukan Marketlist', 'Approve Marketlist', 'Review Per-Item', 'Terima Barang']
+  },
+  staff: {
+    label: 'Staff',
+    badgeClass: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    description: 'Staff Operasional: Buat marketlist dan catat penerimaan barang',
+    permissions: ['Lihat Marketlist', 'Ajukan Marketlist', 'Terima Barang']
   }
 };
 
@@ -388,6 +400,8 @@ export default function UserManagementPage() {
             >
               <option value="all">Semua Peran (Roles)</option>
               <option value="admin">Admin</option>
+              <option value="leader">Leader</option>
+              <option value="staff">Staff</option>
               <option value="purchasing">Purchasing</option>
               <option value="receiver">Receiver</option>
               <option value="accounting">Accounting</option>
@@ -622,6 +636,8 @@ export default function UserManagementPage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
                 >
                   <option value="admin">🛡️ Administrator (Akses Penuh Seluruh Modul & Approval)</option>
+                  <option value="leader">⭐ Leader (Approve Marketlist, Review Per-Item, Terima Barang)</option>
+                  <option value="staff">👤 Staff (Buat Marketlist & Catat Penerimaan Barang)</option>
                   <option value="purchasing">🛒 Purchasing (Pengajuan Marketlist & Transaksi Belanja)</option>
                   <option value="receiver">📦 Receiver (Verifikasi Surat Jalan & Penerimaan Gudang)</option>
                   <option value="accounting">📊 Accounting (Invoices, Overhead, Laba Rugi)</option>
