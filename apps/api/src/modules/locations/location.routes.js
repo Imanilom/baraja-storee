@@ -7,3 +7,4 @@ router.use(authenticate);
 router.get('/', locationController.list);
 
 module.exports = router;
+
