@@ -9,8 +9,8 @@ export const getStoredToken = () => {
 
 export const setStoredUser = (user, token) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('baraja_access_token', token);
-    localStorage.setItem('baraja_user', JSON.stringify(user));
+    if (token) localStorage.setItem('baraja_access_token', token);
+    if (user) localStorage.setItem('baraja_user', JSON.stringify(user));
   }
 };
 
@@ -61,13 +61,24 @@ export async function fetchApi(endpoint, options = {}) {
 }
 
 export const api = {
-  // Auth
+  // Auth & Profile
   login: (email, password) =>
     fetchApi('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password })
     }),
   getMe: () => fetchApi('/auth/me'),
+  getProfile: () => fetchApi('/auth/me'),
+  updateProfile: (data) =>
+    fetchApi('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  changePassword: (data) =>
+    fetchApi('/auth/change-password', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
 
   // Dashboard
   getDashboardMetrics: () => fetchApi('/dashboard'),

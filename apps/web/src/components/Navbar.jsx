@@ -1,9 +1,10 @@
 'use client';
 
-import { Bell, Search, ShieldCheck, Menu, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Bell, Search, ShieldCheck, Menu, PanelLeftClose, PanelLeft, User } from 'lucide-react';
 import { getStoredUser } from '../lib/api';
 import { useEffect, useState } from 'react';
 import { useSidebar } from '../context/SidebarContext';
+import Link from 'next/link';
 
 export default function Navbar({ title = 'Dashboard' }) {
   const [user, setUser] = useState(null);
@@ -49,10 +50,16 @@ export default function Navbar({ title = 'Dashboard' }) {
           />
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-800 text-[11px] sm:text-xs font-semibold">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+        <Link
+          href="/profile"
+          className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full text-emerald-800 text-[11px] sm:text-xs font-semibold transition-colors"
+          title="Buka Profil & Pengaturan Akun"
+        >
+          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black">
+            {user?.name ? user.name[0].toUpperCase() : 'U'}
+          </div>
           <span className="uppercase">{user?.role || 'GUEST'}</span>
-        </div>
+        </Link>
       </div>
     </header>
   );

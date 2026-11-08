@@ -31,6 +31,24 @@ class AuthController {
   async getProfile(req, res) {
     return sendSuccess(res, 'Profile retrieved', req.user);
   }
+
+  async updateProfile(req, res) {
+    try {
+      const result = await authService.updateProfile(req.user._id, req.body);
+      return sendSuccess(res, 'Profil berhasil diperbarui', result);
+    } catch (error) {
+      return sendError(res, error.message, null, 400);
+    }
+  }
+
+  async changePassword(req, res) {
+    try {
+      const result = await authService.changePassword(req.user._id, req.body);
+      return sendSuccess(res, 'Password berhasil diubah', result);
+    } catch (error) {
+      return sendError(res, error.message, null, 400);
+    }
+  }
 }
 
 module.exports = new AuthController();

@@ -56,6 +56,49 @@ class AuthService {
       throw new Error('Invalid or expired refresh token');
     }
   }
+
+  async updateProfile(userId, data) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error('Pengguna tidak ditemukan.');
+    }
+
+    if (data.name && data.name.trim()) {
+      user.name = data.name.trim();
+    }
+
+    await user.save();
+
+    const updated = await User.findById(userId)
+      .select('-password_hash')
+      .populate('location_id', 'name code address');
+
+    return updated;
+  }
+
+  async changePassword(userId, { currentPassword, newPassword }) {
+    if (!currentPassword) {
+      throw new Error('Password saat ini (lama) wajib diisi.');
+    }
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error('Password baru minimal 6 karakter.');
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error('Pengguna tidak ditemukan.');
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      throw new Error('Password saat ini salah. Mohon periksa kembali.');
+    }
+
+    user.password_hash = await User.hashPassword(newPassword);
+    await user.save();
+
+    return { message: 'Password berhasil diperbarui.' };
+  }
 }
 
 module.exports = new AuthService();

@@ -201,15 +201,20 @@ export default function Sidebar() {
         </nav>
 
         {/* User Session Footer */}
-        <div className="p-4 border-t border-slate-800 shrink-0">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-semibold text-slate-200">
+        <div className="p-3.5 border-t border-slate-800 shrink-0 space-y-2">
+          <Link
+            href="/profile"
+            onClick={closeMobileSidebar}
+            className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-800 transition-colors group cursor-pointer"
+            title="Buka Pengaturan Profil & Ubah Password"
+          >
+            <div className="w-8 h-8 rounded-full bg-emerald-600 group-hover:bg-emerald-500 flex items-center justify-center text-xs font-bold text-white shadow-xs transition-colors">
               {user?.name ? user.name[0].toUpperCase() : 'U'}
             </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-slate-200 truncate">{user?.name || 'Staff User'}</p>
+            <div className="overflow-hidden flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-white">{user?.name || 'Staff User'}</p>
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-emerald-400 uppercase font-bold tracking-wider">
+                <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-wider">
                   {user?.role || 'Guest'}
                 </span>
                 {user?.role === 'admin' && (
@@ -217,14 +222,26 @@ export default function Sidebar() {
                 )}
               </div>
             </div>
+          </Link>
+
+          <div className="flex items-center gap-2">
+            <Link
+              href="/profile"
+              onClick={closeMobileSidebar}
+              className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 rounded-lg transition-colors font-medium"
+            >
+              <span>Ubah Password / Profil</span>
+            </Link>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 border border-slate-800 rounded-lg transition-colors font-medium"
+              title="Keluar Akun"
+            >
+              <LogOut className="w-3 h-3" />
+              <span>Keluar</span>
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-950/20 border border-slate-800 rounded-md transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Keluar</span>
-          </button>
         </div>
       </aside>
     </>
