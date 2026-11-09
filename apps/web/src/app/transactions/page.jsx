@@ -11,18 +11,25 @@ import {
 } from 'lucide-react';
 
 const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Tunai / Cash' },
-  { value: 'transfer', label: 'Transfer Bank' },
-  { value: 'tempo', label: 'Tempo / Hutang Kredit' }
+  { value: 'cash', label: '💵 Kas Tunai (Uang Cash Fisik)' },
+  { value: 'transfer', label: '🏦 Transfer Bank (Rekening)' },
+  { value: 'tempo', label: '⏳ Tempo / Hutang Kredit' }
 ];
 
 const paymentBadge = (method) => {
   const map = {
-    cash: 'bg-green-100 text-green-800',
-    transfer: 'bg-blue-100 text-blue-800',
-    tempo: 'bg-amber-100 text-amber-800'
+    cash: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    transfer: 'bg-blue-100 text-blue-800 border border-blue-300',
+    tempo: 'bg-amber-100 text-amber-800 border border-amber-300'
   };
   return map[method] || 'bg-slate-100 text-slate-600';
+};
+
+const paymentLabel = (method, source) => {
+  if (method === 'cash') return '💵 Kas Tunai';
+  if (method === 'transfer') return '🏦 Rekening Bank';
+  if (method === 'tempo') return '⏳ Tempo / Hutang';
+  return method;
 };
 
 const debtStatusBadge = (status) => {
@@ -117,6 +124,7 @@ export default function TransactionsPage() {
   const [mlFilterTab, setMlFilterTab] = useState('all'); // 'all' | 'active' | 'delivered'
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentSource, setPaymentSource] = useState('cash'); // 'cash' | 'bank'
   const [dueDate, setDueDate] = useState('');
   const [downPayment, setDownPayment] = useState('');
   const [invoiceRef, setInvoiceRef] = useState('');
@@ -141,6 +149,7 @@ export default function TransactionsPage() {
   const [editForm, setEditForm] = useState({
     supplier_id: '',
     payment_method: 'cash',
+    payment_source: 'cash',
     due_date: '',
     amount_paid: '0',
     invoice_ref: '',
@@ -395,6 +404,7 @@ export default function TransactionsPage() {
         supplier_id: selectedSupplierId,
         invoice_ref: invoiceRef.trim(),
         payment_method: paymentMethod,
+        payment_source: paymentMethod === 'transfer' ? 'bank' : (paymentMethod === 'tempo' ? paymentSource : 'cash'),
         purchased_at: purchaseDate,
         notes: notes.trim(),
         ...(paymentMethod === 'tempo' && {
@@ -486,6 +496,7 @@ export default function TransactionsPage() {
     setSelectedMlDetail(null);
     setSelectedSupplierId('');
     setPaymentMethod('cash');
+    setPaymentSource('cash');
     setDueDate('');
     setDownPayment('');
     setInvoiceRef('');
@@ -545,6 +556,7 @@ export default function TransactionsPage() {
     setEditForm({
       supplier_id: p.supplier_id?._id || p.supplier_id || '',
       payment_method: p.payment_method || 'cash',
+      payment_source: p.payment_source || (p.payment_method === 'transfer' ? 'bank' : 'cash'),
       due_date: p.due_date ? p.due_date.split('T')[0] : getDefaultDueDate(p.purchased_at),
       amount_paid: isTempo ? String(p.amount_paid ?? 0) : '0',
       invoice_ref: p.invoice_ref || '',
@@ -563,6 +575,8 @@ export default function TransactionsPage() {
         if (prev.payment_method !== 'tempo') {
           next.amount_paid = '0';
         }
+      } else {
+        next.payment_source = method === 'transfer' ? 'bank' : 'cash';
       }
       return next;
     });
@@ -581,6 +595,7 @@ export default function TransactionsPage() {
       const payload = {
         supplier_id: editForm.supplier_id,
         payment_method: editForm.payment_method,
+        payment_source: editForm.payment_method === 'transfer' ? 'bank' : (editForm.payment_method === 'tempo' ? editForm.payment_source : 'cash'),
         invoice_ref: editForm.invoice_ref.trim(),
         purchased_at: editForm.purchased_at,
         notes: editForm.notes.trim(),
@@ -995,6 +1010,35 @@ export default function TransactionsPage() {
                               Sisa hutang = Total - DP = {fmt(formTotal - (Number(downPayment) || 0))}
                             </p>
                           </div>
+                          {Number(downPayment) > 0 && (
+                            <div className="sm:col-span-2 pt-2 border-t border-amber-200">
+                              <label className="block text-xs font-bold text-amber-900 mb-1">
+                                Sumber Dana Uang Muka (DP) *
+                              </label>
+                              <div className="flex gap-4">
+                                <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                                  <input
+                                    type="radio"
+                                    name="paymentSource"
+                                    value="cash"
+                                    checked={paymentSource === 'cash'}
+                                    onChange={(e) => setPaymentSource(e.target.value)}
+                                  />
+                                  <span>💵 Kas Tunai (Uang Cash)</span>
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                                  <input
+                                    type="radio"
+                                    name="paymentSource"
+                                    value="bank"
+                                    checked={paymentSource === 'bank'}
+                                    onChange={(e) => setPaymentSource(e.target.value)}
+                                  />
+                                  <span>🏦 Transfer Bank (Rekening)</span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1418,7 +1462,7 @@ export default function TransactionsPage() {
                   {[
                     { label: 'Marketlist', value: detailPurchase.marketlist_id?.code || detailPurchase.marketlist_id?.marketlist_number || '-' },
                     { label: 'Supplier', value: detailPurchase.supplier_id?.name || '-' },
-                    { label: 'Metode Bayar', value: PAYMENT_METHODS.find((pm) => pm.value === detailPurchase.payment_method)?.label || '-' },
+                    { label: 'Metode & Akun Bayar', value: paymentLabel(detailPurchase.payment_method, detailPurchase.payment_source) },
                     { label: 'Tanggal Beli', value: fmtDate(detailPurchase.purchased_at) }
                   ].map((m) => (
                     <div key={m.label} className="bg-slate-50 p-3 rounded-lg border border-slate-100">
@@ -1761,6 +1805,35 @@ export default function TransactionsPage() {
                           Isi 0 jika belum ada pembayaran sama sekali
                         </p>
                       </div>
+                      {Number(editForm.amount_paid) > 0 && (
+                        <div className="sm:col-span-2 pt-2 border-t border-amber-200">
+                          <label className="block text-xs font-bold text-amber-900 mb-1">
+                            Sumber Dana Uang Muka (DP) *
+                          </label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                              <input
+                                type="radio"
+                                name="editPaymentSource"
+                                value="cash"
+                                checked={editForm.payment_source === 'cash'}
+                                onChange={(e) => setEditForm({ ...editForm, payment_source: e.target.value })}
+                              />
+                              <span>💵 Kas Tunai (Uang Cash)</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                              <input
+                                type="radio"
+                                name="editPaymentSource"
+                                value="bank"
+                                checked={editForm.payment_source === 'bank'}
+                                onChange={(e) => setEditForm({ ...editForm, payment_source: e.target.value })}
+                              />
+                              <span>🏦 Transfer Bank (Rekening)</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="bg-white/80 border border-amber-200 p-2.5 rounded-lg flex items-center justify-between text-xs">
@@ -1855,10 +1928,15 @@ export default function TransactionsPage() {
                         <td className="px-5 py-3.5 text-amber-700 font-semibold">{p.marketlist_id?.code || p.marketlist_id?.marketlist_number || '-'}</td>
                         <td className="px-5 py-3.5 text-slate-700">{p.supplier_id?.name || '-'}</td>
                         <td className="px-5 py-3.5 text-slate-500">{fmtDate(p.purchased_at)}</td>
-                        <td className="px-5 py-3.5">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${paymentBadge(p.payment_method)}`}>
-                            {p.payment_method}
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${paymentBadge(p.payment_method)}`}>
+                            {paymentLabel(p.payment_method, p.payment_source)}
                           </span>
+                          {p.payment_method === 'tempo' && p.amount_paid > 0 && (
+                            <p className="text-[9px] text-slate-500 mt-0.5">
+                              DP via {p.payment_source === 'bank' ? '🏦 Rekening Bank' : '💵 Kas Tunai'}
+                            </p>
+                          )}
                         </td>
                         <td className="px-5 py-3.5">
                           {p.payment_method === 'tempo' ? (
