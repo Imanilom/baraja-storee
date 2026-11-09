@@ -17,7 +17,15 @@ class SupplierService {
   }
 
   async createSupplier(data) {
-    const supplier = new Supplier(data);
+    const payload = { ...data };
+    if (!payload.code || payload.code.trim() === '') {
+      const count = await Supplier.countDocuments();
+      payload.code = `SUP-${String(count + 1).padStart(4, '0')}`;
+    }
+    if (!payload.email || payload.email.trim() === '') {
+      delete payload.email;
+    }
+    const supplier = new Supplier(payload);
     return supplier.save();
   }
 

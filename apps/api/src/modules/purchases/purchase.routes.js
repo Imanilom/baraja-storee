@@ -10,42 +10,42 @@ router.use(authenticate);
 // Daftar transaksi belanja
 router.get(
   '/',
-  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.RECEIVER),
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF),
   purchaseController.list
 );
 
 // Daftar hutang aktif (unpaid / partial / overdue)
 router.get(
   '/debts',
-  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT),
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
   purchaseController.listDebts
 );
 
 // Buat transaksi baru
 router.post(
   '/',
-  authorize(ROLES.ADMIN, ROLES.PURCHASING),
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.MANAGEMENT, ROLES.LEADER, ROLES.STAFF),
   purchaseController.create
 );
 
 // Detail transaksi
 router.get(
   '/:id',
-  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.RECEIVER),
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF),
   purchaseController.getById
 );
 
 // Riwayat pembayaran hutang untuk suatu transaksi
 router.get(
   '/:id/payments',
-  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT),
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
   purchaseController.getPayments
 );
 
 // Catat pembayaran hutang
 router.post(
   '/:id/payments',
-  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING),
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
   purchaseController.recordPayment
 );
 

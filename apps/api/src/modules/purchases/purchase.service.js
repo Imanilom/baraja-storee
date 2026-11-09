@@ -163,6 +163,12 @@ class PurchaseService {
       }
     }
 
+    // Update marketlist status to in_progress if currently approved
+    await Marketlist.findOneAndUpdate(
+      { _id: marketlist_id, status: 'approved' },
+      { $set: { status: 'in_progress' } }
+    ).catch(() => null);
+
     // Audit log
     await ActivityLog.create({
       user_id: user?._id,
@@ -331,7 +337,7 @@ class PurchaseService {
     }
 
     const skip = (Number(page) - 1) * Number(limit);
-    const [purchases, total] = await Promise.all([
+    const [rawPurchases, total] = await Promise.all([
       Purchase.find(filter)
         .populate('supplier_id', 'name code contact_person phone')
         .populate('marketlist_id', 'marketlist_number date status required_date')
@@ -341,6 +347,15 @@ class PurchaseService {
         .limit(Number(limit)),
       Purchase.countDocuments(filter)
     ]);
+
+    const purchases = await Promise.all(
+      rawPurchases.map(async (p) => {
+        const pItems = await PurchaseItem.find({ purchase_id: p._id }).lean();
+        const obj = p.toObject ? p.toObject() : p;
+        obj.items = pItems;
+        return obj;
+      })
+    );
 
     return {
       data: purchases,

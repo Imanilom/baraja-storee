@@ -11,8 +11,13 @@ router.use(authenticate);
 
 router.get('/', supplierController.list);
 router.get('/:id', supplierController.getById);
-router.post('/', authorize(ROLES.ADMIN, ROLES.PURCHASING), validate(supplierSchema), supplierController.create);
-router.patch('/:id', authorize(ROLES.ADMIN), supplierController.update);
+router.post(
+  '/',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.MANAGEMENT, ROLES.LEADER, ROLES.STAFF),
+  validate(supplierSchema),
+  supplierController.create
+);
+router.patch('/:id', authorize(ROLES.ADMIN, ROLES.MANAGEMENT), supplierController.update);
 
 module.exports = router;
 

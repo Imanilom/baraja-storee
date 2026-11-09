@@ -87,6 +87,11 @@ export const api = {
   getProducts: () => fetchApi('/products'),
   getCategories: () => fetchApi('/products/categories'),
   getSuppliers: () => fetchApi('/suppliers'),
+  createSupplier: (data) =>
+    fetchApi('/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
 
   // Marketlists
   getMarketlists: (params = '') => fetchApi(`/marketlists${params}`),

@@ -32,12 +32,12 @@ const productSchema = z.object({
 });
 
 const supplierSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().optional(),
-  contact_person: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
-  address: z.string().optional(),
+  name: z.string().min(1, 'Nama supplier wajib diisi'),
+  code: z.string().optional().nullable().or(z.literal('')),
+  contact_person: z.string().optional().nullable().or(z.literal('')),
+  phone: z.string().optional().nullable().or(z.literal('')),
+  email: z.string().email().optional().nullable().or(z.literal('')),
+  address: z.string().optional().nullable().or(z.literal('')),
   is_active: z.boolean().optional()
 });
 

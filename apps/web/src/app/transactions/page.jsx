@@ -82,10 +82,41 @@ export default function TransactionsPage() {
   const [formItems, setFormItems] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Quick Modal Tambah Supplier Baru
+  const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
+  const [savingSupplier, setSavingSupplier] = useState(false);
+  const [newSupplierForm, setNewSupplierForm] = useState({
+    name: '',
+    phone: '',
+    contact_person: '',
+    address: ''
+  });
+
   // Filters
   const [filterSupplier, setFilterSupplier] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+
+  // Default tempo: 7 hari dari tanggal pembelian
+  const getDefaultDueDate = (baseDateStr) => {
+    const d = baseDateStr ? new Date(baseDateStr) : new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split('T')[0];
+  };
+
+  const handlePaymentMethodChange = (method) => {
+    setPaymentMethod(method);
+    if (method === 'tempo') {
+      setDueDate(getDefaultDueDate(purchaseDate));
+    }
+  };
+
+  const handlePurchaseDateChange = (val) => {
+    setPurchaseDate(val);
+    if (paymentMethod === 'tempo') {
+      setDueDate(getDefaultDueDate(val));
+    }
+  };
 
   // ---------- data loading ----------
   const fetchPurchases = useCallback(async () => {
@@ -118,11 +149,15 @@ export default function TransactionsPage() {
 
   const fetchMasterForForm = async () => {
     try {
-      const [mlRes, supRes] = await Promise.all([
+      const [mlApproved, mlInProgress, supRes] = await Promise.all([
         api.getMarketlists('?status=approved&limit=50').catch(() => ({ data: [] })),
+        api.getMarketlists('?status=in_progress&limit=50').catch(() => ({ data: [] })),
         api.getSuppliers().catch(() => ({ data: [] }))
       ]);
-      setApprovedMLs(mlRes.data?.items || mlRes.data || []);
+      const listA = mlApproved.data?.items || mlApproved.data || [];
+      const listB = mlInProgress.data?.items || mlInProgress.data || [];
+      const combined = [...listA, ...listB.filter((b) => !listA.some((a) => a._id === b._id))];
+      setApprovedMLs(combined);
       setSuppliers(supRes.data?.items || supRes.data || []);
     } catch (_) {}
   };
@@ -133,7 +168,7 @@ export default function TransactionsPage() {
     fetchMasterForForm();
   }, [fetchPurchases, fetchDebts]);
 
-  // ---------- handle ML selection ----------
+  // ---------- handle ML selection & track already purchased items ----------
   const handleSelectMarketlist = async (mlId) => {
     setSelectedMlId(mlId);
     setSelectedMlDetail(null);
@@ -141,11 +176,30 @@ export default function TransactionsPage() {
     setSelectedSupplierId('');
     if (!mlId) return;
     try {
-      const res = await api.getMarketlistById(mlId);
+      const [res, purchaseRes] = await Promise.all([
+        api.getMarketlistById(mlId),
+        api.getPurchases(`?marketlist_id=${mlId}&limit=100`).catch(() => ({ data: [] }))
+      ]);
       const ml = res.data;
       setSelectedMlDetail(ml);
+
+      // Map which marketlist_item_id have already been purchased
+      const alreadyPurchasedMap = {};
+      const existingPurchases = purchaseRes.data || [];
+      existingPurchases.forEach((p) => {
+        (p.items || []).forEach((pItem) => {
+          if (pItem.marketlist_item_id) {
+            alreadyPurchasedMap[pItem.marketlist_item_id.toString()] = {
+              supplierName: p.supplier_id?.name || 'Supplier Lain',
+              purchaseNumber: p.purchase_number
+            };
+          }
+        });
+      });
+
       const items = (ml.items || []).map((it) => {
         const p = it.product_id;
+        const already = alreadyPurchasedMap[it._id.toString()];
         return {
           marketlist_item_id: it._id,
           product_id: p?._id || '',
@@ -155,8 +209,9 @@ export default function TransactionsPage() {
           unit_price_ml: it.unit_price || 0,
           actual_qty: it.requested_qty || 0,
           actual_unit_price: it.unit_price || 0,
-          supplier_id: it.supplier_id?._id || it.supplier_id || '',
-          notes: ''
+          notes: '',
+          selected: !already, // pre-selected if available
+          alreadyPurchased: already || null
         };
       });
       setFormItems(items);
@@ -165,28 +220,48 @@ export default function TransactionsPage() {
     }
   };
 
-  const filteredFormItems = selectedSupplierId
-    ? formItems.filter((it) => it.supplier_id === selectedSupplierId || !it.supplier_id)
-    : formItems;
+  // Toggle item selection for this supplier's transaction
+  const toggleItemSelect = (index) => {
+    const updated = [...formItems];
+    if (updated[index].alreadyPurchased) return;
+    updated[index].selected = !updated[index].selected;
+    setFormItems(updated);
+  };
 
-  const formTotal = filteredFormItems.reduce(
+  // Toggle select all available items
+  const toggleSelectAll = (select) => {
+    const updated = formItems.map((it) => ({
+      ...it,
+      selected: it.alreadyPurchased ? false : select
+    }));
+    setFormItems(updated);
+  };
+
+  // Only items checked and not already purchased will be recorded
+  const selectedItems = formItems.filter((it) => it.selected && !it.alreadyPurchased);
+  const unpurchasedCount = formItems.filter((it) => !it.alreadyPurchased).length;
+  const isAllSelected = unpurchasedCount > 0 && selectedItems.length === unpurchasedCount;
+
+  const formTotal = selectedItems.reduce(
     (sum, it) => sum + Number(it.actual_qty || 0) * Number(it.actual_unit_price || 0),
     0
   );
 
   const handleItemChange = (index, field, value) => {
     const updated = [...formItems];
-    const realIdx = formItems.indexOf(filteredFormItems[index]);
-    updated[realIdx][field] = value;
+    updated[index][field] = value;
     setFormItems(updated);
   };
 
-  // ---------- submit purchase ----------
+  // ---------- submit purchase (1 transaksi = 1 supplier) ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedMlId) { alert('Pilih Marketlist terlebih dahulu.'); return; }
     if (!selectedSupplierId) { alert('Pilih Supplier terlebih dahulu.'); return; }
-    if (filteredFormItems.length === 0) { alert('Tidak ada barang yang ditransaksikan.'); return; }
+    if (selectedItems.length === 0) {
+      alert('Pilih minimal 1 barang yang dibeli dari supplier ini!');
+      return;
+    }
     if (paymentMethod === 'tempo' && !dueDate) {
       alert('Untuk pembayaran tempo / hutang, wajib mengisi Tanggal Jatuh Tempo.'); return;
     }
@@ -204,7 +279,7 @@ export default function TransactionsPage() {
           due_date: dueDate,
           amount_paid: Number(downPayment) || 0
         }),
-        items: filteredFormItems.map((it) => ({
+        items: selectedItems.map((it) => ({
           marketlist_item_id: it.marketlist_item_id,
           product_id: it.product_id,
           product_name: it.product_name,
@@ -214,15 +289,72 @@ export default function TransactionsPage() {
           notes: it.notes || ''
         }))
       };
+
       await api.createPurchase(payload);
-      alert('✅ Transaksi pembelian berhasil dicatat!');
-      resetForm();
       fetchPurchases();
       fetchDebts();
+
+      const selectedSup = suppliers.find((s) => s._id === selectedSupplierId);
+      const remainingItems = formItems.filter(
+        (it) => !it.alreadyPurchased && !it.selected
+      );
+
+      if (remainingItems.length > 0) {
+        if (
+          confirm(
+            `✅ Transaksi untuk "${selectedSup?.name || 'Supplier'}" berhasil dicatat!\n\n` +
+            `Masih ada ${remainingItems.length} barang di Marketlist ini yang belum dicatat transaksinya.\n\n` +
+            `Apakah ingin lanjut mencatat transaksi untuk Supplier berikutnya?`
+          )
+        ) {
+          // Keep form open for the same Marketlist, refresh item purchase state
+          await handleSelectMarketlist(selectedMlId);
+          setSelectedSupplierId('');
+          setInvoiceRef('');
+          setNotes('');
+          setDownPayment('');
+          setPaymentMethod('cash');
+          setDueDate('');
+          setSubmitting(false);
+          return;
+        }
+      } else {
+        alert(`✅ Transaksi untuk "${selectedSup?.name || 'Supplier'}" berhasil dicatat!\nSemua barang pada Marketlist ini telah selesai ditransaksikan.`);
+      }
+
+      resetForm();
     } catch (e) {
       alert(`Gagal menyimpan transaksi: ${e.message}`);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Quick create new supplier
+  const handleCreateNewSupplier = async (e) => {
+    e.preventDefault();
+    if (!newSupplierForm.name.trim()) {
+      alert('Nama supplier wajib diisi!');
+      return;
+    }
+    setSavingSupplier(true);
+    try {
+      const res = await api.createSupplier({
+        name: newSupplierForm.name.trim(),
+        phone: newSupplierForm.phone?.trim() || undefined,
+        contact_person: newSupplierForm.contact_person?.trim() || undefined,
+        address: newSupplierForm.address?.trim() || undefined
+      });
+      const created = res.data;
+      await fetchMasterForForm();
+      setSelectedSupplierId(created._id);
+      setShowAddSupplierModal(false);
+      setNewSupplierForm({ name: '', phone: '', contact_person: '', address: '' });
+      alert(`✅ Supplier "${created.name}" berhasil dibuat & langsung dipilih!`);
+    } catch (err) {
+      alert(`Gagal membuat supplier: ${err.message}`);
+    } finally {
+      setSavingSupplier(false);
     }
   };
 
@@ -449,22 +581,38 @@ export default function TransactionsPage() {
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                          <Store className="w-3.5 h-3.5 inline mr-1" />
-                          Supplier Tujuan
-                        </label>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                            <Store className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Supplier Tujuan *</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddSupplierModal(true)}
+                            className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1 transition"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>+ Supplier Baru</span>
+                          </button>
+                        </div>
                         <select
                           value={selectedSupplierId}
                           onChange={(e) => setSelectedSupplierId(e.target.value)}
                           required
-                          className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold text-slate-800"
                         >
                           <option value="">-- Pilih Supplier --</option>
-                          {(mlSuppliers.length > 0 ? mlSuppliers : suppliers).map((s) => (
-                            <option key={s._id} value={s._id}>{s.name}</option>
+                          {suppliers.map((s) => (
+                            <option key={s._id} value={s._id}>
+                              {s.name} {s.contact_person ? `(${s.contact_person})` : ''}
+                            </option>
                           ))}
                         </select>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          1 Transaksi untuk 1 Supplier. Pilih barang yang dibeli di supplier ini di bawah.
+                        </p>
                       </div>
+
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1.5">
                           <CreditCard className="w-3.5 h-3.5 inline mr-1" />
@@ -472,14 +620,15 @@ export default function TransactionsPage() {
                         </label>
                         <select
                           value={paymentMethod}
-                          onChange={(e) => setPaymentMethod(e.target.value)}
-                          className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          onChange={(e) => handlePaymentMethodChange(e.target.value)}
+                          className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
                         >
                           {PAYMENT_METHODS.map((pm) => (
                             <option key={pm.value} value={pm.value}>{pm.label}</option>
                           ))}
                         </select>
                       </div>
+
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1.5">
                           <Calendar className="w-3.5 h-3.5 inline mr-1" />
@@ -488,20 +637,25 @@ export default function TransactionsPage() {
                         <input
                           type="date"
                           value={purchaseDate}
-                          onChange={(e) => setPurchaseDate(e.target.value)}
+                          onChange={(e) => handlePurchaseDateChange(e.target.value)}
                           required
                           className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                         />
                       </div>
                     </div>
 
-                    {/* Tempo/Hutang fields */}
+                    {/* Tempo/Hutang fields (Default 7 Hari) */}
                     {paymentMethod === 'tempo' && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          Pengaturan Hutang / Tempo
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Pengaturan Hutang / Tempo
+                          </p>
+                          <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                            Default Tempo: 7 Hari
+                          </span>
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-bold text-slate-600 mb-1.5">
@@ -513,8 +667,11 @@ export default function TransactionsPage() {
                               onChange={(e) => setDueDate(e.target.value)}
                               required={paymentMethod === 'tempo'}
                               min={purchaseDate}
-                              className="w-full text-xs p-2.5 bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              className="w-full text-xs p-2.5 bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold text-amber-900"
                             />
+                            <p className="text-[10px] text-amber-700 mt-0.5">
+                              * Otomatis 7 hari dari tanggal belanja (dapat diubah sesuai kesepakatan)
+                            </p>
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-600 mb-1.5">
@@ -562,82 +719,139 @@ export default function TransactionsPage() {
                       </div>
                     </div>
 
-                    {/* Items Table */}
+                    {/* Items Table with Checkboxes */}
                     <div>
-                      <h4 className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
-                        <Package className="w-3.5 h-3.5" />
-                        Daftar Barang yang Dibeli
-                        {selectedSupplierId && (
-                          <span className="ml-1 text-amber-600">({filteredFormItems.length} item)</span>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-3.5 h-3.5 text-amber-600" />
+                          <h4 className="text-xs font-bold text-slate-800">
+                            Pilih Barang yang Dibeli dari Supplier Ini:
+                          </h4>
+                          <span className="text-[11px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
+                            {selectedItems.length} dari {formItems.length} barang dipilih
+                          </span>
+                        </div>
+
+                        {unpurchasedCount > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => toggleSelectAll(!isAllSelected)}
+                              className="text-[11px] font-semibold text-amber-700 hover:text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded transition"
+                            >
+                              {isAllSelected ? 'Batalkan Pilih Semua' : 'Pilih Semua Sisa Barang'}
+                            </button>
+                          </div>
                         )}
-                      </h4>
-                      {filteredFormItems.length === 0 ? (
+                      </div>
+
+                      {formItems.length === 0 ? (
                         <div className="text-xs text-slate-400 py-6 text-center border border-dashed border-slate-200 rounded-lg">
                           <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-slate-300" />
-                          Pilih Marketlist dan Supplier terlebih dahulu.
+                          Pilih Marketlist terlebih dahulu.
                         </div>
                       ) : (
                         <div className="overflow-x-auto border border-slate-200 rounded-xl">
                           <table className="w-full text-xs">
                             <thead className="bg-slate-50 border-b border-slate-200">
                               <tr>
+                                <th className="px-3 py-2.5 text-center w-10">Pilih</th>
                                 <th className="px-3 py-2.5 text-left text-slate-500 font-semibold">Nama Barang</th>
                                 <th className="px-3 py-2.5 text-center text-slate-500 font-semibold">Req ML</th>
                                 <th className="px-3 py-2.5 text-center text-slate-500 font-semibold">Harga ML</th>
-                                <th className="px-3 py-2.5 text-center text-amber-600 font-bold">Qty Aktual</th>
-                                <th className="px-3 py-2.5 text-center text-amber-600 font-bold">Harga Aktual</th>
+                                <th className="px-3 py-2.5 text-center text-amber-600 font-bold">Qty Beli</th>
+                                <th className="px-3 py-2.5 text-center text-amber-600 font-bold">Harga Beli Aktual</th>
                                 <th className="px-3 py-2.5 text-right text-slate-500 font-semibold">Subtotal</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {filteredFormItems.map((it, idx) => {
+                              {formItems.map((it, idx) => {
+                                const isBought = !!it.alreadyPurchased;
+                                const isChecked = !isBought && it.selected;
                                 const sub = Number(it.actual_qty || 0) * Number(it.actual_unit_price || 0);
+
                                 return (
-                                  <tr key={it.marketlist_item_id || idx} className="hover:bg-slate-50/50">
-                                    <td className="px-3 py-2.5 font-semibold text-slate-800">
-                                      {it.product_name}
-                                      <span className="ml-1 text-slate-400 font-normal">({it.unit_name})</span>
+                                  <tr
+                                    key={it.marketlist_item_id || idx}
+                                    className={`transition-colors ${
+                                      isBought
+                                        ? 'bg-slate-100/70 opacity-60'
+                                        : isChecked
+                                        ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                                        : 'hover:bg-slate-50/50'
+                                    }`}
+                                  >
+                                    <td className="px-3 py-2.5 text-center">
+                                      {isBought ? (
+                                        <span title="Sudah ditransaksikan" className="text-emerald-600 font-bold text-xs">
+                                          ✓
+                                        </span>
+                                      ) : (
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={() => toggleItemSelect(idx)}
+                                          className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                                        />
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2.5">
+                                      <div className="font-semibold text-slate-800">
+                                        {it.product_name}
+                                        <span className="ml-1 text-slate-400 font-normal">({it.unit_name})</span>
+                                      </div>
+                                      {isBought && (
+                                        <span className="inline-block mt-0.5 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
+                                          ✓ Sudah Dibeli di {it.alreadyPurchased.supplierName} ({it.alreadyPurchased.purchaseNumber})
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="px-3 py-2.5 text-center text-slate-500">{it.requested_qty}</td>
                                     <td className="px-3 py-2.5 text-center text-slate-500">{fmt(it.unit_price_ml)}</td>
                                     <td className="px-3 py-2.5 text-center">
                                       <input
                                         type="number"
+                                        disabled={isBought || !isChecked}
                                         value={it.actual_qty}
                                         onChange={(e) => handleItemChange(idx, 'actual_qty', e.target.value)}
                                         min="0"
                                         step="any"
-                                        className="w-20 text-xs text-center p-1.5 bg-amber-50 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+                                        className="w-20 text-xs text-center p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold disabled:bg-slate-100 disabled:text-slate-400"
                                       />
                                     </td>
                                     <td className="px-3 py-2.5 text-center">
                                       <input
                                         type="number"
+                                        disabled={isBought || !isChecked}
                                         value={it.actual_unit_price}
                                         onChange={(e) => handleItemChange(idx, 'actual_unit_price', e.target.value)}
                                         min="0"
                                         step="any"
-                                        className="w-28 text-xs text-center p-1.5 bg-amber-50 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+                                        className="w-28 text-xs text-center p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold disabled:bg-slate-100 disabled:text-slate-400"
                                       />
                                     </td>
-                                    <td className="px-3 py-2.5 text-right font-bold text-slate-800">{fmt(sub)}</td>
+                                    <td className="px-3 py-2.5 text-right font-bold text-slate-800">
+                                      {isChecked ? fmt(sub) : '-'}
+                                    </td>
                                   </tr>
                                 );
                               })}
                             </tbody>
                             <tfoot className="border-t-2 border-slate-300 bg-amber-50/50">
                               <tr>
-                                <td colSpan="5" className="px-3 py-3 text-right font-black text-slate-700 text-sm">TOTAL PEMBELIAN AKTUAL:</td>
+                                <td colSpan="6" className="px-3 py-3 text-right font-black text-slate-700 text-sm">
+                                  TOTAL TRANSAKSI SUPPLIER INI ({selectedItems.length} BARANG):
+                                </td>
                                 <td className="px-3 py-3 text-right font-black text-amber-700 text-sm">{fmt(formTotal)}</td>
                               </tr>
                               {paymentMethod === 'tempo' && (
                                 <>
                                   <tr className="text-xs">
-                                    <td colSpan="5" className="px-3 py-1 text-right text-slate-500">Uang Muka / DP:</td>
+                                    <td colSpan="6" className="px-3 py-1 text-right text-slate-500">Uang Muka / DP:</td>
                                     <td className="px-3 py-1 text-right text-green-700 font-bold">{fmt(Number(downPayment) || 0)}</td>
                                   </tr>
                                   <tr className="text-xs">
-                                    <td colSpan="5" className="px-3 py-1 text-right text-red-700 font-bold">Sisa Hutang:</td>
+                                    <td colSpan="6" className="px-3 py-1 text-right text-red-700 font-bold">Sisa Hutang:</td>
                                     <td className="px-3 py-1 text-right text-red-700 font-black">{fmt(formTotal - (Number(downPayment) || 0))}</td>
                                   </tr>
                                 </>
@@ -658,15 +872,108 @@ export default function TransactionsPage() {
                       </button>
                       <button
                         type="submit"
-                        disabled={submitting || filteredFormItems.length === 0}
-                        className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-2"
+                        disabled={submitting || selectedItems.length === 0}
+                        className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-2 shadow-sm"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        {submitting ? 'Menyimpan...' : 'Simpan Transaksi Pembelian'}
+                        {submitting ? 'Menyimpan...' : `Simpan Transaksi (${selectedItems.length} Barang)`}
                       </button>
                     </div>
                   </>
                 )}
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ===== MODAL TAMBAH SUPPLIER BARU ===== */}
+        {showAddSupplierModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                  <Store className="w-4 h-4 text-emerald-600" />
+                  Tambah Supplier Baru
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSupplierModal(false)}
+                  className="text-slate-400 hover:text-slate-600 font-bold text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateNewSupplier} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Nama Supplier / Toko *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Toko Sayur Segar Pak Budi"
+                    value={newSupplierForm.name}
+                    onChange={(e) => setNewSupplierForm({ ...newSupplierForm, name: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    No. Telepon / WhatsApp
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 081234567890"
+                    value={newSupplierForm.phone}
+                    onChange={(e) => setNewSupplierForm({ ...newSupplierForm, phone: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Kontak Person / Nama Penjual
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Pak Budi"
+                    value={newSupplierForm.contact_person}
+                    onChange={(e) => setNewSupplierForm({ ...newSupplierForm, contact_person: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Alamat Toko / Lapak Pasar
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Contoh: Pasar Induk Kramat Jati Blok A No. 12"
+                    value={newSupplierForm.address}
+                    onChange={(e) => setNewSupplierForm({ ...newSupplierForm, address: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddSupplierModal(false)}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingSupplier}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"
+                  >
+                    {savingSupplier ? 'Menyimpan...' : 'Simpan & Pilih Supplier'}
+                  </button>
+                </div>
               </form>
             </div>
           </div>
