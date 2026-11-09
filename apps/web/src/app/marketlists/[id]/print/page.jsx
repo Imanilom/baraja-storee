@@ -227,33 +227,30 @@ export default function MarketlistPrintPage() {
               <button
                 type="button"
                 onClick={() => setActiveTypeFilter('ALL')}
-                className={`px-2.5 py-1 rounded-md font-bold transition text-[11px] ${
-                  activeTypeFilter === 'ALL'
+                className={`px-2.5 py-1 rounded-md font-bold transition text-[11px] ${activeTypeFilter === 'ALL'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 Semua ({stats.grandItems})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTypeFilter('perishable')}
-                className={`px-2 py-1 rounded-md font-bold transition text-[11px] flex items-center gap-1 ${
-                  activeTypeFilter === 'perishable'
+                className={`px-2 py-1 rounded-md font-bold transition text-[11px] flex items-center gap-1 ${activeTypeFilter === 'perishable'
                     ? 'bg-rose-600 text-white shadow-xs'
                     : 'text-rose-700 hover:text-rose-900'
-                }`}
+                  }`}
               >
                 🥩 Perishable ({stats.totalPerishableItems})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTypeFilter('groceries')}
-                className={`px-2 py-1 rounded-md font-bold transition text-[11px] flex items-center gap-1 ${
-                  activeTypeFilter === 'groceries'
+                className={`px-2 py-1 rounded-md font-bold transition text-[11px] flex items-center gap-1 ${activeTypeFilter === 'groceries'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-emerald-700 hover:text-emerald-900'
-                }`}
+                  }`}
               >
                 🌾 Groceries ({stats.totalGroceriesItems})
               </button>
@@ -272,7 +269,7 @@ export default function MarketlistPrintPage() {
 
       {/* Main Printable Container: Single-Strip Header + Unified Dense Table */}
       <main className="max-w-4xl mx-auto my-3 sm:my-5 p-3 sm:p-5 bg-white border border-slate-200 rounded-xl shadow-sm print:m-0 print:p-0 print:border-none print:shadow-none print-full font-sans text-xs">
-        
+
         {/* COMPACT SINGLE-STRIP HEADER (SAVES 70% VERTICAL SPACE) */}
         <div className="border-b-2 border-slate-900 pb-2 mb-2">
           <div className="flex items-center justify-between gap-2">
@@ -371,7 +368,7 @@ export default function MarketlistPrintPage() {
                           return (
                             <tr key={it._id} className="hover:bg-slate-50">
                               <td className="p-1 text-center font-mono font-bold text-slate-400">
-                                [ &nbsp; ]
+                                [ &nbsp;&nbsp; ]
                               </td>
                               <td className="p-1 text-center font-bold text-slate-500">{idx + 1}</td>
                               <td className="p-1 font-bold text-slate-900">
