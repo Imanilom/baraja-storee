@@ -47,7 +47,14 @@ class MarketlistService {
     const items = await Promise.all(
       rawItems.map(async (ml) => {
         const mlItems = await MarketlistItem.find({ marketlist_id: ml._id })
-          .populate('product_id', 'name unit_id sku')
+          .populate({
+            path: 'product_id',
+            select: 'name unit_id category_id item_type sku specification last_purchase_price',
+            populate: [
+              { path: 'category_id', select: 'name code type' },
+              { path: 'unit_id', select: 'name abbreviation' }
+            ]
+          })
           .populate('supplier_id', 'name code')
           .lean();
         const obj = ml.toObject ? ml.toObject() : ml;
@@ -70,7 +77,14 @@ class MarketlistService {
 
     const [items, note, approvals] = await Promise.all([
       MarketlistItem.find({ marketlist_id: id })
-        .populate('product_id', 'name sku unit_id specification')
+        .populate({
+          path: 'product_id',
+          select: 'name sku unit_id category_id item_type specification last_purchase_price',
+          populate: [
+            { path: 'category_id', select: 'name code type' },
+            { path: 'unit_id', select: 'name abbreviation' }
+          ]
+        })
         .populate('supplier_id', 'name code contact_person phone'),
       MarketlistNote.findOne({ marketlist_id: id }).populate('updated_by', 'name email role'),
       MarketlistApproval.find({ marketlist_id: id }).populate('admin_id', 'name email').sort({ created_at: -1 })
@@ -96,7 +110,7 @@ class MarketlistService {
 
     // Fetch product master info for snapshots
     const productIds = items.map((i) => i.product_id);
-    const products = await Product.find({ _id: { $in: productIds } }).populate('unit_id');
+    const products = await Product.find({ _id: { $in: productIds } }).populate('unit_id').populate('category_id');
     const productMap = new Map(products.map((p) => [p._id.toString(), p]));
 
     const preparedItems = items.map((item) => {
@@ -120,7 +134,9 @@ class MarketlistService {
           name: prod.name,
           sku: prod.sku,
           specification: prod.specification,
-          unit_name: prod.unit_id ? prod.unit_id.name : ''
+          unit_name: prod.unit_id ? prod.unit_id.name : '',
+          item_type: prod.item_type || 'groceries',
+          category_name: prod.category_id ? prod.category_id.name : 'Umum'
         },
         supplier_id: item.supplier_id || null,
         requested_qty: item.requested_qty,

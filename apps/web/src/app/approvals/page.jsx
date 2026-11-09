@@ -14,7 +14,8 @@ import {
   Filter,
   CheckSquare,
   Square,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from 'lucide-react';
 
 export default function ApprovalsPage() {
@@ -343,12 +344,24 @@ export default function ApprovalsPage() {
                     Pemohon: <span className="text-slate-200 font-semibold">{selectedMl.created_by?.name}</span> | Lokasi: {selectedMl.location_id?.name || 'Pusat'}
                   </p>
                 </div>
-                <button
-                  onClick={() => setSelectedMl(null)}
-                  className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-lg"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`/marketlists/${selectedMl._id}/print`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition"
+                    title="Buka format cetak PDF belanja"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Cetak Lembar Belanja</span>
+                  </a>
+                  <button
+                    onClick={() => setSelectedMl(null)}
+                    className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
               {/* Modal Body */}

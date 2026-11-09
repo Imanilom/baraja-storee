@@ -16,7 +16,9 @@ const MarketlistItemSchema = new mongoose.Schema(
       name: String,
       sku: String,
       specification: String,
-      unit_name: String
+      unit_name: String,
+      item_type: String,
+      category_name: String
     },
     supplier_id: {
       type: mongoose.Schema.Types.ObjectId,

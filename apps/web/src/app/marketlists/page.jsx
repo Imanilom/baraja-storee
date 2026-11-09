@@ -13,7 +13,8 @@ import {
   Clock,
   Filter,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from 'lucide-react';
 
 const STATUS_TABS = [
@@ -204,6 +205,15 @@ export default function MarketlistPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
+                        <Link
+                          href={`/marketlists/${ml._id}/print`}
+                          target="_blank"
+                          className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded transition-colors inline-flex items-center gap-1"
+                          title="Cetak PDF Lembar Belanja"
+                        >
+                          <Printer className="w-3 h-3 text-slate-600" />
+                          Cetak
+                        </Link>
                         {['draft', 'revision'].includes(ml.status) && (
                           <button
                             onClick={() => handleSubmitToAdmin(ml._id)}
@@ -255,6 +265,15 @@ export default function MarketlistPage() {
                   <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
                     <span>Dibutuhkan: {new Date(ml.required_date || ml.date).toLocaleDateString('id-ID')} ({ml.totals?.total_items || 0} item)</span>
                     <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/marketlists/${ml._id}/print`}
+                        target="_blank"
+                        className="px-2 py-1 text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded inline-flex items-center gap-1"
+                        title="Cetak PDF Belanja"
+                      >
+                        <Printer className="w-2.5 h-2.5 text-slate-600" />
+                        Cetak
+                      </Link>
                       {['draft', 'revision'].includes(ml.status) && (
                         <button
                           onClick={() => handleSubmitToAdmin(ml._id)}
@@ -365,7 +384,15 @@ export default function MarketlistPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <Link
+                  href={`/marketlists/${selectedMl._id}/print`}
+                  target="_blank"
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak PDF Lembar Belanja (Per Kategori)</span>
+                </Link>
                 <button
                   onClick={() => setSelectedMl(null)}
                   className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold"
