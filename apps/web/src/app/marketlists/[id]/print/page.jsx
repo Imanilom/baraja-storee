@@ -7,13 +7,7 @@ import { api } from '../../../../lib/api';
 import {
   Printer,
   ArrowLeft,
-  CheckCircle2,
-  AlertCircle,
-  ShoppingBag,
-  FileText,
-  Filter,
-  CheckSquare,
-  Square
+  AlertCircle
 } from 'lucide-react';
 
 export default function MarketlistPrintPage() {
@@ -25,10 +19,9 @@ export default function MarketlistPrintPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Print controls
+  // Simple filter: Semua / Perishable / Groceries
   const [activeTypeFilter, setActiveTypeFilter] = useState('ALL'); // 'ALL' | 'perishable' | 'groceries'
   const [hideRejected, setHideRejected] = useState(true);
-  const [checkedItems, setCheckedItems] = useState({});
 
   useEffect(() => {
     if (!id) return;
@@ -51,13 +44,6 @@ export default function MarketlistPrintPage() {
     };
     fetchML();
   }, [id]);
-
-  const toggleCheck = (itemId) => {
-    setCheckedItems((prev) => ({
-      ...prev,
-      [itemId]: !prev[itemId]
-    }));
-  };
 
   // Group items by item_type ('perishable' vs 'groceries') and then by sub-category
   const groupedData = useMemo(() => {
@@ -188,7 +174,7 @@ export default function MarketlistPrintPage() {
           }
           .print-table th, .print-table td {
             border: 1px solid #777 !important;
-            padding: 4px 6px !important;
+            padding: 5px 6px !important;
           }
           .print-table th {
             background-color: #f0f0f0 !important;
@@ -217,10 +203,10 @@ export default function MarketlistPrintPage() {
             <div className="h-4 w-px bg-slate-200 mx-1"></div>
             <div>
               <h1 className="text-sm font-bold text-slate-800 leading-tight">
-                Cetak Lembar Belanja: {marketlist.marketlist_number}
+                {marketlist.marketlist_number}
               </h1>
               <p className="text-[11px] text-slate-500">
-                Pemisahan Perishable & Groceries per Sub-Kategori
+                Lembar Belanja Siap Cetak (Langsung Cetak Semua Barang)
               </p>
             </div>
           </div>
@@ -231,7 +217,7 @@ export default function MarketlistPrintPage() {
               <button
                 type="button"
                 onClick={() => setActiveTypeFilter('ALL')}
-                className={`px-2.5 py-1 rounded-md font-bold transition ${
+                className={`px-3 py-1.5 rounded-md font-bold transition ${
                   activeTypeFilter === 'ALL'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -242,7 +228,7 @@ export default function MarketlistPrintPage() {
               <button
                 type="button"
                 onClick={() => setActiveTypeFilter('perishable')}
-                className={`px-2.5 py-1 rounded-md font-bold transition flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1 ${
                   activeTypeFilter === 'perishable'
                     ? 'bg-rose-600 text-white shadow-xs'
                     : 'text-rose-700 hover:text-rose-900'
@@ -253,7 +239,7 @@ export default function MarketlistPrintPage() {
               <button
                 type="button"
                 onClick={() => setActiveTypeFilter('groceries')}
-                className={`px-2.5 py-1 rounded-md font-bold transition flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1 ${
                   activeTypeFilter === 'groceries'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-emerald-700 hover:text-emerald-900'
@@ -263,19 +249,9 @@ export default function MarketlistPrintPage() {
               </button>
             </div>
 
-            <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 select-none">
-              <input
-                type="checkbox"
-                checked={hideRejected}
-                onChange={(e) => setHideRejected(e.target.checked)}
-                className="rounded text-emerald-600 focus:ring-emerald-500"
-              />
-              <span>Sembunyikan Ditolak</span>
-            </label>
-
             <button
               onClick={() => window.print()}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all"
             >
               <Printer className="w-4 h-4" />
               <span>Cetak / Simpan PDF</span>
@@ -301,7 +277,7 @@ export default function MarketlistPrintPage() {
                 LEMBAR DAFTAR BELANJA PASAR & GROSIR
               </h2>
               <p className="text-xs text-slate-600">
-                Dokumen resmi acuan belanja dan pemeriksaan penerimaan barang
+                Dokumen acuan belanja tim purchasing & pemeriksaan penerimaan barang
               </p>
             </div>
 
@@ -403,7 +379,7 @@ export default function MarketlistPrintPage() {
                       <table className="w-full text-left text-xs print-table border-collapse">
                         <thead>
                           <tr className="bg-slate-100 text-slate-700 text-[10px] uppercase font-bold border-b border-slate-300">
-                            <th className="p-1.5 text-center w-8">Cek</th>
+                            <th className="p-1.5 text-center w-10">Cek</th>
                             <th className="p-1.5 text-center w-8">No</th>
                             <th className="p-1.5">Nama Barang & Spesifikasi</th>
                             <th className="p-1.5 text-center w-24">Target Qty</th>
@@ -416,7 +392,6 @@ export default function MarketlistPrintPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                           {subItems.map((it, idx) => {
-                            const isChecked = checkedItems[it._id];
                             const unitName = it.product_snapshot?.unit_name || it.product_id?.unit_id?.abbreviation || 'pcs';
                             const productName = it.product_snapshot?.name || it.product_id?.name;
                             const isRejected = it.item_status === 'rejected';
@@ -424,18 +399,9 @@ export default function MarketlistPrintPage() {
                             return (
                               <tr
                                 key={it._id}
-                                className={`hover:bg-slate-50 transition-colors ${
-                                  isChecked ? 'bg-emerald-50/50' : ''
-                                } ${isRejected ? 'opacity-50 line-through' : ''}`}
+                                className={`hover:bg-slate-50 transition-colors ${isRejected ? 'opacity-50 line-through' : ''}`}
                               >
-                                <td className="p-1.5 text-center cursor-pointer no-print" onClick={() => toggleCheck(it._id)}>
-                                  {isChecked ? (
-                                    <CheckSquare className="w-4 h-4 text-emerald-600 inline" />
-                                  ) : (
-                                    <Square className="w-4 h-4 text-slate-300 inline" />
-                                  )}
-                                </td>
-                                <td className="p-1.5 text-center font-bold print:table-cell hidden print:visible">
+                                <td className="p-1.5 text-center font-mono font-bold text-slate-400">
                                   [ &nbsp; ]
                                 </td>
                                 <td className="p-1.5 text-center font-bold text-slate-500">{idx + 1}</td>
@@ -519,7 +485,7 @@ export default function MarketlistPrintPage() {
                       <table className="w-full text-left text-xs print-table border-collapse">
                         <thead>
                           <tr className="bg-slate-100 text-slate-700 text-[10px] uppercase font-bold border-b border-slate-300">
-                            <th className="p-1.5 text-center w-8">Cek</th>
+                            <th className="p-1.5 text-center w-10">Cek</th>
                             <th className="p-1.5 text-center w-8">No</th>
                             <th className="p-1.5">Nama Barang & Spesifikasi</th>
                             <th className="p-1.5 text-center w-24">Target Qty</th>
@@ -532,7 +498,6 @@ export default function MarketlistPrintPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                           {subItems.map((it, idx) => {
-                            const isChecked = checkedItems[it._id];
                             const unitName = it.product_snapshot?.unit_name || it.product_id?.unit_id?.abbreviation || 'pcs';
                             const productName = it.product_snapshot?.name || it.product_id?.name;
                             const isRejected = it.item_status === 'rejected';
@@ -540,18 +505,9 @@ export default function MarketlistPrintPage() {
                             return (
                               <tr
                                 key={it._id}
-                                className={`hover:bg-slate-50 transition-colors ${
-                                  isChecked ? 'bg-emerald-50/50' : ''
-                                } ${isRejected ? 'opacity-50 line-through' : ''}`}
+                                className={`hover:bg-slate-50 transition-colors ${isRejected ? 'opacity-50 line-through' : ''}`}
                               >
-                                <td className="p-1.5 text-center cursor-pointer no-print" onClick={() => toggleCheck(it._id)}>
-                                  {isChecked ? (
-                                    <CheckSquare className="w-4 h-4 text-emerald-600 inline" />
-                                  ) : (
-                                    <Square className="w-4 h-4 text-slate-300 inline" />
-                                  )}
-                                </td>
-                                <td className="p-1.5 text-center font-bold print:table-cell hidden print:visible">
+                                <td className="p-1.5 text-center font-mono font-bold text-slate-400">
                                   [ &nbsp; ]
                                 </td>
                                 <td className="p-1.5 text-center font-bold text-slate-500">{idx + 1}</td>
@@ -659,4 +615,3 @@ export default function MarketlistPrintPage() {
     </div>
   );
 }
-
