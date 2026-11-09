@@ -157,6 +157,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  updatePurchase: (id, data) =>
+    fetchApi(`/purchases/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  deletePurchase: (id) =>
+    fetchApi(`/purchases/${id}`, {
+      method: 'DELETE'
+    }),
   // Debt management (Purchases / Supplier)
   getDebts: (params = '') => fetchApi(`/purchases/debts${params}`),
   getPurchasePayments: (id) => fetchApi(`/purchases/${id}/payments`),

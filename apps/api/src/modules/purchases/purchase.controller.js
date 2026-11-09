@@ -84,6 +84,33 @@ class PurchaseController {
       next(error);
     }
   }
+
+  // PUT /purchases/:id — Edit transaksi pembelian
+  async update(req, res, next) {
+    try {
+      const updated = await purchaseService.updatePurchase(req.params.id, req.body, req.user);
+      return res.status(200).json({
+        success: true,
+        message: 'Transaksi pembelian berhasil diperbarui.',
+        data: updated
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // DELETE /purchases/:id — Hapus transaksi pembelian
+  async delete(req, res, next) {
+    try {
+      const result = await purchaseService.deletePurchase(req.params.id, req.user);
+      return res.status(200).json({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new PurchaseController();

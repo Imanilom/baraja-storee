@@ -7,7 +7,7 @@ import {
   ShoppingCart, Plus, Eye, X, Package, Calendar, CreditCard,
   FileText, Store, ClipboardList, AlertTriangle, CheckCircle2,
   Wallet, AlertOctagon, Clock, TrendingDown, ChevronRight, Banknote,
-  Truck, RotateCcw, Sparkles, Check
+  Truck, RotateCcw, Sparkles, Check, Pencil, Trash2
 } from 'lucide-react';
 
 const PAYMENT_METHODS = [
@@ -133,6 +133,19 @@ export default function TransactionsPage() {
     phone: '',
     contact_person: '',
     address: ''
+  });
+
+  // Edit Transaksi Modal State
+  const [editPurchaseModal, setEditPurchaseModal] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    supplier_id: '',
+    payment_method: 'cash',
+    due_date: '',
+    amount_paid: '0',
+    invoice_ref: '',
+    purchased_at: '',
+    notes: ''
   });
 
   // Filters
@@ -522,6 +535,97 @@ export default function TransactionsPage() {
       alert(`Gagal mencatat pembayaran: ${e.message}`);
     } finally {
       setSubmittingPayment(false);
+    }
+  };
+
+  // ---------- edit & delete purchase ----------
+  const handleOpenEditModal = (p) => {
+    const isTempo = p.payment_method === 'tempo';
+    setEditPurchaseModal(p);
+    setEditForm({
+      supplier_id: p.supplier_id?._id || p.supplier_id || '',
+      payment_method: p.payment_method || 'cash',
+      due_date: p.due_date ? p.due_date.split('T')[0] : getDefaultDueDate(p.purchased_at),
+      amount_paid: isTempo ? String(p.amount_paid ?? 0) : '0',
+      invoice_ref: p.invoice_ref || '',
+      purchased_at: p.purchased_at ? p.purchased_at.split('T')[0] : new Date().toISOString().split('T')[0],
+      notes: p.notes || ''
+    });
+  };
+
+  const handleEditPaymentMethodChange = (method) => {
+    setEditForm((prev) => {
+      const next = { ...prev, payment_method: method };
+      if (method === 'tempo') {
+        if (!next.due_date) {
+          next.due_date = getDefaultDueDate(next.purchased_at);
+        }
+        if (prev.payment_method !== 'tempo') {
+          next.amount_paid = '0';
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editPurchaseModal) return;
+    if (editForm.payment_method === 'tempo' && !editForm.due_date) {
+      alert('Untuk metode tempo / hutang, tanggal jatuh tempo wajib diisi!');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const payload = {
+        supplier_id: editForm.supplier_id,
+        payment_method: editForm.payment_method,
+        invoice_ref: editForm.invoice_ref.trim(),
+        purchased_at: editForm.purchased_at,
+        notes: editForm.notes.trim(),
+        ...(editForm.payment_method === 'tempo' && {
+          due_date: editForm.due_date,
+          amount_paid: Number(editForm.amount_paid) || 0
+        })
+      };
+
+      await api.updatePurchase(editPurchaseModal._id, payload);
+      alert(`✅ Transaksi "${editPurchaseModal.purchase_number}" berhasil diperbarui! Status pembayaran kini menjadi ${editForm.payment_method === 'tempo' ? 'Tempo / Hutang' : 'Lunas'}.`);
+      setEditPurchaseModal(null);
+      if (detailPurchase && detailPurchase._id === editPurchaseModal._id) {
+        handleViewDetail(editPurchaseModal._id);
+      }
+      fetchPurchases();
+      fetchDebts();
+    } catch (err) {
+      alert(`Gagal memperbarui transaksi: ${err.message}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeletePurchase = async (p) => {
+    if (
+      !confirm(
+        `⚠️ PERINGATAN: Apakah Anda yakin ingin menghapus transaksi "${p.purchase_number}"?\n\n` +
+        `Barang dalam transaksi ini akan dapat dipilih kembali di formulir belanja Marketlist.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await api.deletePurchase(p._id);
+      alert(`✅ Transaksi "${p.purchase_number}" berhasil dihapus.`);
+      if (detailPurchase && detailPurchase._id === p._id) {
+        setDetailPurchase(null);
+      }
+      fetchPurchases();
+      fetchDebts();
+      fetchMasterForForm();
+    } catch (err) {
+      alert(`Gagal menghapus transaksi: ${err.message}`);
     }
   };
 
@@ -1289,9 +1393,25 @@ export default function TransactionsPage() {
                   <FileText className="w-4 h-4 text-amber-600" />
                   Detail Transaksi: {detailPurchase.purchase_number}
                 </h3>
-                <button onClick={() => setDetailPurchase(null)} className="p-1 hover:bg-slate-100 rounded-lg">
-                  <X className="w-4 h-4 text-slate-500" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleOpenEditModal(detailPurchase)}
+                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeletePurchase(detailPurchase)}
+                    className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                    <span>Hapus</span>
+                  </button>
+                  <button onClick={() => setDetailPurchase(null)} className="p-1 hover:bg-slate-100 rounded-lg ml-1">
+                    <X className="w-4 h-4 text-slate-500" />
+                  </button>
+                </div>
               </div>
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1505,6 +1625,201 @@ export default function TransactionsPage() {
           </div>
         )}
 
+        {/* ===== EDIT MODAL ===== */}
+        {editPurchaseModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl my-8">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-amber-50/50 rounded-t-2xl">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <Pencil className="w-4 h-4 text-amber-600" />
+                    Edit Transaksi Belanja
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-mono font-semibold">
+                    {editPurchaseModal.purchase_number} • Total: {fmt(editPurchaseModal.total_actual)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditPurchaseModal(null)}
+                  className="p-1 hover:bg-slate-200/60 rounded-lg text-slate-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEdit} className="p-6 space-y-4 text-xs">
+                {/* Info alert */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 flex items-start gap-2.5">
+                  <CreditCard className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-[11px]">
+                    <p className="font-bold">Ubah Status Pembayaran & Detail Transaksi</p>
+                    <p className="opacity-90 mt-0.5">
+                      Jika sebelumnya salah input sebagai <strong>Tunai / Lunas</strong>, pilih metode <strong>Tempo / Hutang Kredit</strong> di bawah untuk mengaktifkan pencatatan hutang dan jadwal jatuh tempo.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Supplier</label>
+                    <select
+                      value={editForm.supplier_id}
+                      onChange={(e) => setEditForm({ ...editForm, supplier_id: e.target.value })}
+                      required
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold text-slate-800"
+                    >
+                      <option value="">-- Pilih Supplier --</option>
+                      {suppliers.map((s) => (
+                        <option key={s._id} value={s._id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Tanggal Pembelian</label>
+                    <input
+                      type="date"
+                      value={editForm.purchased_at}
+                      onChange={(e) => setEditForm({ ...editForm, purchased_at: e.target.value })}
+                      required
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
+                    />
+                  </div>
+                </div>
+
+                {/* Metode Pembayaran */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Metode Pembayaran *</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PAYMENT_METHODS.map((pm) => {
+                      const isSel = editForm.payment_method === pm.value;
+                      return (
+                        <button
+                          key={pm.value}
+                          type="button"
+                          onClick={() => handleEditPaymentMethodChange(pm.value)}
+                          className={`p-2.5 rounded-xl border text-center transition font-bold ${
+                            isSel
+                              ? pm.value === 'tempo'
+                                ? 'bg-amber-100 border-amber-400 text-amber-900 shadow-xs'
+                                : 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {pm.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tempo / Hutang Configuration */}
+                {editForm.payment_method === 'tempo' && (
+                  <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 space-y-3 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-amber-950 flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-amber-600" />
+                        Pengaturan Hutang / Tempo
+                      </p>
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                        Default: 7 Hari
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">
+                          Tanggal Jatuh Tempo <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={editForm.due_date}
+                          onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                          required={editForm.payment_method === 'tempo'}
+                          min={editForm.purchased_at}
+                          className="w-full p-2.5 bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold text-amber-950"
+                        />
+                        <p className="text-[10px] text-amber-800 mt-1">
+                          Batas akhir pembayaran hutang ke supplier
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">
+                          Uang Muka / Sudah Dibayar (DP)
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.amount_paid}
+                          onChange={(e) => setEditForm({ ...editForm, amount_paid: e.target.value })}
+                          min="0"
+                          max={editPurchaseModal.total_actual}
+                          placeholder="0 = Belum bayar sama sekali"
+                          className="w-full p-2.5 bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold text-slate-900"
+                        />
+                        <p className="text-[10px] text-amber-800 mt-1">
+                          Isi 0 jika belum ada pembayaran sama sekali
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/80 border border-amber-200 p-2.5 rounded-lg flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Total Transaksi: <strong className="text-slate-900">{fmt(editPurchaseModal.total_actual)}</strong></span>
+                      <span className="text-red-700 font-black">
+                        Sisa Hutang: {fmt(Math.max(0, editPurchaseModal.total_actual - (Number(editForm.amount_paid) || 0)))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      No. Nota / Invoice Supplier
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.invoice_ref}
+                      onChange={(e) => setEditForm({ ...editForm, invoice_ref: e.target.value })}
+                      placeholder="Contoh: NOTA-12345"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Catatan</label>
+                    <input
+                      type="text"
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                      placeholder="Catatan tambahan..."
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditPurchaseModal(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEdit}
+                    className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {savingEdit ? 'Menyimpan...' : 'Simpan Perubahan'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* ===== TAB CONTENT ===== */}
         {activeTab === 'transactions' ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1556,13 +1871,31 @@ export default function TransactionsPage() {
                         </td>
                         <td className="px-5 py-3.5 font-black text-slate-900">{fmt(p.total_actual)}</td>
                         <td className="px-5 py-3.5 text-right">
-                          <button
-                            onClick={() => handleViewDetail(p._id)}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-amber-600" />
-                            Detail
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleViewDetail(p._id)}
+                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition"
+                              title="Lihat Detail Transaksi"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-amber-600" />
+                              Detail
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditModal(p)}
+                              className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition"
+                              title="Edit Transaksi (Ubah Metode/Hutang/Tanggal)"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeletePurchase(p)}
+                              className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold inline-flex items-center transition"
+                              title="Hapus Transaksi"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1621,13 +1954,22 @@ export default function TransactionsPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <button
-                            onClick={() => handleOpenPaymentModal(d)}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5"
-                          >
-                            <Banknote className="w-3.5 h-3.5" />
-                            Bayar Hutang
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenPaymentModal(d)}
+                              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition"
+                            >
+                              <Banknote className="w-3.5 h-3.5" />
+                              Bayar Hutang
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditModal(d)}
+                              className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition"
+                              title="Edit Transaksi / Tempo"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))

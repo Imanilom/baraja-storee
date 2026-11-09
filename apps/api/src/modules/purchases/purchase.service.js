@@ -385,6 +385,118 @@ class PurchaseService {
       debt_payments: debtPayments
     };
   }
+
+  async updatePurchase(id, data, user) {
+    const purchase = await Purchase.findById(id);
+    if (!purchase) throw new Error('Transaksi pembelian tidak ditemukan.');
+
+    const {
+      supplier_id,
+      invoice_ref,
+      payment_method,
+      purchased_at,
+      due_date,
+      amount_paid: amountPaidInput,
+      notes
+    } = data;
+
+    if (supplier_id) {
+      const supplier = await Supplier.findById(supplier_id);
+      if (!supplier) throw new Error('Supplier tidak ditemukan.');
+      purchase.supplier_id = supplier_id;
+    }
+
+    if (invoice_ref !== undefined) purchase.invoice_ref = invoice_ref;
+    if (purchased_at) purchase.purchased_at = new Date(purchased_at);
+    if (notes !== undefined) purchase.notes = notes;
+
+    // Handle payment method change
+    const targetPaymentMethod = payment_method || purchase.payment_method;
+    purchase.payment_method = targetPaymentMethod;
+
+    if (targetPaymentMethod === 'tempo') {
+      // Check existing debt payments if any
+      const existingPayments = await DebtPayment.find({ purchase_id: id });
+      const existingPaymentsTotal = existingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+      let amountPaid = amountPaidInput !== undefined ? Number(amountPaidInput) : existingPaymentsTotal;
+      if (isNaN(amountPaid) || amountPaid < 0) amountPaid = 0;
+
+      let paymentStatus;
+      if (amountPaid <= 0) {
+        paymentStatus = PAYMENT_STATUS.UNPAID;
+        amountPaid = 0;
+      } else if (amountPaid >= purchase.total_actual) {
+        paymentStatus = PAYMENT_STATUS.PAID;
+        amountPaid = purchase.total_actual;
+      } else {
+        paymentStatus = PAYMENT_STATUS.PARTIAL;
+      }
+
+      // Check due date
+      const targetDueDate = due_date ? new Date(due_date) : purchase.due_date;
+      if (targetDueDate && paymentStatus !== PAYMENT_STATUS.PAID && new Date() > targetDueDate) {
+        paymentStatus = PAYMENT_STATUS.OVERDUE;
+      }
+
+      purchase.payment_status = paymentStatus;
+      purchase.due_date = targetDueDate || null;
+      purchase.amount_paid = amountPaid;
+      purchase.amount_remaining = Math.max(0, purchase.total_actual - amountPaid);
+    } else {
+      // Cash / Transfer: Lunas
+      purchase.payment_status = PAYMENT_STATUS.PAID;
+      purchase.due_date = null;
+      purchase.amount_paid = purchase.total_actual;
+      purchase.amount_remaining = 0;
+    }
+
+    await purchase.save();
+
+    // Audit log
+    await ActivityLog.create({
+      user_id: user?._id,
+      action: 'PURCHASE_UPDATED',
+      entity: 'Purchase',
+      entity_id: purchase._id,
+      meta_data: {
+        purchase_number: purchase.purchase_number,
+        payment_method: purchase.payment_method,
+        payment_status: purchase.payment_status,
+        amount_paid: purchase.amount_paid,
+        amount_remaining: purchase.amount_remaining,
+        due_date: purchase.due_date
+      }
+    }).catch(() => null);
+
+    return this.getPurchaseById(id);
+  }
+
+  async deletePurchase(id, user) {
+    const purchase = await Purchase.findById(id);
+    if (!purchase) throw new Error('Transaksi pembelian tidak ditemukan.');
+
+    // Delete associated purchase items and debt payments
+    await PurchaseItem.deleteMany({ purchase_id: id });
+    await DebtPayment.deleteMany({ purchase_id: id });
+    await Purchase.findByIdAndDelete(id);
+
+    // Audit log
+    await ActivityLog.create({
+      user_id: user?._id,
+      action: 'PURCHASE_DELETED',
+      entity: 'Purchase',
+      entity_id: id,
+      meta_data: {
+        purchase_number: purchase.purchase_number,
+        marketlist_id: purchase.marketlist_id,
+        supplier_id: purchase.supplier_id,
+        total_actual: purchase.total_actual
+      }
+    }).catch(() => null);
+
+    return { message: `Transaksi ${purchase.purchase_number} berhasil dihapus.` };
+  }
 }
 
 module.exports = new PurchaseService();

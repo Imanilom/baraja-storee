@@ -35,6 +35,20 @@ router.get(
   purchaseController.getById
 );
 
+// Edit transaksi belanja (ubah status hutang/tempo, supplier, invoice, catatan)
+router.put(
+  '/:id',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.MANAGEMENT, ROLES.LEADER, ROLES.STAFF),
+  purchaseController.update
+);
+
+// Hapus transaksi belanja
+router.delete(
+  '/:id',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.MANAGEMENT, ROLES.LEADER),
+  purchaseController.delete
+);
+
 // Riwayat pembayaran hutang untuk suatu transaksi
 router.get(
   '/:id/payments',
