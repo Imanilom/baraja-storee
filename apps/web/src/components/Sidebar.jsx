@@ -16,7 +16,8 @@ import {
   LogOut,
   Boxes,
   X,
-  ChevronLeft
+  ChevronLeft,
+  Landmark
 } from 'lucide-react';
 import { clearStoredAuth, getStoredUser } from '../lib/api';
 import { useEffect, useState } from 'react';
@@ -59,6 +60,12 @@ const navigation = [
     href: '/transactions',
     icon: ShoppingCart,
     roles: ['admin', 'management', 'purchasing', 'accounting']
+  },
+  {
+    name: 'Arus Kas & Bank',
+    href: '/cash-flow',
+    icon: Landmark,
+    roles: ['admin', 'management', 'accounting', 'purchasing', 'leader']
   },
   {
     name: 'Kelola Overhead',

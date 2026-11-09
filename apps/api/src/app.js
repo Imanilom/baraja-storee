@@ -20,6 +20,7 @@ const overheadRoutes = require('./modules/overheads/overhead.routes');
 const kpiRoutes = require('./modules/kpi/kpi.routes');
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const financeRoutes = require('./modules/finance/profit-loss.routes');
+const cashFlowRoutes = require('./modules/cash-flow/cash-flow.routes');
 const locationRoutes = require('./modules/locations/location.routes');
 const externalPosRoutes = require('./modules/external-pos/external-pos.routes');
 
@@ -71,6 +72,7 @@ apiRouter.use('/prices', priceRoutes);
 apiRouter.use('/locations', locationRoutes);
 apiRouter.use('/kpi', kpiRoutes);
 apiRouter.use('/finance', financeRoutes);
+apiRouter.use('/cash-flow', cashFlowRoutes);
 apiRouter.use('/', externalPosRoutes); // provides /oauth2/token and /external-pos/sales
 
 app.use('/api/v1', apiRouter);

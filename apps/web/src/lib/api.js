@@ -175,6 +175,29 @@ export const api = {
       body: JSON.stringify(data)
     }),
 
+  // Arus Kas & Saldo Kas/Bank
+  getCashFlowSummary: (params = '') => fetchApi(`/cash-flow/summary${params}`),
+  getCashFlowMutations: (params = '') => fetchApi(`/cash-flow/mutations${params}`),
+  recordCashIn: (data) =>
+    fetchApi('/cash-flow/in', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  recordWithdrawal: (data) =>
+    fetchApi('/cash-flow/withdraw', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  recordCashOut: (data) =>
+    fetchApi('/cash-flow/out', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  deleteCashTransaction: (id) =>
+    fetchApi(`/cash-flow/${id}`, {
+      method: 'DELETE'
+    }),
+
   // Kelola Biaya Overhead & Hutang Operasional
   getOverheads: (params = '') => fetchApi(`/overheads${params}`),
   getOverheadSummary: (params = '') => fetchApi(`/overheads/summary${params}`),

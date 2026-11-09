@@ -26,6 +26,7 @@ class PurchaseService {
       supplier_id,
       invoice_ref,
       payment_method = 'cash',
+      payment_source,
       purchased_at = new Date(),
       receipt_attachment = '',
       notes = '',
@@ -106,12 +107,15 @@ class PurchaseService {
       paymentStatus = PAYMENT_STATUS.OVERDUE;
     }
 
+    const resolvedPaymentSource = payment_source || (payment_method === 'transfer' ? 'bank' : 'cash');
+
     const purchase = await Purchase.create({
       purchase_number: purchaseNumber,
       marketlist_id,
       supplier_id,
       invoice_ref,
       payment_method,
+      payment_source: resolvedPaymentSource,
       payment_status: paymentStatus,
       due_date: payment_method === 'tempo' && due_date ? new Date(due_date) : null,
       amount_paid: amountPaid,
@@ -136,7 +140,7 @@ class PurchaseService {
       await DebtPayment.create({
         purchase_id: purchase._id,
         amount: amountPaid,
-        payment_method: 'cash',
+        payment_method: resolvedPaymentSource === 'bank' ? 'transfer' : 'cash',
         paid_at: new Date(purchased_at),
         notes: 'Uang muka / DP saat transaksi',
         recorded_by: user?._id
@@ -394,6 +398,7 @@ class PurchaseService {
       supplier_id,
       invoice_ref,
       payment_method,
+      payment_source,
       purchased_at,
       due_date,
       amount_paid: amountPaidInput,
@@ -409,6 +414,12 @@ class PurchaseService {
     if (invoice_ref !== undefined) purchase.invoice_ref = invoice_ref;
     if (purchased_at) purchase.purchased_at = new Date(purchased_at);
     if (notes !== undefined) purchase.notes = notes;
+
+    if (payment_source) {
+      purchase.payment_source = payment_source;
+    } else if (payment_method) {
+      purchase.payment_source = payment_method === 'transfer' ? 'bank' : 'cash';
+    }
 
     // Handle payment method change
     const targetPaymentMethod = payment_method || purchase.payment_method;
