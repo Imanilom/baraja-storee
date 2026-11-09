@@ -13,12 +13,33 @@ class MarketlistService {
   async getAllMarketlists(query = {}, user = null) {
     const filter = {};
     if (query.status) {
-      filter.status = query.status;
+      if (query.status.includes(',')) {
+        filter.status = { $in: query.status.split(',').map((s) => s.trim()) };
+      } else {
+        filter.status = query.status;
+      }
     } else if (user && [ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF].includes(user.role) && query.all !== 'true') {
       if (user.role === ROLES.LEADER) {
-        filter.status = { $in: [MARKETLIST_STATUS.SUBMITTED, MARKETLIST_STATUS.APPROVED, MARKETLIST_STATUS.IN_PROGRESS, MARKETLIST_STATUS.PARTIALLY_RECEIVED] };
+        filter.status = {
+          $in: [
+            MARKETLIST_STATUS.SUBMITTED,
+            MARKETLIST_STATUS.APPROVED,
+            MARKETLIST_STATUS.IN_PROGRESS,
+            MARKETLIST_STATUS.PARTIALLY_RECEIVED,
+            MARKETLIST_STATUS.RECEIVED,
+            MARKETLIST_STATUS.COMPLETED
+          ]
+        };
       } else {
-        filter.status = { $in: [MARKETLIST_STATUS.APPROVED, MARKETLIST_STATUS.IN_PROGRESS, MARKETLIST_STATUS.PARTIALLY_RECEIVED] };
+        filter.status = {
+          $in: [
+            MARKETLIST_STATUS.APPROVED,
+            MARKETLIST_STATUS.IN_PROGRESS,
+            MARKETLIST_STATUS.PARTIALLY_RECEIVED,
+            MARKETLIST_STATUS.RECEIVED,
+            MARKETLIST_STATUS.COMPLETED
+          ]
+        };
       }
       if (query.only_assigned === 'true') {
         filter.assigned_to = user._id;
