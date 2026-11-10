@@ -309,7 +309,7 @@ export default function MarketlistPage() {
                   <div className="flex items-center justify-between">
                     <span className="font-bold font-mono text-slate-900 text-xs">{ml.marketlist_number}</span>
                     <div className="flex items-center gap-1">
-                      <span className={px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border +getStatusBadge(ml.status)}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusBadge(ml.status)}`}>
                         {ml.status?.replace(/_/g, ' ')}
                       </span>
                       {ml.has_invoice && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">??</span>}
