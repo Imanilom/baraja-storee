@@ -1,6 +1,9 @@
 const Invoice = require('./invoice.model');
 const Marketlist = require('../marketlists/marketlist.model');
 const MarketlistItem = require('../marketlists/marketlist-item.model');
+const GoodsReceipt = require('../receiving/goods-receipt.model');
+const GoodsReceiptItem = require('../receiving/goods-receipt-item.model');
+const Supplier = require('../suppliers/supplier.model');
 const auditService = require('../audit/audit.service');
 const { generateInvoiceNumber } = require('../../utils/number-generator');
 const { MARKETLIST_STATUS, INVOICE_STATUS } = require('@purchasing/constants');
@@ -66,10 +69,51 @@ class InvoiceService {
       throw new Error('Marketlist has no items to invoice');
     }
 
+    // Fetch any goods receipts for this marketlist to get actual received/accepted quantities
+    const allReceipts = await GoodsReceipt.find({
+      marketlist_id: marketlistId,
+      status: { $ne: 'cancelled' }
+    });
+    const receiptIds = allReceipts.map((r) => r._id);
+    const allReceiptItems = receiptIds.length > 0
+      ? await GoodsReceiptItem.find({ receipt_id: { $in: receiptIds } })
+      : [];
+
+    const acceptedMap = new Map();
+    allReceiptItems.forEach((ri) => {
+      const k = ri.marketlist_item_id ? ri.marketlist_item_id.toString() : '';
+      if (k) {
+        const qty = ri.accepted_qty !== undefined ? ri.accepted_qty : (ri.received_qty || 0);
+        acceptedMap.set(k, (acceptedMap.get(k) || 0) + qty);
+      }
+    });
+
+    // Check if any items are missing supplier_id and resolve with fallback
+    let defaultSupplierId = null;
+    for (const item of mlItems) {
+      if (!item.supplier_id) {
+        if (!defaultSupplierId) {
+          const recWithSupp = allReceipts.find((r) => r.supplier_id);
+          if (recWithSupp?.supplier_id) {
+            defaultSupplierId = recWithSupp.supplier_id;
+          } else if (item.product_id?.last_supplier_id) {
+            defaultSupplierId = item.product_id.last_supplier_id;
+          } else {
+            let supp = await Supplier.findOne({ is_active: true });
+            if (!supp) {
+              supp = await Supplier.create({ name: 'Supplier Umum', code: 'SUPP-UMUM', is_active: true });
+            }
+            defaultSupplierId = supp._id;
+          }
+        }
+        item.supplier_id = defaultSupplierId;
+      }
+    }
+
     // Group items by supplier_id
     const supplierGroup = new Map();
     for (const item of mlItems) {
-      const suppKey = item.supplier_id ? item.supplier_id.toString() : 'NO_SUPPLIER';
+      const suppKey = item.supplier_id ? item.supplier_id.toString() : defaultSupplierId.toString();
       if (!supplierGroup.has(suppKey)) {
         supplierGroup.set(suppKey, []);
       }
@@ -80,36 +124,26 @@ class InvoiceService {
 
     // Target specific supplier if provided, otherwise all
     for (const [suppKey, items] of supplierGroup.entries()) {
-      if (suppKey === 'NO_SUPPLIER') {
-        throw new Error('All items in marketlist must have an assigned supplier before invoice generation');
-      }
-
       if (options.supplier_id && options.supplier_id.toString() !== suppKey) {
-        continue;
-      }
-
-      // Check if invoice for this supplier and version already exists
-      const existing = await Invoice.findOne({
-        marketlist_id: marketlistId,
-        supplier_id: suppKey,
-        marketlist_version: version
-      });
-
-      if (existing) {
-        generatedInvoices.push(existing);
         continue;
       }
 
       // Calculate totals
       let subtotal = 0;
+      const hasReceipt = allReceiptItems.length > 0;
       const invoiceItems = items.map((item) => {
-        const itemSubtotal = item.requested_qty * item.unit_price;
+        // If received goods exist, use cumulative accepted qty. Otherwise use requested_qty.
+        const invoicedQty = hasReceipt && acceptedMap.has(item._id.toString())
+          ? acceptedMap.get(item._id.toString())
+          : item.requested_qty;
+
+        const itemSubtotal = invoicedQty * item.unit_price;
         subtotal += itemSubtotal;
         return {
           marketlist_item_id: item._id,
           product_name: item.product_snapshot?.name || item.product_id?.name || 'Item',
           sku: item.product_snapshot?.sku || '',
-          quantity: item.requested_qty,
+          quantity: invoicedQty,
           unit: item.product_snapshot?.unit_name || '',
           unit_price: item.unit_price,
           subtotal: itemSubtotal
@@ -119,6 +153,25 @@ class InvoiceService {
       const discount = options.discount || 0;
       const tax = options.tax || 0;
       const grand_total = subtotal - discount + tax;
+
+      // Check if invoice for this supplier and version already exists
+      const existing = await Invoice.findOne({
+        marketlist_id: marketlistId,
+        supplier_id: suppKey,
+        marketlist_version: version
+      });
+
+      if (existing) {
+        // If still in generated status, update with latest received quantities
+        if (existing.status === INVOICE_STATUS.GENERATED) {
+          existing.items = invoiceItems;
+          existing.subtotal = subtotal;
+          existing.grand_total = grand_total;
+          await existing.save();
+        }
+        generatedInvoices.push(existing);
+        continue;
+      }
 
       const count = await Invoice.countDocuments();
       const invoice_number = generateInvoiceNumber(count + 1);

@@ -23,14 +23,14 @@ marketlistInvoiceRouter.use(authenticate);
 
 router.post(
   '/generate',
-  authorize(ROLES.ADMIN, ROLES.ACCOUNTING),
+  authorize(ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.PURCHASING, ROLES.MANAGEMENT, ROLES.LEADER),
   validate(generateInvoiceSchema),
   invoiceController.generate
 );
 
 marketlistInvoiceRouter.post(
   '/generate',
-  authorize(ROLES.ADMIN, ROLES.ACCOUNTING),
+  authorize(ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.PURCHASING, ROLES.MANAGEMENT, ROLES.LEADER),
   validate(generateInvoiceSchema),
   invoiceController.generate
 );

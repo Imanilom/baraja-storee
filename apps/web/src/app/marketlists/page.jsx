@@ -14,15 +14,21 @@ import {
   Filter,
   FileText,
   AlertCircle,
-  Printer
+  Printer,
+  Receipt,
+  PackageCheck,
+  X
 } from 'lucide-react';
 
 const STATUS_TABS = [
   { id: '', label: 'Semua' },
+  { id: 'draft', label: 'Draft' },
   { id: 'submitted', label: 'Menunggu Approval' },
   { id: 'approved', label: 'Disetujui' },
   { id: 'in_progress', label: 'In Progress' },
-  { id: 'draft', label: 'Draft' }
+  { id: 'partially_received', label: 'Partial Received' },
+  { id: 'received', label: '✅ Received' },
+  { id: 'completed', label: 'Selesai' },
 ];
 
 export default function MarketlistPage() {
@@ -33,6 +39,7 @@ export default function MarketlistPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [user, setUser] = useState(null);
   const [toast, setToast] = useState(null);
+  const [generatingInvoice, setGeneratingInvoice] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -77,6 +84,24 @@ export default function MarketlistPage() {
     }
   };
 
+  const handleGenerateInvoice = async (ml) => {
+    if (!confirm(`Generate invoice untuk Marketlist ${ml.marketlist_number}?\n\nInvoice akan dibuat berdasarkan barang yang sudah diterima (received).`)) return;
+    setGeneratingInvoice(ml._id);
+    try {
+      const res = await api.generateInvoice(ml._id, {});
+      showToast(`✅ Invoice berhasil digenerate! (${res.data?.length || 1} invoice)`);
+      fetchMarketlists();
+      if (selectedMl?._id === ml._id) {
+        const detail = await api.getMarketlistById(ml._id);
+        setSelectedMl(detail.data);
+      }
+    } catch (err) {
+      showToast(err.message || 'Gagal generate invoice', 'error');
+    } finally {
+      setGeneratingInvoice(null);
+    }
+  };
+
   const handleOpenDetail = async (id) => {
     try {
       const res = await api.getMarketlistById(id);
@@ -84,6 +109,21 @@ export default function MarketlistPage() {
     } catch (err) {
       showToast('Gagal memuat detail marketlist', 'error');
     }
+  };
+
+  const getStatusBadge = (status) => {
+    const map = {
+      draft: 'bg-slate-100 text-slate-600 border-slate-200',
+      submitted: 'bg-amber-100 text-amber-800 border-amber-200',
+      approved: 'bg-blue-100 text-blue-800 border-blue-200',
+      revision: 'bg-orange-100 text-orange-800 border-orange-200',
+      in_progress: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      partially_received: 'bg-purple-100 text-purple-800 border-purple-200',
+      received: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      completed: 'bg-green-100 text-green-800 border-green-200',
+      cancelled: 'bg-red-100 text-red-700 border-red-200',
+    };
+    return map[status] || 'bg-slate-100 text-slate-700 border-slate-200';
   };
 
   return (
@@ -200,37 +240,55 @@ export default function MarketlistPage() {
                         Rp {(ml.totals?.estimated_amount || 0).toLocaleString('id-ID')}
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">
-                          {ml.status}
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider border ${getStatusBadge(ml.status)}`}>
+                          {ml.status?.replace(/_/g, ' ')}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        <Link
-                          href={`/marketlists/${ml._id}/print`}
-                          target="_blank"
-                          className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded transition-colors inline-flex items-center gap-1"
-                          title="Cetak PDF Lembar Belanja"
-                        >
-                          <Printer className="w-3 h-3 text-slate-600" />
-                          Cetak
-                        </Link>
-                        {['draft', 'revision'].includes(ml.status) && (
-                          <button
-                            onClick={() => handleSubmitToAdmin(ml._id)}
-                            disabled={actionLoading}
-                            className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition-colors inline-flex items-center gap-1"
-                          >
-                            <Send className="w-3 h-3" />
-                            Submit
-                          </button>
+                        {ml.has_invoice && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            📄 Invoice
+                          </span>
                         )}
-                        <button
-                          onClick={() => handleOpenDetail(ml._id)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors inline-flex items-center gap-1"
-                        >
-                          <Eye className="w-3 h-3" />
-                          Detail
-                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          <Link
+                            href={`/marketlists/${ml._id}/print`}
+                            target="_blank"
+                            className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded transition-colors inline-flex items-center gap-1"
+                            title="Cetak PDF Lembar Belanja"
+                          >
+                            <Printer className="w-3 h-3 text-slate-600" />
+                            Cetak
+                          </Link>
+                          {['draft', 'revision'].includes(ml.status) && (
+                            <button
+                              onClick={() => handleSubmitToAdmin(ml._id)}
+                              disabled={actionLoading}
+                              className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition-colors inline-flex items-center gap-1"
+                            >
+                              <Send className="w-3 h-3" />
+                              Submit
+                            </button>
+                          )}
+                          {['approved', 'in_progress', 'partially_received', 'received', 'completed'].includes(ml.status) && !ml.has_invoice && (
+                            <button
+                              onClick={() => handleGenerateInvoice(ml)}
+                              disabled={generatingInvoice === ml._id}
+                              className="px-2.5 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors inline-flex items-center gap-1 disabled:opacity-50"
+                              title="Generate Invoice dari Marketlist"
+                            >
+                              <Receipt className="w-3 h-3" />
+                              {generatingInvoice === ml._id ? '...' : 'Invoice'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleOpenDetail(ml._id)}
+                            className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors inline-flex items-center gap-1"
+                          >
+                            <Eye className="w-3 h-3" />
+                            Detail
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -250,9 +308,12 @@ export default function MarketlistPage() {
                 <div key={ml._id} className="p-4 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="font-bold font-mono text-slate-900 text-xs">{ml.marketlist_number}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
-                      {ml.status}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className={px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border +getStatusBadge(ml.status)}>
+                        {ml.status?.replace(/_/g, ' ')}
+                      </span>
+                      {ml.has_invoice && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">??</span>}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-slate-600">
@@ -281,6 +342,15 @@ export default function MarketlistPage() {
                           className="px-2.5 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded"
                         >
                           Submit
+                        </button>
+                      )}
+                      {['approved', 'in_progress', 'partially_received', 'received', 'completed'].includes(ml.status) && !ml.has_invoice && (
+                        <button
+                          onClick={() => handleGenerateInvoice(ml)}
+                          disabled={generatingInvoice === ml._id}
+                          className="px-2.5 py-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded disabled:opacity-50"
+                        >
+                          {generatingInvoice === ml._id ? '...' : '?? Invoice'}
                         </button>
                       )}
                       <button
@@ -385,14 +455,41 @@ export default function MarketlistPage() {
 
               {/* Modal Footer */}
               <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                <Link
-                  href={`/marketlists/${selectedMl._id}/print`}
-                  target="_blank"
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak PDF Lembar Belanja (Per Kategori)</span>
-                </Link>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    href={`/marketlists/${selectedMl._id}/print`}
+                    target="_blank"
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Cetak PDF</span>
+                  </Link>
+                  {['approved', 'in_progress', 'partially_received', 'received', 'completed'].includes(selectedMl.status) && (
+                    <button
+                      onClick={() => handleGenerateInvoice(selectedMl)}
+                      disabled={generatingInvoice === selectedMl._id}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition disabled:opacity-50"
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>
+                        {generatingInvoice === selectedMl._id
+                          ? 'Generating...'
+                          : selectedMl.has_invoice
+                          ? '🔄 Regenerate Invoice'
+                          : '📄 Generate Invoice'}
+                      </span>
+                    </button>
+                  )}
+                  {selectedMl.has_invoice && (
+                    <Link
+                      href="/invoices"
+                      className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Lihat Invoice</span>
+                    </Link>
+                  )}
+                </div>
                 <button
                   onClick={() => setSelectedMl(null)}
                   className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold"

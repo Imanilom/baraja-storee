@@ -17,7 +17,7 @@ export default function InvoicesPage() {
     try {
       const [invRes, mlRes] = await Promise.all([
         api.getInvoices().catch(() => ({ data: { items: [] } })),
-        api.getMarketlists('?status=approved').catch(() => ({ data: { items: [] } }))
+        api.getMarketlists('?status=approved,received,partially_received,in_progress,completed').catch(() => ({ data: { items: [] } }))
       ]);
 
       if (invRes?.data?.items) setInvoices(invRes.data.items);
@@ -83,10 +83,10 @@ export default function InvoicesPage() {
               required
               className="flex-1 text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              <option value="">-- Pilih Marketlist yang Disetujui Admin --</option>
+              <option value="">-- Pilih Marketlist (Approved / Received) --</option>
               {approvedMarketlists.map((ml) => (
                 <option key={ml._id} value={ml._id}>
-                  {ml.marketlist_number} &bull; Butuh: {new Date(ml.required_date || ml.date).toLocaleDateString('id-ID')} &bull; Rp {(ml.totals?.estimated_amount || 0).toLocaleString('id-ID')}
+                  {ml.marketlist_number} [{ml.status.toUpperCase()}] &bull; Butuh: {new Date(ml.required_date || ml.date).toLocaleDateString('id-ID')} &bull; Rp {(ml.totals?.estimated_amount || 0).toLocaleString('id-ID')}
                 </option>
               ))}
             </select>

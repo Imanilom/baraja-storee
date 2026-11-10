@@ -5,6 +5,7 @@ const MarketlistApproval = require('../approvals/marketlist-approval.model');
 const MarketlistNote = require('../notes/marketlist-note.model');
 const Product = require('../products/product.model');
 const ProductPrice = require('../prices/product-price.model');
+const Invoice = require('../invoices/invoice.model');
 const auditService = require('../audit/audit.service');
 const { generateMarketlistNumber } = require('../../utils/number-generator');
 const { MARKETLIST_STATUS, ROLES, PRICE_SOURCES } = require('@purchasing/constants');
@@ -65,6 +66,21 @@ class MarketlistService {
       Marketlist.countDocuments(filter)
     ]);
 
+    const mlIds = rawItems.map((m) => m._id);
+    const existingInvoices = await Invoice.find({ marketlist_id: { $in: mlIds } })
+      .select('_id invoice_number marketlist_id status grand_total supplier_id')
+      .populate('supplier_id', 'name code')
+      .lean();
+
+    const invoiceMap = new Map();
+    existingInvoices.forEach((inv) => {
+      const mid = inv.marketlist_id ? inv.marketlist_id.toString() : '';
+      if (mid) {
+        if (!invoiceMap.has(mid)) invoiceMap.set(mid, []);
+        invoiceMap.get(mid).push(inv);
+      }
+    });
+
     const items = await Promise.all(
       rawItems.map(async (ml) => {
         const mlItems = await MarketlistItem.find({ marketlist_id: ml._id })
@@ -80,6 +96,8 @@ class MarketlistService {
           .lean();
         const obj = ml.toObject ? ml.toObject() : ml;
         obj.items = mlItems;
+        obj.invoices = invoiceMap.get(ml._id.toString()) || [];
+        obj.has_invoice = obj.invoices.length > 0;
         return obj;
       })
     );
@@ -96,7 +114,7 @@ class MarketlistService {
 
     if (!marketlist) return null;
 
-    const [items, note, approvals] = await Promise.all([
+    const [items, note, approvals, invoices] = await Promise.all([
       MarketlistItem.find({ marketlist_id: id })
         .populate({
           path: 'product_id',
@@ -108,7 +126,8 @@ class MarketlistService {
         })
         .populate('supplier_id', 'name code contact_person phone'),
       MarketlistNote.findOne({ marketlist_id: id }).populate('updated_by', 'name email role'),
-      MarketlistApproval.find({ marketlist_id: id }).populate('admin_id', 'name email').sort({ created_at: -1 })
+      MarketlistApproval.find({ marketlist_id: id }).populate('admin_id', 'name email').sort({ created_at: -1 }),
+      Invoice.find({ marketlist_id: id }).populate('supplier_id', 'name code').lean()
     ]);
 
     return {
@@ -116,7 +135,9 @@ class MarketlistService {
       items,
       note: note ? note.note : '',
       note_details: note,
-      approvals
+      approvals,
+      invoices: invoices || [],
+      has_invoice: (invoices && invoices.length > 0)
     };
   }
 
