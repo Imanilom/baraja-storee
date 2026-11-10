@@ -482,21 +482,28 @@ export default function OverheadPage() {
                             </span>
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="space-y-1">
-                              <div>{renderStatusBadge(item.payment_status, item.is_overdue)}</div>
-                              <div className="text-[10px] text-slate-400 capitalize">
-                                Via: {item.payment_method}
-                                {item.due_date && item.payment_status !== 'paid' && (
-                                  <span>
-                                    {' '}
-                                    • JT:{' '}
-                                    {new Date(item.due_date).toLocaleDateString('id-ID', {
-                                      day: 'numeric',
-                                      month: 'short'
-                                    })}
-                                  </span>
-                                )}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {renderStatusBadge(item.payment_status, item.is_overdue)}
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  item.payment_method === 'cash'
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : item.payment_method === 'transfer'
+                                    ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                }`}>
+                                  {item.payment_method === 'cash' ? '💵 Kas Tunai' : item.payment_method === 'transfer' ? '🏦 Rekening Bank' : '⏳ Tempo'}
+                                </span>
                               </div>
+                              {item.due_date && item.payment_status !== 'paid' && (
+                                <div className="text-[10px] text-rose-600 font-semibold">
+                                  Jatuh Tempo:{' '}
+                                  {new Date(item.due_date).toLocaleDateString('id-ID', {
+                                    day: 'numeric',
+                                    month: 'short'
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="py-3.5 px-4 text-right font-black text-slate-800">
@@ -827,25 +834,31 @@ export default function OverheadPage() {
                 </div>
 
                 {/* Payment Method Selector */}
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                  <label className="block font-semibold text-slate-700">Metode Pembayaran</label>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-semibold text-slate-700">Sumber Dana / Pembayaran</label>
+                    <span className="text-[10px] text-slate-500 font-medium">Terkoneksi ke Arus Kas</span>
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { id: 'cash', label: 'Tunai (Cash)' },
-                      { id: 'transfer', label: 'Transfer Bank' },
-                      { id: 'tempo', label: 'Tempo / Hutang' }
+                      { id: 'cash', label: '💵 Kas Tunai', sub: 'Potong kas fisik' },
+                      { id: 'transfer', label: '🏦 Rekening Bank', sub: 'Potong saldo bank' },
+                      { id: 'tempo', label: '⏳ Tempo / Hutang', sub: 'Bayar nanti' }
                     ].map((m) => (
                       <button
                         key={m.id}
                         type="button"
                         onClick={() => setFormData({ ...formData, payment_method: m.id })}
-                        className={`py-2 px-2 rounded-lg font-bold text-[11px] border transition ${
+                        className={`py-2 px-1.5 rounded-lg font-bold text-[11px] border text-center transition flex flex-col items-center justify-center ${
                           formData.payment_method === m.id
                             ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
                             : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        {m.label}
+                        <span>{m.label}</span>
+                        <span className={`text-[9px] font-normal ${formData.payment_method === m.id ? 'text-amber-100' : 'text-slate-400'}`}>
+                          {m.sub}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -1010,14 +1023,14 @@ export default function OverheadPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Metode Bayar</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Sumber Rekening / Akun</label>
                     <select
                       value={paymentData.payment_method}
                       onChange={(e) => setPaymentData({ ...paymentData, payment_method: e.target.value })}
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-medium"
                     >
-                      <option value="transfer">Transfer Bank</option>
-                      <option value="cash">Tunai (Cash)</option>
+                      <option value="cash">💵 Kas Tunai (Uang Cash Fisik)</option>
+                      <option value="transfer">🏦 Rekening Bank (Transfer)</option>
                     </select>
                   </div>
 
@@ -1158,7 +1171,7 @@ export default function OverheadPage() {
                               month: 'short',
                               year: 'numeric'
                             })}{' '}
-                            • Via {pay.payment_method}
+                            • {pay.payment_method === 'bank' || pay.payment_method === 'transfer' ? '🏦 Rekening Bank' : '💵 Kas Tunai'}
                             {pay.reference_number && ` • Ref: ${pay.reference_number}`}
                           </div>
                           {pay.notes && <div className="text-[11px] text-slate-500 italic">{pay.notes}</div>}

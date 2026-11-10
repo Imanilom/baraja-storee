@@ -6,7 +6,7 @@ import { api } from '../../lib/api';
 import {
   Landmark, Wallet, ArrowDownRight, ArrowUpRight, ArrowLeftRight,
   Plus, Calendar, Filter, Trash2, CheckCircle2, AlertCircle,
-  FileText, ShoppingCart, RefreshCw, X, CreditCard, Banknote, ShieldAlert
+  FileText, ShoppingCart, RefreshCw, X, CreditCard, Banknote, ShieldAlert, Zap
 } from 'lucide-react';
 
 const fmt = (v) => `Rp ${(v || 0).toLocaleString('id-ID')}`;
@@ -100,7 +100,7 @@ export default function CashFlowPage() {
       let params = `?limit=100`;
       if (activeTab === 'cash' || activeTab === 'bank') {
         params += `&account=${activeTab}`;
-      } else if (['in', 'withdrawal', 'purchase'].includes(activeTab)) {
+      } else if (['in', 'withdrawal', 'purchase', 'overhead'].includes(activeTab)) {
         params += `&type=${activeTab}`;
       }
       if (filterStartDate) params += `&startDate=${filterStartDate}`;
@@ -292,9 +292,19 @@ export default function CashFlowPage() {
             <p className={`text-2xl font-black ${summary.current_cash_balance < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
               {fmt(summary.current_cash_balance)}
             </p>
-            <div className="mt-3 pt-3 border-t border-emerald-100 text-[11px] text-slate-500 flex justify-between">
-              <span>Belanja Kas: <strong className="text-slate-800">{fmt(summary.total_purchase_cash)}</strong></span>
-              <span>Tarik Tunai: <strong className="text-emerald-700 font-bold">+{fmt(summary.total_withdrawal)}</strong></span>
+            <div className="mt-3 pt-3 border-t border-emerald-100 text-[11px] text-slate-500 space-y-1">
+              <div className="flex justify-between">
+                <span>Belanja Kas:</span>
+                <strong className="text-slate-800">{fmt(summary.total_purchase_cash)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Overhead Kas:</span>
+                <strong className="text-amber-700">{fmt(summary.total_overhead_cash)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Tarik Tunai Masuk:</span>
+                <strong className="text-emerald-700 font-bold">+{fmt(summary.total_withdrawal)}</strong>
+              </div>
             </div>
           </div>
 
@@ -312,9 +322,19 @@ export default function CashFlowPage() {
             <p className={`text-2xl font-black ${summary.current_bank_balance < 0 ? 'text-red-600' : 'text-blue-700'}`}>
               {fmt(summary.current_bank_balance)}
             </p>
-            <div className="mt-3 pt-3 border-t border-blue-100 text-[11px] text-slate-500 flex justify-between">
-              <span>Belanja Bank: <strong className="text-slate-800">{fmt(summary.total_purchase_bank)}</strong></span>
-              <span>Ditarik ke Kas: <strong className="text-amber-700 font-bold">-{fmt(summary.total_withdrawal)}</strong></span>
+            <div className="mt-3 pt-3 border-t border-blue-100 text-[11px] text-slate-500 space-y-1">
+              <div className="flex justify-between">
+                <span>Belanja Bank:</span>
+                <strong className="text-slate-800">{fmt(summary.total_purchase_bank)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Overhead Bank:</span>
+                <strong className="text-amber-700">{fmt(summary.total_overhead_bank)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Ditarik ke Kas:</span>
+                <strong className="text-rose-600 font-bold">-{fmt(summary.total_withdrawal)}</strong>
+              </div>
             </div>
           </div>
 
@@ -332,9 +352,15 @@ export default function CashFlowPage() {
             <p className="text-2xl font-black text-slate-900">
               {fmt(summary.total_inflow)}
             </p>
-            <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
-              <span>Ke Kas: <strong>{fmt(summary.total_in_cash)}</strong></span>
-              <span>Ke Bank: <strong>{fmt(summary.total_in_bank)}</strong></span>
+            <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
+              <div className="flex justify-between">
+                <span>Ke Kas:</span>
+                <strong>{fmt(summary.total_in_cash)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Ke Bank:</span>
+                <strong>{fmt(summary.total_in_bank)}</strong>
+              </div>
             </div>
           </div>
 
@@ -352,9 +378,62 @@ export default function CashFlowPage() {
             <p className="text-2xl font-black text-amber-700">
               {fmt(summary.total_withdrawal)}
             </p>
-            <div className="mt-3 pt-3 border-t border-amber-100 text-[11px] text-slate-500 flex justify-between">
-              <span>Likuiditas Gabungan:</span>
-              <strong className="text-indigo-700 font-bold">{fmt(summary.total_liquidity)}</strong>
+            <div className="mt-3 pt-3 border-t border-amber-100 text-[11px] text-slate-500 space-y-1">
+              <div className="flex justify-between">
+                <span>Likuiditas Gabungan:</span>
+                <strong className="text-indigo-700 font-bold">{fmt(summary.total_liquidity)}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== BREAKDOWN PENGELUARAN (BELANJA & OVERHEAD) ===== */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                <ShoppingCart className="w-3.5 h-3.5 text-slate-600" />
+                Total Belanja Supplier
+              </span>
+              <div className="text-lg font-black text-slate-900 mt-1">{fmt(summary.total_purchase)}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                Kas Tunai: <strong className="text-slate-700">{fmt(summary.total_purchase_cash)}</strong> • Bank: <strong className="text-slate-700">{fmt(summary.total_purchase_bank)}</strong>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500">
+              <ShoppingCart className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="bg-white border border-amber-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold text-amber-800 uppercase flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-600" />
+                Total Biaya Overhead
+              </span>
+              <div className="text-lg font-black text-amber-900 mt-1">{fmt(summary.total_overhead)}</div>
+              <div className="text-[10px] text-amber-700 mt-0.5">
+                Kas Tunai: <strong>{fmt(summary.total_overhead_cash)}</strong> • Bank: <strong>{fmt(summary.total_overhead_bank)}</strong>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+              <Zap className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="bg-white border border-rose-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold text-rose-800 uppercase flex items-center gap-1.5">
+                <ArrowUpRight className="w-3.5 h-3.5 text-rose-600" />
+                Total Seluruh Pengeluaran
+              </span>
+              <div className="text-lg font-black text-rose-900 mt-1">{fmt(summary.total_outflow)}</div>
+              <div className="text-[10px] text-rose-700 mt-0.5">
+                Termasuk belanja, overhead, & bayar hutang
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+              <ArrowUpRight className="w-5 h-5" />
             </div>
           </div>
         </div>
@@ -422,7 +501,8 @@ export default function CashFlowPage() {
             { id: 'bank', label: '🏦 Rekening Bank' },
             { id: 'in', label: '📥 Uang Masuk' },
             { id: 'withdrawal', label: '🏧 Tarik Tunai' },
-            { id: 'purchase', label: '🛒 Belanja Supplier' }
+            { id: 'purchase', label: '🛒 Belanja Supplier' },
+            { id: 'overhead', label: '⚡ Biaya Overhead' }
           ].map((tab) => (
             <button
               key={tab.id}
