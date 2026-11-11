@@ -17,6 +17,7 @@ import {
   Printer,
   Receipt,
   PackageCheck,
+  Pencil,
   X
 } from 'lucide-react';
 
@@ -520,6 +521,15 @@ export default function MarketlistPage() {
                     <Printer className="w-3.5 h-3.5" />
                     <span>Cetak PDF</span>
                   </Link>
+                  {['received', 'completed'].includes(selectedMl.status) && (
+                    <Link
+                      href={`/receiving?marketlistId=${selectedMl._id}`}
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit Penerimaan</span>
+                    </Link>
+                  )}
                   {['partially_received', 'received'].includes(selectedMl.status) && canCompleteMarketlists && (
                     <button
                       onClick={() => handleCompleteMarketlist(selectedMl)}

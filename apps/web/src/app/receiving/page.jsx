@@ -15,27 +15,6 @@ export default function ReceivingMonitorPage() {
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [receiptEditError, setReceiptEditError] = useState('');
 
-  useEffect(() => {
-    async function loadReceivingMl() {
-      setLoading(true);
-      try {
-        const res = await api.getMarketlists('?limit=20');
-        if (res?.data?.items) {
-          // Filter to approved / in receiving
-          const filtered = res.data.items.filter((m) =>
-            ['approved', 'in_progress', 'partially_received', 'received'].includes(m.status)
-          );
-          setActiveMarketlists(filtered);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadReceivingMl();
-  }, []);
-
   const handleSelectMarketlist = async (ml) => {
     try {
       const [detailRes, receiptRes] = await Promise.all([
@@ -51,6 +30,32 @@ export default function ReceivingMonitorPage() {
       alert('Gagal memuat detail penerimaan');
     }
   };
+
+  useEffect(() => {
+    async function loadReceivingMl() {
+      setLoading(true);
+      try {
+        const res = await api.getMarketlists('?limit=20');
+        if (res?.data?.items) {
+          const filtered = res.data.items.filter((m) =>
+            ['approved', 'in_progress', 'partially_received', 'received', 'completed'].includes(m.status)
+          );
+          setActiveMarketlists(filtered);
+          const marketlistId = new URLSearchParams(window.location.search).get('marketlistId');
+          if (marketlistId) {
+            const requestedMarketlist = filtered.find((marketlist) => marketlist._id === marketlistId)
+              || { _id: marketlistId };
+            await handleSelectMarketlist(requestedMarketlist);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReceivingMl();
+  }, []);
 
   const handleStartReceiptEdit = (receipt) => {
     setEditingReceiptId(receipt._id);
