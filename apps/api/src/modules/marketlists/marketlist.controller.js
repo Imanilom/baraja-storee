@@ -20,6 +20,29 @@ class MarketlistController {
     }
   }
 
+  async getDailyPrint(req, res) {
+    const { required_date: requiredDate } = req.query;
+    const parsedDate = typeof requiredDate === 'string'
+      ? new Date(`${requiredDate}T00:00:00.000Z`)
+      : null;
+
+    if (
+      !parsedDate ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(requiredDate) ||
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== requiredDate
+    ) {
+      return sendError(res, 'Invalid required_date. Use YYYY-MM-DD.', null, 400);
+    }
+
+    try {
+      const data = await marketlistService.getDailyPrintData(parsedDate);
+      return sendSuccess(res, 'Daily marketlist print data retrieved', data);
+    } catch (error) {
+      return sendError(res, 'Failed to fetch daily print data', error.message, 500);
+    }
+  }
+
   async getById(req, res) {
     try {
       const marketlist = await marketlistService.getMarketlistById(req.params.id);
@@ -100,4 +123,3 @@ class MarketlistController {
 }
 
 module.exports = new MarketlistController();
-

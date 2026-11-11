@@ -23,6 +23,12 @@ const ProductSchema = new mongoose.Schema(
       default: 'groceries',
       index: true
     },
+    department: {
+      type: String,
+      enum: ['kitchen', 'bar'],
+      default: null,
+      index: true
+    },
     unit_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Unit',
@@ -50,4 +56,3 @@ const ProductSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Product', ProductSchema);
-

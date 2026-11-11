@@ -154,6 +154,14 @@ export default function MarketlistPage() {
 
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <Link
+              href="/marketlists/print"
+              target="_blank"
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 transition-colors"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak Harian</span>
+            </Link>
+            <Link
               href="/marketlists/create"
               className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
             >

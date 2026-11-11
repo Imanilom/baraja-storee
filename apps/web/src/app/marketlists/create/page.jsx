@@ -43,6 +43,7 @@ export default function CreateMarketlistPage() {
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     item_type: 'groceries',
+    department: '',
     category_id: '',
     unit_id: '',
     estimated_price: ''
@@ -189,6 +190,7 @@ export default function CreateMarketlistPage() {
       const payload = {
         name: newProductForm.name.trim(),
         item_type: newProductForm.item_type,
+        department: newProductForm.department || null,
         category_id: newProductForm.category_id || undefined,
         unit_id: newProductForm.unit_id || undefined,
         last_purchase_price: newProductForm.estimated_price ? Number(newProductForm.estimated_price) : 0
@@ -204,6 +206,7 @@ export default function CreateMarketlistPage() {
       setNewProductForm({
         name: '',
         item_type: 'groceries',
+        department: '',
         category_id: '',
         unit_id: '',
         estimated_price: ''
@@ -777,6 +780,21 @@ export default function CreateMarketlistPage() {
                     🥩 Perishable (Basah)
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Bagian Penggunaan
+                </label>
+                <select
+                  value={newProductForm.department}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, department: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                >
+                  <option value="">Belum ditentukan</option>
+                  <option value="kitchen">Kitchen</option>
+                  <option value="bar">Bar</option>
+                </select>
               </div>
 
               <div>

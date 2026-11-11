@@ -95,6 +95,8 @@ export const api = {
 
   // Marketlists
   getMarketlists: (params = '') => fetchApi(`/marketlists${params}`),
+  getDailyMarketlistPrint: (requiredDate) =>
+    fetchApi(`/marketlists/daily-print?required_date=${encodeURIComponent(requiredDate)}`),
   getMarketlistById: (id) => fetchApi(`/marketlists/${id}`),
   createMarketlist: (data) =>
     fetchApi('/marketlists', {
@@ -270,4 +272,3 @@ export const api = {
   getUnits: () => fetchApi('/products/units'),
   getCategories: () => fetchApi('/products/categories')
 };
-

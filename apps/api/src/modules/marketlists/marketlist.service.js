@@ -86,7 +86,7 @@ class MarketlistService {
         const mlItems = await MarketlistItem.find({ marketlist_id: ml._id })
           .populate({
             path: 'product_id',
-            select: 'name unit_id category_id item_type sku specification last_purchase_price',
+            select: 'name unit_id category_id item_type department sku specification last_purchase_price',
             populate: [
               { path: 'category_id', select: 'name code type' },
               { path: 'unit_id', select: 'name abbreviation' }
@@ -118,7 +118,7 @@ class MarketlistService {
       MarketlistItem.find({ marketlist_id: id })
         .populate({
           path: 'product_id',
-          select: 'name sku unit_id category_id item_type specification last_purchase_price',
+          select: 'name sku unit_id category_id item_type department specification last_purchase_price',
           populate: [
             { path: 'category_id', select: 'name code type' },
             { path: 'unit_id', select: 'name abbreviation' }
@@ -138,6 +138,88 @@ class MarketlistService {
       approvals,
       invoices: invoices || [],
       has_invoice: (invoices && invoices.length > 0)
+    };
+  }
+
+  async getDailyPrintData(date) {
+    const startDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+
+    const marketlists = await Marketlist.find({
+      required_date: { $gte: startDate, $lt: endDate },
+      status: { $ne: MARKETLIST_STATUS.CANCELLED }
+    })
+      .select('_id marketlist_number required_date')
+      .sort({ marketlist_number: 1 })
+      .lean();
+
+    const marketlistIds = marketlists.map((marketlist) => marketlist._id);
+    const marketlistNumbers = marketlists.map((marketlist) => marketlist.marketlist_number);
+    if (marketlistIds.length === 0) {
+      return {
+        required_date: startDate,
+        marketlist_count: 0,
+        marketlist_numbers: [],
+        total_items: 0,
+        total_quantity: 0,
+        total_estimated_amount: 0,
+        items: []
+      };
+    }
+
+    const marketlistItems = await MarketlistItem.find({
+      marketlist_id: { $in: marketlistIds },
+      item_status: { $ne: 'rejected' }
+    }).populate({
+      path: 'product_id',
+      select: 'name sku department specification category_id unit_id',
+      populate: [
+        { path: 'category_id', select: 'name' },
+        { path: 'unit_id', select: 'name abbreviation' }
+      ]
+    });
+
+    const itemsByProduct = new Map();
+    for (const item of marketlistItems) {
+      const product = item.product_id;
+      const productId = product?._id?.toString() || item.product_snapshot?.sku || item.product_snapshot?.name || item._id.toString();
+      const quantity = Number(item.requested_qty) || 0;
+      const unitPrice = Number(item.unit_price) || 0;
+      const subtotal = Number.isFinite(Number(item.subtotal))
+        ? Number(item.subtotal)
+        : quantity * unitPrice;
+
+      if (!itemsByProduct.has(productId)) {
+        itemsByProduct.set(productId, {
+          product_id: product?._id?.toString() || null,
+          name: product?.name || item.product_snapshot?.name || 'Barang',
+          specification: item.product_snapshot?.specification || product?.specification || '',
+          category: item.product_snapshot?.category_name || product?.category_id?.name || 'Lainnya / Umum',
+          department: item.product_snapshot?.department || product?.department || 'unassigned',
+          unit: product?.unit_id?.abbreviation || item.product_snapshot?.unit_name || 'pcs',
+          total_requested_qty: 0,
+          estimated_amount: 0
+        });
+      }
+
+      const dailyItem = itemsByProduct.get(productId);
+      dailyItem.total_requested_qty += quantity;
+      dailyItem.estimated_amount += subtotal;
+    }
+
+    const items = Array.from(itemsByProduct.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, 'id')
+    );
+
+    return {
+      required_date: startDate,
+      marketlist_count: marketlists.length,
+      marketlist_numbers: marketlistNumbers,
+      total_items: items.length,
+      total_quantity: items.reduce((total, item) => total + item.total_requested_qty, 0),
+      total_estimated_amount: items.reduce((total, item) => total + item.estimated_amount, 0),
+      items
     };
   }
 
@@ -178,6 +260,7 @@ class MarketlistService {
           specification: prod.specification,
           unit_name: prod.unit_id ? prod.unit_id.name : '',
           item_type: prod.item_type || 'groceries',
+          department: prod.department || null,
           category_name: prod.category_id ? prod.category_id.name : 'Umum'
         },
         supplier_id: item.supplier_id || null,
@@ -281,7 +364,8 @@ class MarketlistService {
             name: prod?.name || '',
             sku: prod?.sku || '',
             specification: prod?.specification || '',
-            unit_name: prod?.unit_id ? prod.unit_id.name : ''
+            unit_name: prod?.unit_id ? prod.unit_id.name : '',
+            department: prod?.department || null
           },
           supplier_id: item.supplier_id || null,
           requested_qty: item.requested_qty,
@@ -608,4 +692,3 @@ class MarketlistService {
 }
 
 module.exports = new MarketlistService();
-

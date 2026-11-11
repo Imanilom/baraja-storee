@@ -20,6 +20,7 @@ router.use(authenticate);
 // List & Read Marketlist
 router.get('/', marketlistController.list);
 router.get('/aggregate', marketlistController.getAggregate);
+router.get('/daily-print', marketlistController.getDailyPrint);
 router.get('/:id', marketlistController.getById);
 
 // Create & Edit Marketlist
@@ -43,4 +44,3 @@ router.get('/:id/notes', noteController.get);
 router.put('/:id/notes', validate(marketlistNoteSchema), noteController.update);
 
 module.exports = router;
-

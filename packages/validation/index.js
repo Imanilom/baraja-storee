@@ -26,6 +26,7 @@ const productSchema = z.object({
   category_id: z.string().regex(objectIdRegex, 'Invalid ObjectId').optional().nullable().or(z.literal('')),
   unit_id: z.string().regex(objectIdRegex, 'Invalid ObjectId').optional().nullable().or(z.literal('')),
   item_type: z.enum(['perishable', 'groceries']).optional(),
+  department: z.enum(['kitchen', 'bar']).optional().nullable().or(z.literal('')),
   last_purchase_price: z.number().min(0).optional(),
   specification: z.string().optional(),
   is_active: z.boolean().optional()
@@ -135,4 +136,3 @@ module.exports = {
   createGoodsReceiptSchema,
   generateInvoiceSchema
 };
-

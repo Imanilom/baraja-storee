@@ -40,6 +40,7 @@ export default function ProductsPage() {
   const [formData, setFormData] = useState({
     name: '',
     item_type: 'groceries',
+    department: '',
     category_id: '',
     unit_id: '',
     last_purchase_price: '',
@@ -112,6 +113,7 @@ export default function ProductsPage() {
     setFormData({
       name: '',
       item_type: 'groceries',
+      department: '',
       category_id: '',
       unit_id: '',
       last_purchase_price: '',
@@ -125,6 +127,7 @@ export default function ProductsPage() {
     setFormData({
       name: p.name,
       item_type: p.item_type || 'groceries',
+      department: p.department || '',
       category_id: p.category_id?._id || '',
       unit_id: p.unit_id?._id || '',
       last_purchase_price: p.last_purchase_price || '',
@@ -145,6 +148,7 @@ export default function ProductsPage() {
       const payload = {
         name: formData.name.trim(),
         item_type: formData.item_type,
+        department: formData.department || null,
         category_id: formData.category_id || undefined,
         unit_id: formData.unit_id || undefined,
         last_purchase_price: formData.last_purchase_price ? Number(formData.last_purchase_price) : 0,
@@ -551,6 +555,21 @@ export default function ProductsPage() {
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
+                  Bagian Penggunaan
+                </label>
+                <select
+                  value={formData.department}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                >
+                  <option value="">Belum ditentukan</option>
+                  <option value="kitchen">Kitchen</option>
+                  <option value="bar">Bar</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
                   Kategori
                 </label>
                 <select
@@ -635,4 +654,3 @@ export default function ProductsPage() {
     </div>
   );
 }
-
