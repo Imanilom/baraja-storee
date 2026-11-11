@@ -73,6 +73,15 @@ class MarketlistController {
     }
   }
 
+  async complete(req, res) {
+    try {
+      const result = await marketlistService.completePartiallyReceivedMarketlist(req.params.id, req.user);
+      return sendSuccess(res, 'Partially received marketlist completed successfully', result);
+    } catch (error) {
+      return sendError(res, 'Failed to complete marketlist', error.message, 400);
+    }
+  }
+
   async submit(req, res) {
     try {
       const result = await marketlistService.submitMarketlist(req.params.id, req.user);

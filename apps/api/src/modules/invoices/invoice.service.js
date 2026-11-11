@@ -83,14 +83,21 @@ class InvoiceService {
     allReceiptItems.forEach((ri) => {
       const k = ri.marketlist_item_id ? ri.marketlist_item_id.toString() : '';
       if (k) {
-        const qty = ri.accepted_qty !== undefined ? ri.accepted_qty : (ri.received_qty || 0);
+        const qty = Number(ri.accepted_qty !== undefined ? ri.accepted_qty : (ri.received_qty || 0));
         acceptedMap.set(k, (acceptedMap.get(k) || 0) + qty);
       }
     });
 
+    const invoiceableItems = mlItems.filter((item) =>
+      (acceptedMap.get(item._id.toString()) || 0) > 0
+    );
+    if (invoiceableItems.length === 0) {
+      throw new Error('No accepted goods have been received for this marketlist');
+    }
+
     // Check if any items are missing supplier_id and resolve with fallback
     let defaultSupplierId = null;
-    for (const item of mlItems) {
+    for (const item of invoiceableItems) {
       if (!item.supplier_id) {
         if (!defaultSupplierId) {
           const recWithSupp = allReceipts.find((r) => r.supplier_id);
@@ -112,7 +119,7 @@ class InvoiceService {
 
     // Group items by supplier_id
     const supplierGroup = new Map();
-    for (const item of mlItems) {
+    for (const item of invoiceableItems) {
       const suppKey = item.supplier_id ? item.supplier_id.toString() : defaultSupplierId.toString();
       if (!supplierGroup.has(suppKey)) {
         supplierGroup.set(suppKey, []);
@@ -130,12 +137,8 @@ class InvoiceService {
 
       // Calculate totals
       let subtotal = 0;
-      const hasReceipt = allReceiptItems.length > 0;
       const invoiceItems = items.map((item) => {
-        // If received goods exist, use cumulative accepted qty. Otherwise use requested_qty.
-        const invoicedQty = hasReceipt && acceptedMap.has(item._id.toString())
-          ? acceptedMap.get(item._id.toString())
-          : item.requested_qty;
+        const invoicedQty = acceptedMap.get(item._id.toString()) || 0;
 
         const itemSubtotal = invoicedQty * item.unit_price;
         subtotal += itemSubtotal;
@@ -229,4 +232,3 @@ class InvoiceService {
 }
 
 module.exports = new InvoiceService();
-

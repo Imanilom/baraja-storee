@@ -406,6 +406,37 @@ class MarketlistService {
     return this.getMarketlistById(id);
   }
 
+  async completePartiallyReceivedMarketlist(id, user) {
+    const marketlist = await Marketlist.findById(id);
+    if (!marketlist) {
+      throw new Error('Marketlist not found');
+    }
+
+    if (marketlist.status === MARKETLIST_STATUS.COMPLETED) {
+      return marketlist;
+    }
+
+    if (marketlist.status !== MARKETLIST_STATUS.PARTIALLY_RECEIVED) {
+      throw new Error(`Only partially received marketlists can be completed. Current status: '${marketlist.status}'.`);
+    }
+
+    marketlist.status = MARKETLIST_STATUS.COMPLETED;
+    marketlist.completed_at = new Date();
+    await marketlist.save();
+
+    await auditService.log({
+      entity_type: 'marketlist',
+      entity_id: marketlist._id,
+      action: 'marketlist_completed',
+      performed_by: user._id,
+      old_value: { status: MARKETLIST_STATUS.PARTIALLY_RECEIVED },
+      new_value: { status: MARKETLIST_STATUS.COMPLETED },
+      description: `Marketlist ${marketlist.marketlist_number} completed with partial receiving`
+    });
+
+    return marketlist;
+  }
+
   async submitMarketlist(id, user) {
     const marketlist = await Marketlist.findById(id);
     if (!marketlist) throw new Error('Marketlist not found');

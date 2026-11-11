@@ -50,13 +50,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService.get('/marketlists?status=approved&limit=20');
+      final res = await ApiService.get(
+        '/marketlists?status=approved,in_progress,partially_received&limit=20',
+      );
       final allRes = await ApiService.get('/marketlists?limit=1&all=true');
       if (mounted) {
         setState(() {
           _approvedMarketlists = _parseMarketlists(res);
           int total = 0;
-          if (allRes != null && allRes['data'] is Map && allRes['data']['pagination'] != null) {
+          if (allRes != null &&
+              allRes['data'] is Map &&
+              allRes['data']['pagination'] != null) {
             total = allRes['data']['pagination']['total'] ?? 0;
           } else if (allRes != null && allRes['total'] != null) {
             total = allRes['total'];
@@ -198,7 +202,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: const Color(0xFFD97706),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -270,7 +277,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.analytics_outlined, color: Color(0xFFD97706), size: 24),
+                        child: const Icon(
+                          Icons.analytics_outlined,
+                          color: Color(0xFFD97706),
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
@@ -288,7 +299,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             SizedBox(height: 2),
                             Text(
                               'Lihat total belanja per hari & per minggu (Perishable & Groceries)',
-                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
                           ],
                         ),
@@ -338,11 +352,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: const Center(
                     child: Column(
                       children: [
-                        Icon(Icons.check_circle_outline, size: 40, color: Colors.green),
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 40,
+                          color: Colors.green,
+                        ),
                         SizedBox(height: 8),
                         Text(
                           'Tidak ada Surat Jalan yang menunggu penerimaan.',
-                          style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -358,14 +379,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     final dateStr = ml['date'] != null
                         ? ml['date'].toString().split('T')[0]
                         : '-';
-                    final itemsCount = ml['totals'] != null && ml['totals']['total_items'] != null
+                    final itemsCount =
+                        ml['totals'] != null &&
+                            ml['totals']['total_items'] != null
                         ? ml['totals']['total_items']
-                        : (ml['items'] is List ? (ml['items'] as List).length : 0);
-                    final totalVal = ml['totals'] != null && ml['totals']['estimated_amount'] != null
+                        : (ml['items'] is List
+                              ? (ml['items'] as List).length
+                              : 0);
+                    final totalVal =
+                        ml['totals'] != null &&
+                            ml['totals']['estimated_amount'] != null
                         ? ml['totals']['estimated_amount']
                         : (ml['estimated_total'] ?? 0);
                     final totalEst = currencyFormat.format(totalVal);
-                    final code = ml['marketlist_number'] ?? ml['code'] ?? 'ML-UNTITLED';
+                    final code =
+                        ml['marketlist_number'] ?? ml['code'] ?? 'ML-UNTITLED';
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -380,7 +408,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           final res = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (ctx) => DigitalSuratJalanScreen(marketlist: ml),
+                              builder: (ctx) =>
+                                  DigitalSuratJalanScreen(marketlist: ml),
                             ),
                           );
                           if (res == true) {
@@ -393,7 +422,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
@@ -435,7 +465,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const Divider(height: 18),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Tanggal: $dateStr',
@@ -456,7 +487,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 6),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Total: $totalEst',
@@ -553,4 +585,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-

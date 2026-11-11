@@ -17,6 +17,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
   bool _isLoading = true;
   List<dynamic> _allMarketlists = [];
   String _filter = 'all';
+  String? _completingMarketlistId;
 
   @override
   void initState() {
@@ -72,7 +73,11 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
     if (_filter == 'approved') {
       return _allMarketlists.where((m) {
         final st = (m['status'] ?? '').toString().toLowerCase();
-        return st == 'approved' || st == 'in_receiving' || st == 'in_progress' || st == 'completed';
+        return st == 'approved' ||
+            st == 'in_receiving' ||
+            st == 'in_progress' ||
+            st == 'partially_received' ||
+            st == 'received';
       }).toList();
     } else if (_filter == 'pending') {
       return _allMarketlists.where((m) {
@@ -114,6 +119,61 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
         return const Color(0xFFFEE2E2);
       default:
         return const Color(0xFFFEF3C7);
+    }
+  }
+
+  Future<void> _completePartiallyReceivedMarketlist(dynamic marketlist) async {
+    final code = marketlist['marketlist_number'] ?? marketlist['code'] ?? 'Marketlist';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Selesaikan Marketlist?'),
+        content: const Text(
+          'Barang yang belum diterima tidak akan masuk invoice. Setelah diselesaikan, penerimaan barang baru tidak dapat dicatat.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Selesaikan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final marketlistId = marketlist['_id']?.toString();
+    if (marketlistId == null || marketlistId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ID Marketlist tidak ditemukan.')),
+      );
+      return;
+    }
+
+    setState(() => _completingMarketlistId = marketlistId);
+    try {
+      await ApiService.post('/marketlists/$marketlistId/complete', {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$code berhasil diselesaikan.')),
+        );
+        await _fetchMarketlists();
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal menyelesaikan $code: ${error.toString().replaceFirst('Exception:', '').trim()}',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _completingMarketlistId = null);
     }
   }
 
@@ -226,7 +286,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                         final isApproved = status == 'approved' ||
                             status == 'in_receiving' ||
                             status == 'in_progress' ||
-                            status == 'completed';
+                            status == 'partially_received';
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -319,30 +379,62 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                                       ),
                                     ],
                                   ),
-                                  if (isApproved) ...[
+                                  if (isApproved || status == 'partially_received') ...[
                                     const Divider(height: 16),
-                                    const Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Icon(
-                                          Icons.local_shipping,
-                                          size: 14,
-                                          color: Color(0xFF0284C7),
-                                        ),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          'Buka Surat Jalan & Penerimaan',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF0284C7),
+                                        if (isApproved)
+                                          const Flexible(
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: [
+                                                Icon(
+                                                  Icons.local_shipping,
+                                                  size: 14,
+                                                  color: Color(0xFF0284C7),
+                                                ),
+                                                SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    'Buka Surat Jalan & Penerimaan',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Color(0xFF0284C7),
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                Icon(
+                                                  Icons.arrow_forward_ios,
+                                                  size: 12,
+                                                  color: Color(0xFF0284C7),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                        Icon(
-                                          Icons.arrow_forward_ios,
-                                          size: 12,
-                                          color: Color(0xFF0284C7),
-                                        ),
+                                        if (status == 'partially_received')
+                                          TextButton.icon(
+                                            onPressed: _completingMarketlistId == ml['_id']?.toString()
+                                                ? null
+                                                : () => _completePartiallyReceivedMarketlist(ml),
+                                            icon: _completingMarketlistId == ml['_id']?.toString()
+                                                ? const SizedBox(
+                                                    width: 14,
+                                                    height: 14,
+                                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                                  )
+                                                : const Icon(Icons.task_alt, size: 16),
+                                            label: const Text('Selesaikan'),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: const Color(0xFF15803D),
+                                              textStyle: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   ],
@@ -455,4 +547,3 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
     );
   }
 }
-

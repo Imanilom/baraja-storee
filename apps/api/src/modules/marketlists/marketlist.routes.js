@@ -30,6 +30,7 @@ router.patch('/:id', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.LEADER, ROLE
 // Workflow Actions (support both POST and PUT)
 router.post('/:id/submit', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.LEADER, ROLES.STAFF), marketlistController.submit);
 router.put('/:id/submit', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.LEADER, ROLES.STAFF), marketlistController.submit);
+router.post('/:id/complete', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF, ROLES.MANAGEMENT), marketlistController.complete);
 router.post('/:id/approve', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(approveMarketlistSchema), marketlistController.approve);
 router.put('/:id/approve', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(approveMarketlistSchema), marketlistController.approve);
 router.post('/:id/reject', authorize(ROLES.ADMIN, ROLES.LEADER, ROLES.MANAGEMENT), validate(rejectMarketlistSchema), marketlistController.reject);

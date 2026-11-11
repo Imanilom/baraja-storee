@@ -107,6 +107,10 @@ export const api = {
     fetchApi(`/marketlists/${id}/submit`, {
       method: 'POST'
     }),
+  completeMarketlist: (id) =>
+    fetchApi(`/marketlists/${id}/complete`, {
+      method: 'POST'
+    }),
   approveMarketlist: (id, note) =>
     fetchApi(`/marketlists/${id}/approve`, {
       method: 'POST',
