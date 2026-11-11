@@ -10,7 +10,7 @@ const PurchaseItemSchema = new mongoose.Schema(
     marketlist_item_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'MarketlistItem',
-      required: true
+      default: null
     },
     product_id: {
       type: mongoose.Schema.Types.ObjectId,

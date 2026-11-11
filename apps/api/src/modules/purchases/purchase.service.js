@@ -14,10 +14,13 @@ class PurchaseService {
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
     const prefix = `TRX-${dateStr}`;
-    const count = await Purchase.countDocuments({
-      purchase_number: new RegExp(`^${prefix}`)
-    });
-    const seq = String(count + 1).padStart(4, '0');
+    const latestPurchase = await Purchase.findOne({
+      purchase_number: new RegExp(`^${prefix}-`)
+    }).sort({ purchase_number: -1 }).select('purchase_number');
+    const lastSequence = latestPurchase
+      ? Number(latestPurchase.purchase_number.slice(prefix.length + 1)) || 0
+      : 0;
+    const seq = String(lastSequence + 1).padStart(4, '0');
     return `${prefix}-${seq}`;
   }
 
@@ -37,12 +40,11 @@ class PurchaseService {
       amount_paid: amountPaidInput
     } = data;
 
-    if (!marketlist_id) throw new Error('Marketlist ID wajib diisi.');
     if (!supplier_id) throw new Error('Supplier wajib dipilih.');
     if (!items || items.length === 0) throw new Error('Minimal harus ada 1 barang transaksi pembelian.');
 
-    const marketlist = await Marketlist.findById(marketlist_id);
-    if (!marketlist) throw new Error('Marketlist tidak ditemukan.');
+    const marketlist = marketlist_id ? await Marketlist.findById(marketlist_id) : null;
+    if (marketlist_id && !marketlist) throw new Error('Marketlist tidak ditemukan.');
 
     const supplier = await Supplier.findById(supplier_id);
     if (!supplier) throw new Error('Supplier tidak ditemukan.');
@@ -54,15 +56,31 @@ class PurchaseService {
     const itemsToInsert = [];
 
     for (const item of items) {
-      const mlItem = await MarketlistItem.findById(item.marketlist_item_id).populate('product_id');
+      if (item.marketlist_item_id && !marketlist_id) {
+        throw new Error('Pilih Marketlist untuk mengalokasikan barang ke item Marketlist.');
+      }
+      const mlItem = item.marketlist_item_id
+        ? await MarketlistItem.findOne({
+            _id: item.marketlist_item_id,
+            ...(marketlist_id ? { marketlist_id } : {})
+          }).populate('product_id.unit_id')
+        : null;
+      if (item.marketlist_item_id && !mlItem) {
+        throw new Error('Item Marketlist tidak ditemukan pada Marketlist yang dipilih.');
+      }
+      if (!mlItem && !item.product_id) {
+        throw new Error('Pilih barang dari master item untuk transaksi tanpa alokasi Marketlist.');
+      }
+      const product = mlItem?.product_id || await Product.findById(item.product_id).populate('unit_id');
+      if (!product) throw new Error('Barang transaksi tidak ditemukan.');
       const qty = Number(item.actual_qty) || 0;
       const unitPrice = Number(item.actual_unit_price) || 0;
       const subtotal = qty * unitPrice;
       totalActual += subtotal;
 
-      const pName = mlItem?.product_id?.name || item.product_name || 'Item';
-      const uName = mlItem?.product_id?.unit_id?.name || item.unit_name || 'Satuan';
-      const prodId = mlItem?.product_id?._id || item.product_id;
+      const pName = product.name || item.product_name || 'Item';
+      const uName = product.unit_id?.name || item.unit_name || 'Satuan';
+      const prodId = product._id;
 
       itemsToInsert.push({
         marketlist_item_id: item.marketlist_item_id,
@@ -135,9 +153,11 @@ class PurchaseService {
         purchase_id: purchase._id
       }))
     );
-    await Marketlist.findByIdAndUpdate(marketlist_id, {
-      $set: { purchase_tracking_started: true }
-    });
+    if (marketlist_id) {
+      await Marketlist.findByIdAndUpdate(marketlist_id, {
+        $set: { purchase_tracking_started: true }
+      });
+    }
 
     // If tempo & uang muka dibayar, record first debt payment
     if (payment_method === 'tempo' && amountPaid > 0 && amountPaid < totalActual) {
@@ -172,10 +192,12 @@ class PurchaseService {
     }
 
     // Update marketlist status to in_progress if currently approved
-    await Marketlist.findOneAndUpdate(
-      { _id: marketlist_id, status: 'approved' },
-      { $set: { status: 'in_progress' } }
-    ).catch(() => null);
+    if (marketlist_id) {
+      await Marketlist.findOneAndUpdate(
+        { _id: marketlist_id, status: 'approved' },
+        { $set: { status: 'in_progress' } }
+      ).catch(() => null);
+    }
 
     // Audit log
     await ActivityLog.create({
@@ -198,7 +220,9 @@ class PurchaseService {
       }
     }).catch(() => null);
 
-    await invoiceService.syncMarketlistPurchaseQuantities(marketlist_id, user);
+    if (marketlist_id) {
+      await invoiceService.syncMarketlistPurchaseQuantities(marketlist_id, user);
+    }
 
     return {
       ...purchase.toObject(),
@@ -469,7 +493,9 @@ class PurchaseService {
     }
 
     await purchase.save();
-    await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
+    if (purchase.marketlist_id) {
+      await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
+    }
 
     // Audit log
     await ActivityLog.create({
@@ -513,10 +539,12 @@ class PurchaseService {
       }
     }).catch(() => null);
 
-    await Marketlist.findByIdAndUpdate(purchase.marketlist_id, {
-      $set: { purchase_tracking_started: true }
-    });
-    await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
+    if (purchase.marketlist_id) {
+      await Marketlist.findByIdAndUpdate(purchase.marketlist_id, {
+        $set: { purchase_tracking_started: true }
+      });
+      await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
+    }
 
     return { message: `Transaksi ${purchase.purchase_number} berhasil dihapus.` };
   }

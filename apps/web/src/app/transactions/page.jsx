@@ -118,8 +118,11 @@ export default function TransactionsPage() {
 
   // Form state
   const [approvedMLs, setApprovedMLs] = useState([]);
+  const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [entryMode, setEntryMode] = useState('marketlist');
   const [selectedMlId, setSelectedMlId] = useState('');
+  const [manualProductId, setManualProductId] = useState('');
   const [selectedMlDetail, setSelectedMlDetail] = useState(null);
   const [mlFilterTab, setMlFilterTab] = useState('all'); // 'all' | 'active' | 'delivered'
   const [mlSearch, setMlSearch] = useState('');
@@ -216,9 +219,10 @@ export default function TransactionsPage() {
   const fetchMasterForForm = async () => {
     try {
       let mlList = [];
-      const [mlMultiRes, supRes] = await Promise.all([
+      const [mlMultiRes, supRes, productRes] = await Promise.all([
         api.getMarketlists('?status=approved,in_progress,partially_received,received,completed&limit=100&all=true').catch(() => ({ data: [] })),
-        api.getSuppliers().catch(() => ({ data: [] }))
+        api.getSuppliers().catch(() => ({ data: [] })),
+        api.getProducts().catch(() => ({ data: [] }))
       ]);
       mlList = mlMultiRes.data?.items || mlMultiRes.data || [];
 
@@ -240,6 +244,7 @@ export default function TransactionsPage() {
 
       setApprovedMLs(mlList);
       setSuppliers(supRes.data?.items || supRes.data || []);
+      setProducts(productRes.data?.items || productRes.data || []);
     } catch (_) {}
   };
 
@@ -253,8 +258,20 @@ export default function TransactionsPage() {
   const handleSelectMarketlist = async (mlId) => {
     setSelectedMlId(mlId);
     setSelectedMlDetail(null);
-    setFormItems([]);
-    setSelectedSupplierId('');
+    if (entryMode !== 'manual') {
+      setFormItems([]);
+      setSelectedSupplierId('');
+    } else {
+      setFormItems((currentItems) => currentItems.map((item) => ({
+        ...item,
+        marketlist_item_id: null,
+        marketlist_match: null,
+        requested_qty: 0,
+        purchased_qty: 0,
+        remaining_qty: 0,
+        unit_price_ml: 0
+      })));
+    }
     if (!mlId) return;
     try {
       const [res, purchaseRes, receiptRes] = await Promise.all([
@@ -264,6 +281,24 @@ export default function TransactionsPage() {
       ]);
       const ml = res.data;
       setSelectedMlDetail(ml);
+      if (entryMode === 'manual') {
+        setFormItems((currentItems) => currentItems.map((item) => {
+          const match = (ml.items || []).find((mlItem) =>
+            mlItem.product_id?._id?.toString() === item.product_id?.toString() &&
+            mlItem.item_status !== 'rejected'
+          );
+          return {
+            ...item,
+            marketlist_item_id: match?._id || null,
+            marketlist_match: match || null,
+            requested_qty: match?.requested_qty || 0,
+            purchased_qty: match?.purchased_qty || 0,
+            remaining_qty: Math.max(0, (Number(match?.requested_qty) || 0) - (Number(match?.purchased_qty) || 0)),
+            unit_price_ml: match?.unit_price || 0
+          };
+        }));
+        return;
+      }
 
       // Aggregate purchased quantities so partially purchased items remain selectable.
       const alreadyPurchasedMap = {};
@@ -334,6 +369,55 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleEntryModeChange = (mode) => {
+    setEntryMode(mode);
+    setSelectedMlId('');
+    setSelectedMlDetail(null);
+    setFormItems([]);
+    setManualProductId('');
+    setSelectedSupplierId('');
+  };
+
+  const addManualProduct = () => {
+    const product = products.find((entry) => entry._id === manualProductId);
+    if (!product) return;
+    if (formItems.some((item) => item.product_id?.toString() === product._id.toString())) {
+      alert('Barang ini sudah ada di daftar transaksi.');
+      return;
+    }
+
+    const match = (selectedMlDetail?.items || []).find((item) =>
+      item.product_id?._id?.toString() === product._id.toString() &&
+      item.item_status !== 'rejected'
+    );
+    const requestedQty = Number(match?.requested_qty) || 0;
+    const purchasedQty = Number(match?.purchased_qty) || 0;
+    const remainingQty = Math.max(0, requestedQty - purchasedQty);
+    setFormItems((currentItems) => [...currentItems, {
+      marketlist_item_id: match?._id || null,
+      marketlist_match: match || null,
+      product_id: product._id,
+      product_name: product.name,
+      unit_name: product.unit_id?.abbreviation || product.unit_id?.name || 'Satuan',
+      supplier_id: '',
+      requested_qty: requestedQty,
+      purchased_qty: purchasedQty,
+      remaining_qty: remainingQty,
+      received_qty: 0,
+      unit_price_ml: Number(match?.unit_price) || 0,
+      actual_qty: remainingQty || 1,
+      actual_unit_price: Number(match?.unit_price || product.last_purchase_price) || 0,
+      notes: '',
+      selected: true,
+      alreadyPurchased: null
+    }]);
+    setManualProductId('');
+  };
+
+  const removeManualProduct = (index) => {
+    setFormItems((currentItems) => currentItems.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   // Quick fill helper (Samakan Qty Rencana, Qty Diterima, Harga Rencana)
   const applyQuickFill = (type) => {
     const updated = formItems.map((it) => {
@@ -397,7 +481,7 @@ export default function TransactionsPage() {
   // ---------- submit purchase (1 transaksi = 1 supplier) ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedMlId) { alert('Pilih Marketlist terlebih dahulu.'); return; }
+    if (entryMode === 'marketlist' && !selectedMlId) { alert('Pilih Marketlist terlebih dahulu.'); return; }
     if (!selectedSupplierId) { alert('Pilih Supplier terlebih dahulu.'); return; }
     if (selectedItems.length === 0) {
       alert('Pilih minimal 1 barang yang dibeli dari supplier ini!');
@@ -409,8 +493,10 @@ export default function TransactionsPage() {
 
     setSubmitting(true);
     try {
+      const allocatedToMarketlist = entryMode === 'marketlist' ||
+        selectedItems.some((item) => item.marketlist_item_id);
       const payload = {
-        marketlist_id: selectedMlId,
+        ...(selectedMlId && allocatedToMarketlist && { marketlist_id: selectedMlId }),
         supplier_id: selectedSupplierId,
         invoice_ref: invoiceRef.trim(),
         payment_method: paymentMethod,
@@ -422,7 +508,7 @@ export default function TransactionsPage() {
           amount_paid: Number(downPayment) || 0
         }),
         items: selectedItems.map((it) => ({
-          marketlist_item_id: it.marketlist_item_id,
+          ...(it.marketlist_item_id && { marketlist_item_id: it.marketlist_item_id }),
           product_id: it.product_id,
           product_name: it.product_name,
           unit_name: it.unit_name,
@@ -441,7 +527,7 @@ export default function TransactionsPage() {
         (it) => !it.alreadyPurchased && !it.selected
       );
 
-      if (remainingItems.length > 0) {
+      if (entryMode === 'marketlist' && remainingItems.length > 0) {
         if (
           confirm(
             `✅ Transaksi untuk "${selectedSup?.name || 'Supplier'}" berhasil dicatat!\n\n` +
@@ -460,8 +546,10 @@ export default function TransactionsPage() {
           setSubmitting(false);
           return;
         }
-      } else {
+      } else if (entryMode === 'marketlist') {
         alert(`✅ Transaksi untuk "${selectedSup?.name || 'Supplier'}" berhasil dicatat!\nSemua barang pada Marketlist ini telah selesai ditransaksikan.`);
+      } else {
+        alert(`✅ Transaksi manual untuk "${selectedSup?.name || 'Supplier'}" berhasil dicatat.`);
       }
 
       resetForm();
@@ -502,6 +590,7 @@ export default function TransactionsPage() {
 
   const resetForm = () => {
     setShowForm(false);
+    setEntryMode('marketlist');
     setSelectedMlId('');
     setSelectedMlDetail(null);
     setSelectedSupplierId('');
@@ -513,6 +602,7 @@ export default function TransactionsPage() {
     setPurchaseDate(new Date().toISOString().split('T')[0]);
     setNotes('');
     setFormItems([]);
+    setManualProductId('');
   };
 
   // ---------- view detail ----------
@@ -807,12 +897,34 @@ export default function TransactionsPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">Cara input transaksi</p>
+                    <p className="text-[10px] text-slate-500">Pilih Marketlist atau catat nota manual dengan alokasi Marketlist opsional.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleEntryModeChange('marketlist')}
+                      className={`rounded-lg px-3 py-2 text-xs font-bold ${entryMode === 'marketlist' ? 'bg-amber-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                    >
+                      Dari Marketlist
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEntryModeChange('manual')}
+                      className={`rounded-lg px-3 py-2 text-xs font-bold ${entryMode === 'manual' ? 'bg-amber-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                    >
+                      Input Manual
+                    </button>
+                  </div>
+                </div>
                 {/* Marketlist selection */}
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="block text-xs font-bold text-slate-700">
                       <ClipboardList className="w-3.5 h-3.5 inline mr-1 text-amber-600" />
-                      Pilih Marketlist (Disetujui / Delivered)
+                      {entryMode === 'manual' ? 'Alokasikan ke Marketlist (Opsional)' : 'Pilih Marketlist (Disetujui / Delivered)'}
                     </label>
                     {/* Quick filter tabs */}
                     <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-[10px]">
@@ -864,10 +976,10 @@ export default function TransactionsPage() {
                   <select
                     value={selectedMlId}
                     onChange={(e) => handleSelectMarketlist(e.target.value)}
-                    required
+                    required={entryMode === 'marketlist'}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium text-slate-800"
                   >
-                    <option value="">-- Pilih Marketlist untuk Transaksi Belanja --</option>
+                    <option value="">{entryMode === 'manual' ? '-- Tidak dialokasikan ke Marketlist --' : '-- Pilih Marketlist untuk Transaksi Belanja --'}</option>
                     {filteredMLs.map((ml) => {
                       const meta = getMlStatusMeta(ml.status);
                       const reqDateStr = new Date(ml.required_date || ml.date).toLocaleDateString('id-ID');
@@ -885,7 +997,7 @@ export default function TransactionsPage() {
                   </select>
 
                   {/* Status Banner when an ML is selected */}
-                  {selectedMlDetail && (
+                  {selectedMlDetail && entryMode === 'marketlist' && (
                     <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
                       isDeliveredSelectedMl
                         ? 'bg-purple-50/70 border-purple-200 text-purple-950'
@@ -921,7 +1033,7 @@ export default function TransactionsPage() {
                   )}
                 </div>
 
-                {selectedMlDetail && (
+                {(selectedMlDetail || entryMode === 'manual') && (
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
@@ -956,6 +1068,52 @@ export default function TransactionsPage() {
                           1 Transaksi untuk 1 Supplier. Pilih barang yang dibeli di supplier ini di bawah.
                         </p>
                       </div>
+
+                      {entryMode === 'manual' && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                          <label className="mb-2 block text-xs font-bold text-slate-700">
+                            Tambah barang dari master item
+                          </label>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <select
+                              value={manualProductId}
+                              onChange={(event) => setManualProductId(event.target.value)}
+                              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-2.5 text-xs"
+                            >
+                              <option value="">-- Pilih barang --</option>
+                              {products.map((product) => {
+                                const match = (selectedMlDetail?.items || []).find((item) =>
+                                  item.product_id?._id?.toString() === product._id.toString() &&
+                                  item.item_status !== 'rejected'
+                                );
+                                const remaining = Math.max(
+                                  0,
+                                  (Number(match?.requested_qty) || 0) - (Number(match?.purchased_qty) || 0)
+                                );
+                                return (
+                                  <option key={product._id} value={product._id}>
+                                    {product.name} ({product.unit_id?.abbreviation || product.unit_id?.name || 'Satuan'})
+                                    {match ? ` • Cocok di ML, sisa ${remaining}` : ''}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={addManualProduct}
+                              disabled={!manualProductId}
+                              className="inline-flex items-center justify-center gap-1 rounded-lg bg-amber-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+                            >
+                              <Plus className="h-4 w-4" /> Tambah Barang
+                            </button>
+                          </div>
+                          {selectedMlDetail && (
+                            <p className="mt-2 text-[10px] text-emerald-800">
+                              Barang yang ada di {selectedMlDetail.marketlist_number} akan ditandai dan otomatis dialokasikan ke item Marketlist yang cocok.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1.5">
@@ -1106,7 +1264,7 @@ export default function TransactionsPage() {
                         </div>
 
                         {/* Quick Batch Actions */}
-                        {unpurchasedCount > 0 && (
+                        {entryMode === 'marketlist' && unpurchasedCount > 0 && (
                           <div className="flex flex-wrap items-center gap-1.5 text-xs">
                             <button
                               type="button"
@@ -1153,7 +1311,7 @@ export default function TransactionsPage() {
                       {formItems.length === 0 ? (
                         <div className="text-xs text-slate-400 py-6 text-center border border-dashed border-slate-200 rounded-lg">
                           <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-slate-300" />
-                          Pilih Marketlist terlebih dahulu.
+                          {entryMode === 'manual' ? 'Pilih barang dari master item untuk memulai transaksi.' : 'Pilih Marketlist terlebih dahulu.'}
                         </div>
                       ) : (
                         <div className="overflow-x-auto border border-slate-200 rounded-xl">
@@ -1169,6 +1327,7 @@ export default function TransactionsPage() {
                                 <th className="px-3 py-2.5 text-center text-amber-600 font-bold min-w-[140px]">Qty Beli Aktual</th>
                                 <th className="px-3 py-2.5 text-center text-amber-600 font-bold min-w-[130px]">Harga Beli Satuan</th>
                                 <th className="px-3 py-2.5 text-right text-slate-500 font-semibold">Subtotal</th>
+                                <th className="px-3 py-2.5 text-center text-slate-500 font-semibold">Aksi</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -1183,6 +1342,8 @@ export default function TransactionsPage() {
                                     className={`transition-colors ${
                                       isBought
                                         ? 'bg-slate-100/70 opacity-60'
+                                        : entryMode === 'manual' && it.marketlist_item_id
+                                        ? 'bg-emerald-50 hover:bg-emerald-100/70'
                                         : isChecked
                                         ? 'bg-amber-50/40 hover:bg-amber-50/70'
                                         : 'hover:bg-slate-50/50'
@@ -1207,6 +1368,13 @@ export default function TransactionsPage() {
                                         {it.product_name}
                                         <span className="ml-1 text-slate-400 font-normal">({it.unit_name})</span>
                                       </div>
+                                      {entryMode === 'manual' && (
+                                        <span className={`mt-0.5 inline-block text-[10px] font-semibold ${it.marketlist_item_id ? 'text-emerald-700' : 'text-slate-400'}`}>
+                                          {it.marketlist_item_id
+                                            ? `✓ Cocok dengan item ${selectedMlDetail?.marketlist_number} — akan dialokasikan`
+                                            : selectedMlDetail ? 'Tidak ada item cocok di Marketlist ini' : 'Transaksi manual'}
+                                        </span>
+                                      )}
                                       {isBought && (
                                         <span className="inline-block mt-0.5 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
                                           ✓ Sudah Dibeli di {it.alreadyPurchased.supplierName} ({it.alreadyPurchased.purchaseNumber})
@@ -1314,13 +1482,25 @@ export default function TransactionsPage() {
                                     <td className="px-3 py-2.5 text-right font-bold text-slate-800">
                                       {isChecked ? fmt(sub) : '-'}
                                     </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {entryMode === 'manual' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeManualProduct(idx)}
+                                          className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                          title="Hapus barang"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+                                    </td>
                                   </tr>
                                 );
                               })}
                             </tbody>
                             <tfoot className="border-t-2 border-slate-300 bg-amber-50/50">
                               <tr>
-                                <td colSpan="8" className="px-3 py-3 text-right font-black text-slate-700 text-sm">
+                                <td colSpan="9" className="px-3 py-3 text-right font-black text-slate-700 text-sm">
                                   TOTAL TRANSAKSI SUPPLIER INI ({selectedItems.length} BARANG):
                                 </td>
                                 <td className="px-3 py-3 text-right font-black text-amber-700 text-sm">{fmt(formTotal)}</td>
@@ -1328,11 +1508,11 @@ export default function TransactionsPage() {
                               {paymentMethod === 'tempo' && (
                                 <>
                                   <tr className="text-xs">
-                                    <td colSpan="8" className="px-3 py-1 text-right text-slate-500">Uang Muka / DP:</td>
+                                    <td colSpan="9" className="px-3 py-1 text-right text-slate-500">Uang Muka / DP:</td>
                                     <td className="px-3 py-1 text-right text-green-700 font-bold">{fmt(Number(downPayment) || 0)}</td>
                                   </tr>
                                   <tr className="text-xs">
-                                    <td colSpan="8" className="px-3 py-1 text-right text-red-700 font-bold">Sisa Hutang:</td>
+                                    <td colSpan="9" className="px-3 py-1 text-right text-red-700 font-bold">Sisa Hutang:</td>
                                     <td className="px-3 py-1 text-right text-red-700 font-black">{fmt(formTotal - (Number(downPayment) || 0))}</td>
                                   </tr>
                                 </>
@@ -1957,7 +2137,7 @@ export default function TransactionsPage() {
                     purchases.map((p) => (
                       <tr key={p._id} className="hover:bg-slate-50">
                         <td className="px-5 py-3.5 font-bold text-slate-900">{p.purchase_number}</td>
-                        <td className="px-5 py-3.5 text-amber-700 font-semibold">{p.marketlist_id?.code || p.marketlist_id?.marketlist_number || '-'}</td>
+                        <td className="px-5 py-3.5 text-amber-700 font-semibold">{p.marketlist_id?.code || p.marketlist_id?.marketlist_number || 'Manual'}</td>
                         <td className="px-5 py-3.5 text-slate-700">{p.supplier_id?.name || '-'}</td>
                         <td className="px-5 py-3.5 text-slate-500">{fmtDate(p.purchased_at)}</td>
                         <td className="px-5 py-3.5 whitespace-nowrap">

@@ -97,7 +97,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 36 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 38 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -109,7 +109,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/36] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/38] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -701,8 +701,49 @@ async function runTests() {
     'Menghapus transaksi langsung menghitung ulang qty beli dan invoice.'
   );
 
+  // 37. Manual purchases can be recorded without a marketlist
+  const manualPurchase = await purchaseService.createPurchase({
+    supplier_id: supplierA._id,
+    items: [{
+      product_id: productAyam._id,
+      actual_qty: 3,
+      actual_unit_price: 42000
+    }]
+  }, purchasingUser);
+  const manualPurchaseItem = await PurchaseItem.findOne({ purchase_id: manualPurchase._id });
+  assert(
+    manualPurchase.marketlist_id === null &&
+      manualPurchaseItem.marketlist_item_id === null &&
+      manualPurchaseItem.product_id.toString() === productAyam._id.toString() &&
+      manualPurchase.total_actual === 126000,
+    'Transaksi manual tersimpan dengan master barang dan supplier tanpa wajib terhubung ke Marketlist.'
+  );
+
+  // 38. A manual item can be allocated to a matching Marketlist item
+  await purchaseService.createPurchase({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: purchaseSyncItem._id,
+      product_id: productBeras._id,
+      actual_qty: 1,
+      actual_unit_price: 15500
+    }]
+  }, purchasingUser);
+  const allocatedMarketlist = await marketlistService.getMarketlistById(purchaseSyncMl._id);
+  const allocatedInvoice = await Invoice.findOne({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    status: 'generated'
+  });
+  assert(
+    allocatedMarketlist.items[0].purchased_qty === 3 &&
+      allocatedInvoice.items[0].quantity === 3,
+    'Transaksi manual yang dialokasikan ke item Marketlist memperbarui qty dan invoice terkait.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 36/36 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 38/38 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();

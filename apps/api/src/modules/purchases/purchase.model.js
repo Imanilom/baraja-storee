@@ -11,7 +11,7 @@ const PurchaseSchema = new mongoose.Schema(
     marketlist_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Marketlist',
-      required: true
+      default: null
     },
     supplier_id: {
       type: mongoose.Schema.Types.ObjectId,
