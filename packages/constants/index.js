@@ -38,6 +38,8 @@ const GOODS_RECEIPT_STATUS = {
 const ITEM_CONDITION = {
   GOOD: 'good',
   DAMAGED: 'damaged',
+  SHORTAGE: 'shortage',
+  OVERAGE: 'overage',
   INCOMPLETE: 'incomplete',
   EXPIRED: 'expired',
   OTHER: 'other'
@@ -117,4 +119,3 @@ module.exports = {
   OVERHEAD_CATEGORY_LABELS,
   PRICE_SOURCES
 };
-

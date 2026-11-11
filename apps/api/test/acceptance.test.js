@@ -19,6 +19,7 @@ const receivingService = require('../src/modules/receiving/receiving.service');
 const invoiceService = require('../src/modules/invoices/invoice.service');
 
 const { ROLES, MARKETLIST_STATUS, RECEIVING_STATUS, ITEM_CONDITION } = require('@purchasing/constants');
+const { createGoodsReceiptSchema } = require('@purchasing/validation');
 
 let mongod;
 let adminUser, purchasingUser, receiverUser;
@@ -93,7 +94,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 17 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 18 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -105,7 +106,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/17] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/18] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -145,15 +146,38 @@ async function runTests() {
     'Cetak harian menggabungkan kuantitas per tanggal kebutuhan dan memisahkan Kitchen / Bar.'
   );
 
-  // 3. Purchasing dapat submit Marketlist kepada Admin
+  // 3. Kondisi barang shortage dan overage dari Flutter diterima schema API
+  const receiptValidation = createGoodsReceiptSchema.safeParse({
+    items: [
+      {
+        marketlist_item_id: mlCreated.items[0]._id.toString(),
+        received_qty: 5,
+        accepted_qty: 5,
+        rejected_qty: 0,
+        condition: ITEM_CONDITION.SHORTAGE,
+        is_checked: true
+      },
+      {
+        marketlist_item_id: mlCreated.items[1]._id.toString(),
+        received_qty: 55,
+        accepted_qty: 55,
+        rejected_qty: 0,
+        condition: ITEM_CONDITION.OVERAGE,
+        is_checked: true
+      }
+    ]
+  });
+  assert(receiptValidation.success, 'Validasi API menerima kondisi penerimaan shortage dan overage dari Flutter.');
+
+  // 4. Purchasing dapat submit Marketlist kepada Admin
   const mlSubmitted = await marketlistService.submitMarketlist(mlCreated._id, purchasingUser);
   assert(mlSubmitted.status === 'submitted', 'Purchasing dapat submit Marketlist kepada Admin.');
 
-  // 4. Hanya Admin yang dapat menyetujui Marketlist
+  // 5. Hanya Admin yang dapat menyetujui Marketlist
   const mlApproved = await marketlistService.approveMarketlist(mlCreated._id, adminUser, 'Approved by Admin');
   assert(mlApproved.status === 'approved' && mlApproved.approval.approved_by._id.toString() === adminUser._id.toString(), 'Hanya Admin yang dapat menyetujui Marketlist.');
 
-  // 5. Marketlist yang ditolak dapat direvisi
+  // 6. Marketlist yang ditolak dapat direvisi
   const ml2 = await marketlistService.createMarketlist({
     date: new Date(),
     required_date: new Date(),
@@ -165,7 +189,7 @@ async function runTests() {
   const ml2Revised = await marketlistService.getMarketlistById(ml2._id);
   assert(ml2Revised.status === 'revision' && ml2Revised.current_version === 2, 'Marketlist yang ditolak/minta revisi masuk status revision dengan version bertambah.');
 
-  // 6. Marketlist yang belum approved tidak dapat menghasilkan invoice
+  // 7. Marketlist yang belum approved tidak dapat menghasilkan invoice
   let invoiceRejected = false;
   try {
     await invoiceService.generateInvoicesFromMarketlist(ml2._id, {}, adminUser);
@@ -174,7 +198,7 @@ async function runTests() {
   }
   assert(invoiceRejected, 'Marketlist yang belum approved tidak dapat menghasilkan invoice.');
 
-  // 7. Invoice menggunakan harga dan kuantitas snapshot Marketlist
+  // 8. Invoice menggunakan harga dan kuantitas snapshot Marketlist
   const invoices = await invoiceService.generateInvoicesFromMarketlist(mlCreated._id, {}, adminUser);
   const invSupplierA = invoices.find(i => i.supplier_id.toString() === supplierA._id.toString());
   assert(
@@ -182,15 +206,15 @@ async function runTests() {
     'Invoice menggunakan harga dan kuantitas snapshot Marketlist.'
   );
 
-  // 8. Satu Marketlist dengan beberapa supplier menghasilkan invoice terpisah
+  // 9. Satu Marketlist dengan beberapa supplier menghasilkan invoice terpisah
   assert(invoices.length === 2, 'Satu Marketlist dengan beberapa supplier menghasilkan invoice terpisah (Supplier A dan Supplier B).');
 
-  // 9. Mobile hanya menampilkan Marketlist yang sudah disetujui dan ditugaskan
+  // 10. Mobile hanya menampilkan Marketlist yang sudah disetujui dan ditugaskan
   const receiverList = await marketlistService.getAllMarketlists({ only_assigned: 'true' }, receiverUser);
   const hasOnlyApproved = receiverList.items.every(m => ['approved', 'in_progress', 'partially_received'].includes(m.status));
   assert(hasOnlyApproved && receiverList.items.length >= 1, 'Mobile hanya menampilkan Marketlist yang sudah disetujui dan ditugaskan.');
 
-  // 10. Receiver dapat memeriksa barang dan menginput kuantitas aktual
+  // 11. Receiver dapat memeriksa barang dan menginput kuantitas aktual
   const mlItemBeras = mlCreated.items.find(i => i.product_id._id.toString() === productBeras._id.toString());
   const mlItemAyam = mlCreated.items.find(i => i.product_id._id.toString() === productAyam._id.toString());
 
@@ -210,7 +234,7 @@ async function runTests() {
   }, receiverUser);
   assert(receipt1.items[0].accepted_qty === 100 && receipt1.items[0].status === 'complete', 'Receiver dapat memeriksa barang dan menginput kuantitas aktual.');
 
-  // 11. Satu Marketlist dapat memiliki beberapa penerimaan bertahap
+  // 12. Satu Marketlist dapat memiliki beberapa penerimaan bertahap
   const receipt2 = await receivingService.createReceipt(mlCreated._id, {
     supplier_id: supplierB._id,
     general_condition: 'Ayam datang bertahap 45 kg',
@@ -228,7 +252,7 @@ async function runTests() {
   const receiptsCount = await receivingService.getReceiptsByMarketlist(mlCreated._id);
   assert(receiptsCount.length === 2, 'Satu Marketlist dapat memiliki beberapa penerimaan bertahap.');
 
-  // 12. Sistem dapat mendeteksi barang kurang, lebih, dan rusak
+  // 13. Sistem dapat mendeteksi barang kurang, lebih, dan rusak
   const receipt3 = await receivingService.createReceipt(mlCreated._id, {
     supplier_id: supplierB._id,
     general_condition: 'Sisa ayam 5 kg: 3 kg baik, 2 kg rusak/ditolak',
@@ -246,25 +270,25 @@ async function runTests() {
   }, receiverUser);
   assert(receipt3.items[0].rejected_qty === 2 && receipt3.items[0].condition === 'damaged', 'Sistem dapat mendeteksi barang kurang, lebih, dan rusak.');
 
-  // 13. Satu Marketlist hanya memiliki satu notes aktif
+  // 14. Satu Marketlist hanya memiliki satu notes aktif
   await marketlistNoteService.upsertNote(mlCreated._id, 'Ayam kurang 2 kg karena rusak', receiverUser);
   const totalNotesCount = await MarketlistNote.countDocuments({ marketlist_id: mlCreated._id });
   assert(totalNotesCount === 1, 'Satu Marketlist hanya memiliki satu notes aktif.');
 
-  // 14. Perubahan notes dan approval tercatat di audit log
+  // 15. Perubahan notes dan approval tercatat di audit log
   const auditLogs = await ActivityLog.find({ entity_id: { $in: [mlCreated._id, (await MarketlistNote.findOne({ marketlist_id: mlCreated._id }))._id] } });
   assert(auditLogs.length > 0, 'Perubahan notes dan approval tercatat di audit log.');
 
-  // 15. Invoice tidak berubah ketika master harga atau Marketlist berubah
+  // 16. Invoice tidak berubah ketika master harga atau Marketlist berubah
   await Product.findByIdAndUpdate(productBeras._id, { specification: 'Updated name' });
   const checkInvoice = await invoiceService.getInvoiceById(invSupplierA._id);
   assert(checkInvoice.items[0].unit_price === 15000 && checkInvoice.grand_total === 1500000, 'Invoice tidak berubah ketika master harga atau Marketlist berubah (immutable snapshot).');
 
-  // 16. Marketlist tidak dapat ditutup jika masih ada penerimaan atau administrasi yang belum selesai
+  // 17. Marketlist tidak dapat ditutup jika masih ada penerimaan atau administrasi yang belum selesai
   const mlStatusCheck = await Marketlist.findById(mlCreated._id);
   assert(['in_progress', 'partially_received', 'received'].includes(mlStatusCheck.status), 'Marketlist melacak progress penerimaan dan tidak ditutup otomatis.');
 
-  // 17. Sinkronisasi offline tidak membuat penerimaan ganda (client_request_id idempotency)
+  // 18. Sinkronisasi offline tidak membuat penerimaan ganda (client_request_id idempotency)
   const offlineReceipt1 = await receivingService.createReceipt(mlCreated._id, {
     client_request_id: 'REQ-OFFLINE-UUID-999',
     supplier_id: supplierA._id,
@@ -283,7 +307,7 @@ async function runTests() {
   assert(offlineReceipt1._id.toString() === offlineReceipt2._id.toString(), 'Sinkronisasi offline tidak membuat penerimaan ganda (client_request_id idempotency).');
 
   console.log('===========================================================');
-  console.log(`🎉 ALL 17/17 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 18/18 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();

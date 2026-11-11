@@ -3,6 +3,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const ApiException(this.statusCode, this.message);
+}
+
 class ApiService {
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -84,8 +91,13 @@ class ApiService {
       final msg = decoded is Map && decoded['message'] != null
           ? decoded['message'].toString()
           : 'Terjadi kesalahan (HTTP ${response.statusCode})';
-      throw Exception(msg);
+      final details = decoded is Map && decoded['error'] != null
+          ? decoded['error'].toString()
+          : null;
+      final fullMessage = details == null || details.isEmpty
+          ? msg
+          : '$msg: $details';
+      throw ApiException(response.statusCode, fullMessage);
     }
   }
 }
-

@@ -10,7 +10,8 @@ class DigitalSuratJalanScreen extends StatefulWidget {
   const DigitalSuratJalanScreen({super.key, required this.marketlist});
 
   @override
-  State<DigitalSuratJalanScreen> createState() => _DigitalSuratJalanScreenState();
+  State<DigitalSuratJalanScreen> createState() =>
+      _DigitalSuratJalanScreenState();
 }
 
 class _ItemReceivingState {
@@ -48,7 +49,9 @@ class _ItemReceivingState {
 
   void updateReceived(double newQty) {
     receivedQty = newQty < 0 ? 0 : newQty;
-    acceptedQty = (receivedQty - rejectedQty) < 0 ? 0 : (receivedQty - rejectedQty);
+    acceptedQty = (receivedQty - rejectedQty) < 0
+        ? 0
+        : (receivedQty - rejectedQty);
     _autoSetCondition();
     syncControllers();
   }
@@ -59,7 +62,9 @@ class _ItemReceivingState {
 
   void updateRejected(double newRej) {
     rejectedQty = newRej < 0 ? 0 : newRej;
-    acceptedQty = (receivedQty - rejectedQty) < 0 ? 0 : (receivedQty - rejectedQty);
+    acceptedQty = (receivedQty - rejectedQty) < 0
+        ? 0
+        : (receivedQty - rejectedQty);
     _autoSetCondition();
     syncControllers();
   }
@@ -126,7 +131,9 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
     try {
       final res = await ApiService.get('/marketlists/$mlId');
       final data = res['data'] ?? res;
-      if (data != null && data['items'] is List && (data['items'] as List).isNotEmpty) {
+      if (data != null &&
+          data['items'] is List &&
+          (data['items'] as List).isNotEmpty) {
         setState(() {
           for (final it in _checkItems) {
             it.dispose();
@@ -134,26 +141,32 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
           _checkItems.clear();
           for (final it in (data['items'] as List)) {
             final p = it['product_id'];
-            final pName = p is Map ? p['name'] : (it['product_snapshot']?['name'] ?? it['product_name'] ?? 'Barang');
+            final pName = p is Map
+                ? p['name']
+                : (it['product_snapshot']?['name'] ??
+                      it['product_name'] ??
+                      'Barang');
             final uName = p is Map && p['unit_id'] is Map
                 ? p['unit_id']['name']
                 : (it['product_snapshot']?['unit_name'] ?? 'Satuan');
             final reqQty = (it['requested_qty'] as num?)?.toDouble() ?? 1.0;
 
-            _checkItems.add(_ItemReceivingState(
-              itemId: it['_id']?.toString() ?? '',
-              productName: pName,
-              unitName: uName,
-              requestedQty: reqQty,
-              supplierId: it['supplier_id'] is Map
-                  ? it['supplier_id']['_id']
-                  : it['supplier_id']?.toString(),
-              receivedQty: reqQty,
-              acceptedQty: reqQty,
-              rejectedQty: 0,
-              condition: 'good',
-              isChecked: true,
-            ));
+            _checkItems.add(
+              _ItemReceivingState(
+                itemId: it['_id']?.toString() ?? '',
+                productName: pName,
+                unitName: uName,
+                requestedQty: reqQty,
+                supplierId: it['supplier_id'] is Map
+                    ? it['supplier_id']['_id']
+                    : it['supplier_id']?.toString(),
+                receivedQty: reqQty,
+                acceptedQty: reqQty,
+                rejectedQty: 0,
+                condition: 'good',
+                isChecked: true,
+              ),
+            );
           }
         });
       }
@@ -168,23 +181,27 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
     for (final it in rawItems) {
       final p = it['product_id'];
       final pName = p is Map ? p['name'] : (it['product_name'] ?? 'Barang');
-      final uName = p is Map && p['unit_id'] is Map ? p['unit_id']['name'] : 'Satuan';
+      final uName = p is Map && p['unit_id'] is Map
+          ? p['unit_id']['name']
+          : 'Satuan';
       final reqQty = (it['requested_qty'] as num?)?.toDouble() ?? 1.0;
 
-      _checkItems.add(_ItemReceivingState(
-        itemId: it['_id']?.toString() ?? '',
-        productName: pName,
-        unitName: uName,
-        requestedQty: reqQty,
-        supplierId: it['supplier_id'] is Map
-            ? it['supplier_id']['_id']
-            : it['supplier_id']?.toString(),
-        receivedQty: reqQty,
-        acceptedQty: reqQty,
-        rejectedQty: 0,
-        condition: 'good',
-        isChecked: true,
-      ));
+      _checkItems.add(
+        _ItemReceivingState(
+          itemId: it['_id']?.toString() ?? '',
+          productName: pName,
+          unitName: uName,
+          requestedQty: reqQty,
+          supplierId: it['supplier_id'] is Map
+              ? it['supplier_id']['_id']
+              : it['supplier_id']?.toString(),
+          receivedQty: reqQty,
+          acceptedQty: reqQty,
+          rejectedQty: 0,
+          condition: 'good',
+          isChecked: true,
+        ),
+      );
     }
   }
 
@@ -195,8 +212,8 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
       if (res['data'] != null && res['data']['content'] != null) {
         _noteController.text = res['data']['content'];
       }
-    } catch (_) {}
-    finally {
+    } catch (_) {
+    } finally {
       if (mounted) setState(() => _isLoadingNote = false);
     }
   }
@@ -241,7 +258,9 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
               title: const Text('Foto Surat Jalan / Faktur Fisik'),
               subtitle: const Text('Dokumentasikan surat jalan bertandatangan'),
               onTap: () {
-                final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+                final timestamp = DateFormat(
+                  'yyyyMMdd_HHmmss',
+                ).format(DateTime.now());
                 setState(() {
                   _photos.add('surat_jalan_$timestamp.jpg');
                 });
@@ -255,12 +274,17 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                   color: const Color(0xFFDCFCE7),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.inventory_outlined, color: Color(0xFF15803D)),
+                child: const Icon(
+                  Icons.inventory_outlined,
+                  color: Color(0xFF15803D),
+                ),
               ),
               title: const Text('Foto Kondisi Fisik Barang'),
               subtitle: const Text('Dokumentasikan barang saat tiba di outlet'),
               onTap: () {
-                final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+                final timestamp = DateFormat(
+                  'yyyyMMdd_HHmmss',
+                ).format(DateTime.now());
                 setState(() {
                   _photos.add('kondisi_barang_$timestamp.jpg');
                 });
@@ -274,12 +298,19 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                   color: const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.scale_outlined, color: Color(0xFFD97706)),
+                child: const Icon(
+                  Icons.scale_outlined,
+                  color: Color(0xFFD97706),
+                ),
               ),
               title: const Text('Foto Timbangan / Label Supplier'),
-              subtitle: const Text('Dokumentasikan bukti berat timbangan fisik'),
+              subtitle: const Text(
+                'Dokumentasikan bukti berat timbangan fisik',
+              ),
               onTap: () {
-                final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+                final timestamp = DateFormat(
+                  'yyyyMMdd_HHmmss',
+                ).format(DateTime.now());
                 setState(() {
                   _photos.add('timbangan_$timestamp.jpg');
                 });
@@ -292,7 +323,10 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
               decoration: InputDecoration(
                 hintText: 'Atau masukkan nama file / link foto...',
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.add_photo_alternate, color: Color(0xFFD97706)),
+                  icon: const Icon(
+                    Icons.add_photo_alternate,
+                    color: Color(0xFFD97706),
+                  ),
                   onPressed: () {
                     final text = customUrlController.text.trim();
                     if (text.isNotEmpty) {
@@ -301,7 +335,9 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                     }
                   },
                 ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 isDense: true,
               ),
             ),
@@ -316,18 +352,25 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
     final mlId = widget.marketlist['_id'];
     setState(() => _isSaving = true);
 
-    final firstSuppId = _checkItems.isNotEmpty ? _checkItems.first.supplierId : null;
+    final firstSuppId = _checkItems.isNotEmpty
+        ? _checkItems.first.supplierId
+        : null;
     final payload = {
       'client_request_id': const Uuid().v4(),
-      if (firstSuppId != null && firstSuppId.isNotEmpty) 'supplier_id': firstSuppId,
-      'items': _checkItems.map((ci) => {
-        'marketlist_item_id': ci.itemId,
-        'received_qty': ci.receivedQty,
-        'accepted_qty': ci.acceptedQty,
-        'rejected_qty': ci.rejectedQty,
-        'condition': ci.condition,
-        'is_checked': ci.isChecked,
-      }).toList(),
+      if (firstSuppId != null && firstSuppId.isNotEmpty)
+        'supplier_id': firstSuppId,
+      'items': _checkItems
+          .map(
+            (ci) => {
+              'marketlist_item_id': ci.itemId,
+              'received_qty': ci.receivedQty,
+              'accepted_qty': ci.acceptedQty,
+              'rejected_qty': ci.rejectedQty,
+              'condition': ci.condition,
+              'is_checked': ci.isChecked,
+            },
+          )
+          .toList(),
       'note': _noteController.text.trim(),
       'photos': _photos,
       'attachments': _photos.map((p) => {'url': p, 'type': 'photo'}).toList(),
@@ -348,12 +391,29 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF16A34A),
-            content: Text('✅ Penerimaan barang berhasil diverifikasi & disimpan!'),
+            content: Text(
+              '✅ Penerimaan barang berhasil diverifikasi & disimpan!',
+            ),
           ),
         );
         Navigator.pop(context, true);
       }
     } catch (e) {
+      if (e is ApiException) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFDC2626),
+              content: Text(
+                'Server menolak penerimaan (HTTP ${e.statusCode}): ${e.message}',
+              ),
+              duration: const Duration(seconds: 8),
+            ),
+          );
+        }
+        return;
+      }
+
       // Jika jaringan gagal, simpan ke offline queue
       await OfflineService.enqueueReceipt(mlId, payload);
       if (mounted) {
@@ -377,7 +437,9 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
   Widget build(BuildContext context) {
     final ml = widget.marketlist;
     final code = ml['marketlist_number'] ?? ml['code'] ?? 'SURAT-JALAN';
-    final dateStr = ml['date'] != null ? ml['date'].toString().split('T')[0] : '-';
+    final dateStr = ml['date'] != null
+        ? ml['date'].toString().split('T')[0]
+        : '-';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -474,14 +536,21 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF16A34A),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
                           'SIAP VERIFIKASI',
-                          style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -489,11 +558,17 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'Marketlist: $code',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                   Text(
                     'Tanggal Permintaan: $dateStr',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF475569),
+                    ),
                   ),
                 ],
               ),
@@ -524,7 +599,9 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
               final isExact = ci.receivedQty == ci.requestedQty;
               final isOverage = ci.receivedQty > ci.requestedQty;
               final diff = (ci.requestedQty - ci.receivedQty).abs();
-              final diffStr = diff % 1 == 0 ? diff.toInt().toString() : diff.toStringAsFixed(1);
+              final diffStr = diff % 1 == 0
+                  ? diff.toInt().toString()
+                  : diff.toStringAsFixed(1);
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 14),
@@ -535,7 +612,9 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                   border: Border.all(
                     color: isShortage
                         ? const Color(0xFFFBBF24)
-                        : (ci.isChecked ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0)),
+                        : (ci.isChecked
+                              ? const Color(0xFF86EFAC)
+                              : const Color(0xFFE2E8F0)),
                     width: isShortage || ci.isChecked ? 1.5 : 1,
                   ),
                 ),
@@ -580,11 +659,16 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                         const SizedBox(width: 8),
                         if (isShortage)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFEF3C7),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFFFCD34D)),
+                              border: Border.all(
+                                color: const Color(0xFFFCD34D),
+                              ),
                             ),
                             child: Text(
                               '⚠️ Kurang $diffStr ${ci.unitName}',
@@ -597,7 +681,10 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                           )
                         else if (isExact)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFDCFCE7),
                               borderRadius: BorderRadius.circular(4),
@@ -613,7 +700,10 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                           )
                         else if (isOverage)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFE0F2FE),
                               borderRadius: BorderRadius.circular(4),
@@ -643,7 +733,11 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                             children: [
                               const Text(
                                 'Diterima Fisik',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF475569),
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Row(
@@ -654,27 +748,44 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                         ci.adjustReceived(-1);
                                       });
                                     },
-                                    icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFDC2626)),
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline,
+                                      color: Color(0xFFDC2626),
+                                    ),
                                     padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
                                     iconSize: 24,
                                     tooltip: 'Kurangi 1',
                                   ),
                                   Expanded(
                                     child: TextFormField(
                                       controller: ci.receivedController,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
                                       textAlign: TextAlign.center,
                                       decoration: InputDecoration(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 8,
+                                            ),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         isDense: true,
                                       ),
                                       onChanged: (val) {
                                         setState(() {
-                                          ci.updateReceived(double.tryParse(val) ?? 0);
+                                          ci.updateReceived(
+                                            double.tryParse(val) ?? 0,
+                                          );
                                         });
                                       },
                                     ),
@@ -685,9 +796,15 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                         ci.adjustReceived(1);
                                       });
                                     },
-                                    icon: const Icon(Icons.add_circle_outline, color: Color(0xFF16A34A)),
+                                    icon: const Icon(
+                                      Icons.add_circle_outline,
+                                      color: Color(0xFF16A34A),
+                                    ),
                                     padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
                                     iconSize: 24,
                                     tooltip: 'Tambah 1',
                                   ),
@@ -706,15 +823,25 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                             children: [
                               const Text(
                                 'Baik',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF15803D),
+                                ),
                               ),
                               const SizedBox(height: 4),
                               TextFormField(
                                 controller: ci.acceptedController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 textAlign: TextAlign.center,
                                 decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 8,
+                                  ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -739,15 +866,25 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                             children: [
                               const Text(
                                 'Rusak',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFB91C1C)),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFB91C1C),
+                                ),
                               ),
                               const SizedBox(height: 4),
                               TextFormField(
                                 controller: ci.rejectedController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 textAlign: TextAlign.center,
                                 decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 8,
+                                  ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -755,7 +892,9 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                 ),
                                 onChanged: (val) {
                                   setState(() {
-                                    ci.updateRejected(double.tryParse(val) ?? 0);
+                                    ci.updateRejected(
+                                      double.tryParse(val) ?? 0,
+                                    );
                                   });
                                 },
                               ),
@@ -778,13 +917,19 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                               });
                             },
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               minimumSize: const Size(50, 26),
                               side: const BorderSide(color: Color(0xFFCBD5E1)),
                             ),
                             child: Text(
                               'Pas (${_ItemReceivingState._formatNum(ci.requestedQty)})',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF0F172A)),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF0F172A),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -795,13 +940,20 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                               });
                             },
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               minimumSize: const Size(40, 26),
                               side: const BorderSide(color: Color(0xFFFCA5A5)),
                             ),
                             child: const Text(
                               '-1',
-                              style: TextStyle(fontSize: 11, color: Color(0xFFDC2626), fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFDC2626),
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -812,13 +964,20 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                               });
                             },
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               minimumSize: const Size(40, 26),
                               side: const BorderSide(color: Color(0xFFFCA5A5)),
                             ),
                             child: const Text(
                               '-5',
-                              style: TextStyle(fontSize: 11, color: Color(0xFFDC2626), fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFDC2626),
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -829,13 +988,19 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                               });
                             },
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               minimumSize: const Size(45, 26),
                               side: const BorderSide(color: Color(0xFFCBD5E1)),
                             ),
                             child: const Text(
                               '0 (Kosong)',
-                              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
                           ),
                         ],
@@ -850,13 +1015,28 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                         labelText: 'Kondisi Fisik Barang',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'good', child: Text('✅ Baik & Sesuai')),
-                        DropdownMenuItem(value: 'shortage', child: Text('⚠️ Kurang (Shortage)')),
-                        DropdownMenuItem(value: 'overage', child: Text('➕ Lebih (Overage)')),
-                        DropdownMenuItem(value: 'damaged', child: Text('❌ Rusak / Cacat')),
+                        DropdownMenuItem(
+                          value: 'good',
+                          child: Text('✅ Baik & Sesuai'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'shortage',
+                          child: Text('⚠️ Kurang (Shortage)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'overage',
+                          child: Text('➕ Lebih (Overage)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'damaged',
+                          child: Text('❌ Rusak / Cacat'),
+                        ),
                       ],
                       onChanged: (val) {
                         setState(() => ci.condition = val ?? 'good');
@@ -885,7 +1065,11 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.camera_alt_outlined, size: 20, color: Color(0xFF0284C7)),
+                          const Icon(
+                            Icons.camera_alt_outlined,
+                            size: 20,
+                            color: Color(0xFF0284C7),
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Bukti Foto / Nota (${_photos.length})',
@@ -900,12 +1084,23 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                       ElevatedButton.icon(
                         onPressed: _showAddPhotoDialog,
                         icon: const Icon(Icons.add_a_photo, size: 16),
-                        label: const Text('+ Foto', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        label: const Text(
+                          '+ Foto',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0284C7),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
@@ -925,15 +1120,25 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE2E8F0), style: BorderStyle.solid),
+                        border: Border.all(
+                          color: const Color(0xFFE2E8F0),
+                          style: BorderStyle.solid,
+                        ),
                       ),
                       child: Column(
                         children: [
-                          Icon(Icons.photo_camera_back_outlined, size: 36, color: Colors.grey[400]),
+                          Icon(
+                            Icons.photo_camera_back_outlined,
+                            size: 36,
+                            color: Colors.grey[400],
+                          ),
                           const SizedBox(height: 6),
                           const Text(
                             'Belum ada bukti foto ditambahkan',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF94A3B8),
+                            ),
                           ),
                         ],
                       ),
@@ -946,7 +1151,10 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(8),
@@ -960,7 +1168,11 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: const Icon(Icons.image, size: 20, color: Color(0xFF0284C7)),
+                                child: const Icon(
+                                  Icons.image,
+                                  size: 20,
+                                  color: Color(0xFF0284C7),
+                                ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -975,7 +1187,11 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                  size: 20,
+                                ),
                                 onPressed: () {
                                   setState(() => _photos.removeAt(pIdx));
                                 },
@@ -1029,7 +1245,8 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                           controller: _noteController,
                           maxLines: 3,
                           decoration: const InputDecoration(
-                            hintText: 'Tuliskan catatan kondisi pengiriman atau alasan selisih kuantitas...',
+                            hintText:
+                                'Tuliskan catatan kondisi pengiriman atau alasan selisih kuantitas...',
                             border: OutlineInputBorder(),
                           ),
                         ),
