@@ -78,14 +78,16 @@ class InvoiceService {
     }));
   }
 
-  getInvoiceItemKey(item) {
+  getInvoiceItemKey(item, defaultSupplierId = null) {
     return item.marketlist_item_id
-      ? `marketlist:${item.marketlist_item_id.toString()}`
+      ? `marketlist:${(item.supplier_id || defaultSupplierId)?.toString() || ''}:${item.marketlist_item_id.toString()}`
       : `purchase:${item.purchase_item_id.toString()}`;
   }
 
   getInvoiceItemPrice(item, supplierId, purchasePrices) {
-    const purchasePrice = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
+    const purchasePrice = supplierId
+      ? purchasePrices.get(`${supplierId}:${item._id.toString()}`)
+      : null;
     if (purchasePrice?.unit_price > 0) return purchasePrice;
     if (Number(item.product_id?.last_purchase_price) > 0) {
       return {
@@ -99,7 +101,13 @@ class InvoiceService {
   async getAllInvoices(query = {}) {
     const filter = {};
     if (query.status) filter.status = query.status;
-    if (query.supplier_id) filter.supplier_id = query.supplier_id;
+    else filter.status = { $ne: INVOICE_STATUS.CANCELLED };
+    if (query.supplier_id) {
+      filter.$or = [
+        { supplier_id: query.supplier_id },
+        { 'items.supplier_id': query.supplier_id }
+      ];
+    }
     if (query.marketlist_id) filter.marketlist_id = query.marketlist_id;
 
     const page = parseInt(query.page) || 1;
@@ -179,12 +187,7 @@ class InvoiceService {
     const existingInvoices = await Invoice.find({
       marketlist_id: marketlistId,
       marketlist_version: version
-    });
-    const targetExistingInvoices = options.supplier_id
-      ? existingInvoices.filter(
-          (invoice) => invoice.supplier_id.toString() === options.supplier_id.toString()
-        )
-      : existingInvoices;
+    }).sort({ createdAt: 1 });
     // Resolve missing suppliers using receipt and product history.
     let defaultSupplierId = null;
     for (const item of candidateItems) {
@@ -215,190 +218,241 @@ class InvoiceService {
       if (hasPurchaseRecap) return recap?.quantity || 0;
       return acceptedMap.get(item._id.toString()) || 0;
     };
-    const invoiceableItems = candidateItems.filter((item) => {
-      if (!hasPurchaseRecap) return getActualQuantity(item) > 0;
-      const itemId = item._id.toString();
-      return [...purchasePrices.entries()].some(
-        ([key, recap]) => key.endsWith(`:${itemId}`) && recap.quantity > 0
-      );
-    });
-    if (invoiceableItems.length === 0 && manualPurchaseItems.length === 0 && targetExistingInvoices.length === 0) {
-      throw new Error('No accepted goods or purchases exist for this marketlist');
-    }
+    const supplierIds = new Set([
+      ...candidateItems.map((item) => item.supplier_id?.toString()).filter(Boolean),
+      ...[...purchasePrices.keys()].map((key) => key.split(':')[0]),
+      ...manualPurchaseItems.map((item) => item.supplier_id?.toString()).filter(Boolean),
+      ...existingInvoices.map((invoice) => invoice.supplier_id?.toString()).filter(Boolean)
+    ]);
+    const suppliers = supplierIds.size > 0
+      ? await Supplier.find({ _id: { $in: [...supplierIds] } }).select('name')
+      : [];
+    const supplierNameMap = new Map(
+      suppliers.map((supplier) => [supplier._id.toString(), supplier.name])
+    );
+    const invoiceItems = [];
 
-    // Group items by supplier_id
-    const supplierGroup = new Map();
-    const supplierIds = new Set();
     if (hasPurchaseRecap) {
-      candidateItems.forEach((item) => supplierIds.add(item.supplier_id.toString()));
-      manualPurchaseItems.forEach((item) => supplierIds.add(item.supplier_id.toString()));
-      for (const key of purchasePrices.keys()) {
-        supplierIds.add(key.split(':')[0]);
-      }
       for (const item of candidateItems) {
         const itemId = item._id.toString();
-        const itemRecaps = [...purchasePrices.entries()].filter(([key]) => key.endsWith(`:${itemId}`));
-        if (itemRecaps.some(([, recap]) => recap.quantity > 0)) {
-          itemRecaps.forEach(([key, recap]) => {
-            if (recap.quantity > 0) supplierIds.add(key.split(':')[0]);
+        for (const [key, recap] of purchasePrices) {
+          const separator = key.indexOf(':');
+          const supplierId = key.slice(0, separator);
+          if (key.slice(separator + 1) !== itemId || recap.quantity <= 0) continue;
+          const price = this.getInvoiceItemPrice(item, supplierId, purchasePrices);
+          invoiceItems.push({
+            marketlist_item_id: item._id,
+            supplier_id: supplierId,
+            supplier_name: supplierNameMap.get(supplierId) || 'Supplier',
+            product_id: item.product_id?._id || item.product_id,
+            product_name: item.product_snapshot?.name || item.product_id?.name || 'Item',
+            sku: item.product_snapshot?.sku || '',
+            quantity: recap.quantity,
+            purchased: true,
+            unit: item.product_snapshot?.unit_name || '',
+            unit_price: price.unit_price,
+            price_source: price.price_source,
+            subtotal: recap.quantity * price.unit_price
           });
         }
       }
-    } else {
-      invoiceableItems.forEach((item) => supplierIds.add(item.supplier_id.toString()));
-    }
-    if (hasPurchaseRecap) {
-      existingInvoices.forEach((invoice) => supplierIds.add(invoice.supplier_id.toString()));
-    }
-    for (const supplierId of supplierIds) {
-      const items = candidateItems.filter((item) => {
-        const assignedSupplierId = item.supplier_id.toString();
-        const recap = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
-        return assignedSupplierId === supplierId || (hasPurchaseRecap && recap?.quantity > 0);
-      });
-      const manualItemsForSupplier = manualPurchaseItems.filter(
-        (item) => item.supplier_id.toString() === supplierId
-      );
-      if (items.length > 0 || manualItemsForSupplier.length > 0) {
-        supplierGroup.set(supplierId, { marketlistItems: items, manualItems: manualItemsForSupplier });
-      }
-    }
 
-    const generatedInvoices = [];
-
-    // Target specific supplier if provided, otherwise all
-    for (const [suppKey, group] of supplierGroup.entries()) {
-      if (options.supplier_id && options.supplier_id.toString() !== suppKey) {
-        continue;
-      }
-
-      // Calculate totals
-      let subtotal = 0;
-      const invoiceItems = group.marketlistItems.map((item) => {
-        const invoicedQty = getActualQuantity(item, suppKey);
-        const price = this.getInvoiceItemPrice(item, suppKey, purchasePrices);
-        const purchased = invoicedQty > 0;
-        const itemSubtotal = invoicedQty * price.unit_price;
-        subtotal += itemSubtotal;
-        return {
-          marketlist_item_id: item._id,
-          product_id: item.product_id?._id || item.product_id,
-          product_name: item.product_snapshot?.name || item.product_id?.name || 'Item',
-          sku: item.product_snapshot?.sku || '',
-          quantity: invoicedQty,
-          purchased,
-          unit: item.product_snapshot?.unit_name || '',
-          unit_price: price.unit_price,
-          price_source: price.price_source,
-          subtotal: itemSubtotal
-        };
-      });
-      for (const item of group.manualItems) {
+      for (const item of manualPurchaseItems) {
         const quantity = Number(item.actual_qty) || 0;
+        if (quantity <= 0) continue;
+        const supplierId = item.supplier_id?.toString();
         const unitPrice = Number(item.actual_unit_price) || 0;
-        const itemSubtotal = quantity * unitPrice;
-        subtotal += itemSubtotal;
         invoiceItems.push({
           purchase_item_id: item._id,
+          supplier_id: supplierId,
+          supplier_name: supplierNameMap.get(supplierId) || 'Supplier',
           product_id: item.product_id?._id || item.product_id,
           product_name: item.product_name || item.product_id?.name || 'Item Manual',
           sku: item.product_id?.sku || '',
           quantity,
-          purchased: quantity > 0,
+          purchased: true,
           unit: item.unit_name || item.product_id?.unit_id?.name || '',
           unit_price: unitPrice,
           price_source: 'purchase_recap',
-          subtotal: itemSubtotal
+          subtotal: quantity * unitPrice
         });
       }
-
-      const discount = options.discount || 0;
-      const tax = options.tax || 0;
-      const grand_total = subtotal - discount + tax;
-
-      // Check if invoice for this supplier and version already exists
-      const existing = existingInvoices.find(
-        (invoice) => invoice.supplier_id.toString() === suppKey
-      );
-
-      if (existing) {
-        // If still in generated status, update with latest received quantities
-        if (
-          existing.status === INVOICE_STATUS.GENERATED &&
-          (existing.purchases_confirmed !== true || options.syncPurchases === true)
-        ) {
-          existing.items = invoiceItems;
-          existing.subtotal = subtotal;
-          existing.grand_total = grand_total;
-          if (options.syncPurchases === true) existing.purchases_confirmed = false;
-          await existing.save();
-        }
-        generatedInvoices.push(existing);
-        continue;
+    } else {
+      for (const item of candidateItems) {
+        const quantity = getActualQuantity(item);
+        if (quantity <= 0) continue;
+        const supplierId = item.supplier_id?.toString();
+        const price = this.getInvoiceItemPrice(item, supplierId, purchasePrices);
+        invoiceItems.push({
+          marketlist_item_id: item._id,
+          supplier_id: supplierId,
+          supplier_name: supplierNameMap.get(supplierId) || 'Supplier',
+          product_id: item.product_id?._id || item.product_id,
+          product_name: item.product_snapshot?.name || item.product_id?.name || 'Item',
+          sku: item.product_snapshot?.sku || '',
+          quantity,
+          purchased: true,
+          unit: item.product_snapshot?.unit_name || '',
+          unit_price: price.unit_price,
+          price_source: price.price_source,
+          subtotal: quantity * price.unit_price
+        });
       }
+    }
 
+    const activeInvoices = existingInvoices.filter(
+      (invoice) => invoice.status === INVOICE_STATUS.GENERATED
+    );
+    const reusableInvoice = activeInvoices.find((invoice) => !invoice.supplier_id) ||
+      existingInvoices.find((invoice) =>
+        !invoice.supplier_id && invoice.status === INVOICE_STATUS.CANCELLED
+      ) ||
+      activeInvoices[0];
+    const verifiedInvoice = existingInvoices.find(
+      (invoice) => invoice.status === INVOICE_STATUS.VERIFIED && !invoice.supplier_id
+    ) || existingInvoices.find((invoice) => invoice.status === INVOICE_STATUS.VERIFIED);
+
+    if (verifiedInvoice && !verifiedInvoice.supplier_id) return [verifiedInvoice];
+    if (activeInvoices.length === 0 && verifiedInvoice) return [verifiedInvoice];
+
+    if (invoiceItems.length === 0 && !reusableInvoice) {
+      throw new Error('No accepted goods or purchases exist for this marketlist');
+    }
+
+    if (invoiceItems.length === 0) {
+      for (const invoice of activeInvoices) {
+        invoice.items = [];
+        invoice.subtotal = 0;
+        invoice.discount = 0;
+        invoice.tax = 0;
+        invoice.grand_total = 0;
+        invoice.status = INVOICE_STATUS.CANCELLED;
+        await invoice.save();
+        await auditService.log({
+          entity_type: 'invoice',
+          entity_id: invoice._id,
+          action: 'invoice_cancelled',
+          performed_by: user._id,
+          description: `Invoice ${invoice.invoice_number} cancelled because no purchased items remain for its Marketlist`
+        });
+      }
+      return activeInvoices;
+    }
+
+    let targetInvoice = reusableInvoice;
+    if (!targetInvoice) {
       const count = await Invoice.countDocuments();
-      const invoice_number = generateInvoiceNumber(count + 1);
-
-      const invoice = new Invoice({
-        invoice_number,
+      targetInvoice = new Invoice({
+        invoice_number: generateInvoiceNumber(count + 1),
         marketlist_id: marketlist._id,
-        supplier_id: suppKey,
+        supplier_id: null,
         marketlist_version: version,
         invoice_date: new Date(),
-        items: invoiceItems,
-        subtotal,
-        discount,
-        tax,
-        grand_total,
+        discount: options.discount || 0,
+        tax: options.tax || 0,
         status: INVOICE_STATUS.GENERATED,
         generated_by: user._id,
         generated_at: new Date()
       });
-
-      await invoice.save();
-
-      await auditService.log({
-        entity_type: 'invoice',
-        entity_id: invoice._id,
-        action: 'invoice_generated',
-        performed_by: user._id,
-        new_value: { invoice_number, grand_total },
-        description: `Generated invoice ${invoice_number} from Marketlist ${marketlist.marketlist_number}`
-      });
-
-      generatedInvoices.push(invoice);
     }
 
-    for (const existing of existingInvoices) {
-      if (
-        existing.status !== INVOICE_STATUS.GENERATED ||
-        (existing.purchases_confirmed === true && options.syncPurchases !== true) ||
-        supplierGroup.has(existing.supplier_id.toString()) ||
-        (options.supplier_id &&
-          existing.supplier_id.toString() !== options.supplier_id.toString())
-      ) {
-        continue;
+    if (targetInvoice.status !== INVOICE_STATUS.VERIFIED) {
+      const siblingInvoices = activeInvoices.filter(
+        (invoice) => invoice._id.toString() !== targetInvoice._id.toString()
+      );
+      const preserveConfirmedItems =
+        activeInvoices.some((invoice) => invoice.purchases_confirmed === true) &&
+        options.syncPurchases !== true;
+
+      if (preserveConfirmedItems) {
+        const mergedItems = new Map();
+        for (const sourceInvoice of [targetInvoice, ...siblingInvoices]) {
+          for (const sourceItem of sourceInvoice.items) {
+            if (
+              sourceInvoice !== targetInvoice &&
+              (sourceItem.purchased === false || sourceItem.quantity <= 0)
+            ) {
+              continue;
+            }
+            const supplierId = sourceItem.supplier_id || sourceInvoice.supplier_id;
+            const item = {
+              ...sourceItem.toObject(),
+              supplier_id: supplierId,
+              supplier_name: sourceItem.supplier_name ||
+                supplierNameMap.get(supplierId?.toString()) ||
+                sourceInvoice.supplier_id?.name ||
+                'Supplier'
+            };
+            const key = this.getInvoiceItemKey(item);
+            if (!mergedItems.has(key)) mergedItems.set(key, item);
+          }
+        }
+        targetInvoice.items = [...mergedItems.values()];
+      } else {
+        targetInvoice.items = invoiceItems;
       }
 
-      existing.items = [];
-      existing.subtotal = 0;
-      existing.discount = 0;
-      existing.tax = 0;
-      existing.grand_total = 0;
-      existing.status = INVOICE_STATUS.CANCELLED;
-      await existing.save();
+      targetInvoice.marketlist_id = marketlist._id;
+      targetInvoice.supplier_id = null;
+      targetInvoice.marketlist_version = version;
+      targetInvoice.subtotal = targetInvoice.items.reduce((sum, item) => sum + item.subtotal, 0);
+      if (!preserveConfirmedItems) {
+        targetInvoice.discount = options.discount || 0;
+        targetInvoice.tax = options.tax || 0;
+      }
+      targetInvoice.grand_total =
+        targetInvoice.subtotal - targetInvoice.discount + targetInvoice.tax;
+      targetInvoice.status = INVOICE_STATUS.GENERATED;
+      if (options.syncPurchases === true) targetInvoice.purchases_confirmed = false;
+      else if (preserveConfirmedItems) targetInvoice.purchases_confirmed = true;
+      await targetInvoice.save();
+
+      for (const duplicate of siblingInvoices) {
+        duplicate.items = [];
+        duplicate.subtotal = 0;
+        duplicate.discount = 0;
+        duplicate.tax = 0;
+        duplicate.grand_total = 0;
+        duplicate.status = INVOICE_STATUS.CANCELLED;
+        await duplicate.save();
+        await auditService.log({
+          entity_type: 'invoice',
+          entity_id: duplicate._id,
+          action: 'invoice_cancelled',
+          performed_by: user._id,
+          description: `Invoice ${duplicate.invoice_number} cancelled after consolidating Marketlist ${marketlist.marketlist_number}`
+        });
+      }
+    } else {
+      const count = await Invoice.countDocuments();
+      targetInvoice = new Invoice({
+        invoice_number: generateInvoiceNumber(count + 1),
+        marketlist_id: marketlist._id,
+        supplier_id: null,
+        marketlist_version: version,
+        invoice_date: new Date(),
+        items: invoiceItems,
+        subtotal: invoiceItems.reduce((sum, item) => sum + item.subtotal, 0),
+        discount: options.discount || 0,
+        tax: options.tax || 0,
+        grand_total: 0,
+        status: INVOICE_STATUS.GENERATED,
+        generated_by: user._id,
+        generated_at: new Date()
+      });
+      targetInvoice.grand_total = targetInvoice.subtotal - targetInvoice.discount + targetInvoice.tax;
+      await targetInvoice.save();
       await auditService.log({
         entity_type: 'invoice',
-        entity_id: existing._id,
-        action: 'invoice_cancelled',
+        entity_id: targetInvoice._id,
+        action: 'invoice_generated',
         performed_by: user._id,
-        description: `Invoice ${existing.invoice_number} cancelled because no accepted goods remain for its supplier`
+        new_value: { invoice_number: targetInvoice.invoice_number, grand_total: targetInvoice.grand_total },
+        description: `Generated consolidated invoice ${targetInvoice.invoice_number} from Marketlist ${marketlist.marketlist_number}`
       });
-      generatedInvoices.push(existing);
     }
 
-    return generatedInvoices;
+    return [targetInvoice];
   }
 
   async syncMarketlistPurchaseQuantities(marketlistId, user) {
@@ -483,11 +537,14 @@ class InvoiceService {
       throw new Error('Only generated invoices can be edited');
     }
 
-    const existingItems = new Map(invoice.items.map((item) => [this.getInvoiceItemKey(item), item]));
+    const existingItems = new Map(invoice.items.map((item) => [
+      this.getInvoiceItemKey(item, invoice.supplier_id),
+      item
+    ]));
     const updates = new Map();
     for (const input of data.items) {
       const itemId = input.marketlist_item_id
-        ? `marketlist:${input.marketlist_item_id.toString()}`
+        ? `marketlist:${(input.supplier_id || invoice.supplier_id)?.toString() || ''}:${input.marketlist_item_id.toString()}`
         : `purchase:${input.purchase_item_id.toString()}`;
       if (!existingItems.has(itemId) || updates.has(itemId)) {
         throw new Error('Invoice item not found or duplicated');
@@ -519,6 +576,8 @@ class InvoiceService {
       return {
         marketlist_item_id: item.marketlist_item_id,
         purchase_item_id: item.purchase_item_id,
+        supplier_id: item.supplier_id,
+        supplier_name: item.supplier_name,
         product_id: item.product_id,
         product_name: item.product_name,
         sku: item.sku,
@@ -567,8 +626,7 @@ class InvoiceService {
       marketlistItems.map((item) => [item._id.toString(), item])
     );
     const purchasePrices = await this.getPurchaseRecapPrices(
-      invoice.marketlist_id,
-      [invoice.supplier_id]
+      invoice.marketlist_id
     );
     const previousItems = invoice.items.map((item) => ({
       marketlist_item_id: item.marketlist_item_id,
@@ -593,7 +651,7 @@ class InvoiceService {
       }
       const price = this.getInvoiceItemPrice(
         marketlistItem,
-        invoice.supplier_id.toString(),
+        invoiceItem.supplier_id?.toString() || invoice.supplier_id?.toString(),
         purchasePrices
       );
       const itemSubtotal = invoiceItem.quantity * price.unit_price;
@@ -601,6 +659,8 @@ class InvoiceService {
       return {
         marketlist_item_id: invoiceItem.marketlist_item_id,
         purchase_item_id: invoiceItem.purchase_item_id,
+        supplier_id: invoiceItem.supplier_id,
+        supplier_name: invoiceItem.supplier_name,
         product_id: invoiceItem.product_id,
         product_name: invoiceItem.product_name,
         sku: invoiceItem.sku,

@@ -119,7 +119,6 @@ const updateGoodsReceiptSchema = z.object({
 
 // Generate Invoice schema
 const generateInvoiceSchema = z.object({
-  supplier_id: zObjectId.optional(), // If provided, only generates for this supplier. Otherwise generates for all suppliers in ML
   discount: z.number().min(0).default(0),
   tax: z.number().min(0).default(0)
 });
@@ -128,6 +127,7 @@ const updateInvoiceItemsSchema = z.object({
   items: z.array(z.object({
     marketlist_item_id: zObjectId.optional(),
     purchase_item_id: zObjectId.optional(),
+    supplier_id: zObjectId.optional(),
     purchased: z.boolean(),
     quantity: z.number().min(0),
     unit_price: z.number().min(0)

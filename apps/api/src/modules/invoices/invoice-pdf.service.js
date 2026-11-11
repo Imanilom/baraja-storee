@@ -18,18 +18,19 @@ class InvoicePdfService {
       .text(`Marketlist Ref: ${invoice.marketlist_id?.marketlist_number || invoice.marketlist_id || 'Manual'}`, 50, 105)
       .text(`Status: ${invoice.status.toUpperCase()}`, 50, 120);
 
-    // Supplier Info
-    const supplier = invoice.supplier_id || {};
+    const supplierNames = [...new Set(
+      invoice.items.map((item) => item.supplier_name).filter(Boolean)
+    )];
+    if (supplierNames.length === 0 && invoice.supplier_id?.name) {
+      supplierNames.push(invoice.supplier_id.name);
+    }
     doc
       .fontSize(12)
       .font('Helvetica-Bold')
-      .text('SUPPLIER DETAIL:', 350, 75)
+      .text('SUPPLIER(S):', 350, 75)
       .fontSize(10)
       .font('Helvetica')
-      .text(supplier.name || 'N/A', 350, 90)
-      .text(supplier.contact_person ? `Attn: ${supplier.contact_person}` : '', 350, 105)
-      .text(supplier.phone ? `Phone: ${supplier.phone}` : '', 350, 120)
-      .text(supplier.address ? `Address: ${supplier.address}` : '', 350, 135);
+      .text(supplierNames.join(', ') || 'N/A', 350, 90, { width: 200, height: 55 });
 
     // Divider
     doc.moveTo(50, 160).lineTo(550, 160).stroke('#cccccc');
@@ -39,9 +40,10 @@ class InvoicePdfService {
     doc
       .fontSize(10)
       .font('Helvetica-Bold')
-      .text('Item Description', 50, y)
-      .text('Qty', 270, y, { width: 50, align: 'right' })
-      .text('Unit', 330, y, { width: 40, align: 'center' })
+      .text('Item Description', 50, y, { width: 145 })
+      .text('Supplier', 200, y, { width: 90 })
+      .text('Qty', 295, y, { width: 40, align: 'right' })
+      .text('Unit', 340, y, { width: 35, align: 'center' })
       .text('Unit Price', 380, y, { width: 70, align: 'right' })
       .text('Subtotal', 460, y, { width: 90, align: 'right' });
 
@@ -59,9 +61,10 @@ class InvoicePdfService {
       }
 
       doc
-        .text(item.product_name, 50, y, { width: 210 })
-        .text(item.quantity.toLocaleString('id-ID'), 270, y, { width: 50, align: 'right' })
-        .text(item.unit || '', 330, y, { width: 40, align: 'center' })
+        .text(item.product_name, 50, y, { width: 145, ellipsis: true })
+        .text(item.supplier_name || invoice.supplier_id?.name || '', 200, y, { width: 90, ellipsis: true })
+        .text(item.quantity.toLocaleString('id-ID'), 295, y, { width: 40, align: 'right' })
+        .text(item.unit || '', 340, y, { width: 35, align: 'center', ellipsis: true })
         .text(`Rp ${item.unit_price.toLocaleString('id-ID')}`, 380, y, { width: 70, align: 'right' })
         .text(`Rp ${item.subtotal.toLocaleString('id-ID')}`, 460, y, { width: 90, align: 'right' });
 

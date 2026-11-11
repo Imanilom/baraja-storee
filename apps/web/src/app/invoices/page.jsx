@@ -96,6 +96,7 @@ export default function InvoicesPage() {
     setInvoiceItemDraft((invoice.items || []).map((item) => ({
       marketlist_item_id: item.marketlist_item_id,
       purchase_item_id: item.purchase_item_id,
+      supplier_id: item.supplier_id || invoice.supplier_id?._id || invoice.supplier_id,
       purchased: item.purchased !== false,
       quantity: item.purchased === false ? 0 : item.quantity,
       unit_price: item.unit_price
@@ -135,7 +136,7 @@ export default function InvoicesPage() {
             <div>
               <p className="font-bold">Invoice dari Transaksi Belanja Marketlist</p>
               <p className="text-emerald-800/80">
-                Invoice mengikuti jumlah belanja aktual, termasuk item manual yang dialokasikan ke Marketlist. Periksa status dibeli/tidak dibeli dan kuantitas sebelum verifikasi.
+                Satu Marketlist menghasilkan satu invoice gabungan dari seluruh supplier. Invoice hanya berisi item yang dibeli; item manual yang dialokasikan ke Marketlist juga disertakan.
               </p>
             </div>
           </div>
@@ -199,7 +200,7 @@ export default function InvoicesPage() {
                 <tr>
                   <th className="px-6 py-3.5">Nomor Invoice</th>
                   <th className="px-6 py-3.5">Referensi ML</th>
-                  <th className="px-6 py-3.5">Supplier Rekanan</th>
+                  <th className="px-6 py-3.5">Supplier dalam Invoice</th>
                   <th className="px-6 py-3.5">Tanggal Terbit</th>
                   <th className="px-6 py-3.5">Status Pembelian</th>
                   <th className="px-6 py-3.5">Grand Total Tagihan</th>
@@ -223,7 +224,13 @@ export default function InvoicesPage() {
                           {inv.marketlist_id?.marketlist_number || '-'}
                         </td>
                         <td className="px-6 py-4 text-slate-700 font-medium">
-                          {inv.supplier_id?.name || 'Supplier Rekanan'}
+                          {[
+                            ...new Set(
+                              (inv.items || [])
+                                .map((item) => item.supplier_name)
+                                .filter(Boolean)
+                            )
+                          ].join(', ') || inv.supplier_id?.name || 'Supplier Rekanan'}
                         </td>
                         <td className="px-6 py-4 text-slate-500">
                           {new Date(inv.invoice_date).toLocaleDateString('id-ID')}
@@ -301,11 +308,11 @@ export default function InvoicesPage() {
                               <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
                                 {(inv.items || []).map((item) => {
                                   const itemId = item.marketlist_item_id
-                                    ? `marketlist:${item.marketlist_item_id.toString()}`
+                                    ? `marketlist:${(item.supplier_id || inv.supplier_id?._id || inv.supplier_id)?.toString() || ''}:${item.marketlist_item_id.toString()}`
                                     : `purchase:${item.purchase_item_id?.toString()}`;
                                   const draftIndex = invoiceItemDraft.findIndex(
                                     (draft) => (draft.marketlist_item_id
-                                      ? `marketlist:${draft.marketlist_item_id.toString()}`
+                                      ? `marketlist:${draft.supplier_id?.toString() || ''}:${draft.marketlist_item_id.toString()}`
                                       : `purchase:${draft.purchase_item_id?.toString()}`) === itemId
                                   );
                                   const draft = invoiceItemDraft[draftIndex];
@@ -321,7 +328,7 @@ export default function InvoicesPage() {
                                           )}
                                         </p>
                                         <p className="text-[11px] text-slate-500">
-                                          Sumber harga: {({
+                                          {item.supplier_name || inv.supplier_id?.name || 'Supplier'} • Sumber harga: {({
                                             purchase_recap: 'Rekap belanja',
                                             master_item: 'Master item',
                                             marketlist: 'Marketlist',

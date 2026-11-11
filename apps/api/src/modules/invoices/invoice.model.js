@@ -11,6 +11,11 @@ const InvoiceItemEmbeddedSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'PurchaseItem'
     },
+    supplier_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Supplier'
+    },
+    supplier_name: String,
     product_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product'
@@ -61,7 +66,7 @@ const InvoiceSchema = new mongoose.Schema(
     supplier_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Supplier',
-      required: true
+      default: null
     },
     marketlist_version: {
       type: Number,

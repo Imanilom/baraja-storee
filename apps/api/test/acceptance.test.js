@@ -97,7 +97,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 42 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 44 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -109,7 +109,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/42] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/44] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -286,21 +286,81 @@ async function runTests() {
   assert(receipt3.items[0].rejected_qty === 2 && receipt3.items[0].condition === 'damaged', 'Sistem dapat mendeteksi barang kurang, lebih, dan rusak.');
 
   // 13. Invoice hanya memasukkan kuantitas diterima baik
+  const legacyInvoiceVersion = (await Marketlist.findById(mlCreated._id)).approved_version;
+  await Invoice.create([
+    {
+      invoice_number: 'INV/LEGACY/SUP-A',
+      marketlist_id: mlCreated._id,
+      supplier_id: supplierA._id,
+      marketlist_version: legacyInvoiceVersion,
+      items: [{
+        marketlist_item_id: mlItemBeras._id,
+        product_id: productBeras._id,
+        product_name: 'Beras Ramos',
+        quantity: 100,
+        unit_price: 15000,
+        subtotal: 1500000
+      }],
+      subtotal: 1500000,
+      grand_total: 1500000,
+      status: 'generated'
+    },
+    {
+      invoice_number: 'INV/LEGACY/SUP-B',
+      marketlist_id: mlCreated._id,
+      supplier_id: supplierB._id,
+      marketlist_version: legacyInvoiceVersion,
+      items: [{
+        marketlist_item_id: mlItemAyam._id,
+        product_id: productAyam._id,
+        product_name: 'Ayam',
+        quantity: 48,
+        unit_price: 38000,
+        subtotal: 1824000
+      }],
+      subtotal: 1824000,
+      grand_total: 1824000,
+      status: 'generated'
+    }
+  ]);
   const invoices = await invoiceService.generateInvoicesFromMarketlist(mlCreated._id, {}, adminUser);
-  const invSupplierA = invoices.find(i => i.supplier_id.toString() === supplierA._id.toString());
-  const invSupplierB = invoices.find(i => i.supplier_id.toString() === supplierB._id.toString());
+  const marketlistInvoice = invoices[0];
+  const invoiceBeras = marketlistInvoice?.items.find(
+    (item) => item.marketlist_item_id?.toString() === mlItemBeras._id.toString()
+  );
+  const invoiceAyam = marketlistInvoice?.items.find(
+    (item) => item.marketlist_item_id?.toString() === mlItemAyam._id.toString()
+  );
+  const visibleMarketlistInvoices = await invoiceService.getAllInvoices({
+    marketlist_id: mlCreated._id
+  });
   assert(
-    invSupplierA?.items.length === 1 &&
-      invSupplierA.items[0].quantity === 100 &&
-      invSupplierA.items[0].unit_price === 15000 &&
-      invSupplierA.grand_total === 1500000 &&
-      invSupplierB?.items.length === 1 &&
-      invSupplierB.items[0].quantity === 48,
-    'Invoice hanya memuat kuantitas diterima baik, bukan kuantitas yang belum diterima atau ditolak.'
+    invoices.length === 1 &&
+      marketlistInvoice.supplier_id === null &&
+      marketlistInvoice.items.length === 2 &&
+      invoiceBeras?.quantity === 100 &&
+      invoiceBeras?.unit_price === 15000 &&
+      invoiceBeras?.supplier_id.toString() === supplierA._id.toString() &&
+      invoiceAyam?.quantity === 48 &&
+      invoiceAyam?.supplier_id.toString() === supplierB._id.toString() &&
+      marketlistInvoice.grand_total === 3324000 &&
+      await Invoice.countDocuments({
+        marketlist_id: mlCreated._id,
+        status: 'generated'
+      }) === 1 &&
+      visibleMarketlistInvoices.items.length === 1,
+    'Invoice supplier lama dikonsolidasikan menjadi satu dokumen dengan kuantitas aktual dan supplier per baris.'
+  );
+  assert(
+    await Invoice.countDocuments({
+      marketlist_id: mlCreated._id,
+      status: 'cancelled'
+    }) === 1,
+    'Invoice supplier lama yang digabung dibatalkan agar tidak ada tagihan ganda.'
   );
 
-  // 14. Satu Marketlist dengan beberapa supplier menghasilkan invoice terpisah
-  assert(invoices.length === 2, 'Satu Marketlist dengan beberapa supplier menghasilkan invoice terpisah (Supplier A dan Supplier B).');
+  // 14. One Marketlist produces exactly one invoice across its suppliers
+  assert(invoices.length === 1, 'Satu Marketlist dengan beberapa supplier menghasilkan satu invoice gabungan.');
 
   // 15. Satu Marketlist hanya memiliki satu notes aktif
   await marketlistNoteService.upsertNote(mlCreated._id, 'Ayam kurang 2 kg karena rusak', receiverUser);
@@ -313,8 +373,12 @@ async function runTests() {
 
   // 17. Invoice tidak berubah ketika master harga atau Marketlist berubah
   await Product.findByIdAndUpdate(productBeras._id, { specification: 'Updated name' });
-  const checkInvoice = await invoiceService.getInvoiceById(invSupplierA._id);
-  assert(checkInvoice.items[0].unit_price === 15000 && checkInvoice.grand_total === 1500000, 'Invoice tidak berubah ketika master harga atau Marketlist berubah (immutable snapshot).');
+  const checkInvoice = await invoiceService.getInvoiceById(marketlistInvoice._id);
+  assert(
+    checkInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).unit_price === 15000 &&
+      checkInvoice.grand_total === 3324000,
+    'Invoice tidak berubah ketika master harga atau Marketlist berubah (immutable snapshot).'
+  );
 
   // 18. Marketlist tetap parsial sampai diselesaikan secara eksplisit
   const mlStatusCheck = await Marketlist.findById(mlCreated._id);
@@ -494,7 +558,7 @@ async function runTests() {
     invoiceCorrectionMl._id,
     {},
     adminUser
-  )).find((invoice) => invoice.supplier_id.toString() === supplierA._id.toString());
+  ))[0];
   assert(
     rejectedItemInvoice.items.length === 1 &&
       rejectedItemInvoice.items[0].product_name === correctionAyam.product_snapshot.name,
@@ -534,7 +598,7 @@ async function runTests() {
     invoiceCorrectionMl._id,
     {},
     adminUser
-  )).find((invoice) => invoice.supplier_id.toString() === supplierA._id.toString());
+  ))[0];
   assert(
     zeroQtyInvoice.status === 'cancelled' &&
       zeroQtyInvoice.items.length === 0 &&
@@ -543,36 +607,40 @@ async function runTests() {
   );
 
   // 29. Invoice items can be marked purchased with an actual quantity
-  const updatedInvoice = await invoiceService.updateInvoiceItems(invSupplierA._id, {
-    items: [{
-      marketlist_item_id: mlItemBeras._id,
+  const updatedInvoice = await invoiceService.updateInvoiceItems(marketlistInvoice._id, {
+    items: marketlistInvoice.items.map((item) => ({
+      marketlist_item_id: item.marketlist_item_id,
+      purchase_item_id: item.purchase_item_id,
+      supplier_id: item.supplier_id,
       purchased: true,
-      quantity: 5,
-      unit_price: 15000
-    }]
+      quantity: item.marketlist_item_id.toString() === mlItemBeras._id.toString() ? 5 : item.quantity,
+      unit_price: item.unit_price
+    }))
   }, purchasingUser);
   assert(
-    updatedInvoice.items[0].purchased === true &&
-      updatedInvoice.items[0].quantity === 5 &&
-      updatedInvoice.subtotal === 75000 &&
-      updatedInvoice.grand_total === 75000,
+    updatedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).purchased === true &&
+      updatedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).quantity === 5 &&
+      updatedInvoice.subtotal === 1899000 &&
+      updatedInvoice.grand_total === 1899000,
     'Invoice menyimpan status dibeli, kuantitas aktual, dan menghitung ulang total.'
   );
 
   // 30. Marking an item not purchased removes it from the bill
-  const notPurchasedInvoice = await invoiceService.updateInvoiceItems(invSupplierA._id, {
-    items: [{
-      marketlist_item_id: mlItemBeras._id,
-      purchased: false,
-      quantity: 0,
-      unit_price: 15000
-    }]
+  const notPurchasedInvoice = await invoiceService.updateInvoiceItems(marketlistInvoice._id, {
+    items: updatedInvoice.items.map((item) => ({
+      marketlist_item_id: item.marketlist_item_id,
+      purchase_item_id: item.purchase_item_id,
+      supplier_id: item.supplier_id,
+      purchased: item.marketlist_item_id.toString() === mlItemBeras._id.toString() ? false : item.purchased,
+      quantity: item.marketlist_item_id.toString() === mlItemBeras._id.toString() ? 0 : item.quantity,
+      unit_price: item.unit_price
+    }))
   }, purchasingUser);
   assert(
-    notPurchasedInvoice.items[0].purchased === false &&
-      notPurchasedInvoice.items[0].quantity === 0 &&
-      notPurchasedInvoice.items[0].subtotal === 0 &&
-      notPurchasedInvoice.grand_total === 0,
+    notPurchasedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).purchased === false &&
+      notPurchasedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).quantity === 0 &&
+      notPurchasedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).subtotal === 0 &&
+      notPurchasedInvoice.grand_total === 1824000,
     'Invoice barang tidak dibeli bernilai nol dan tidak masuk tagihan.'
   );
 
@@ -581,12 +649,12 @@ async function runTests() {
     mlCreated._id,
     {},
     adminUser
-  )).find((invoice) => invoice._id.toString() === invSupplierA._id.toString());
+  ))[0];
   assert(
-    invoiceAfterRegenerate.items[0].purchased === false &&
-      invoiceAfterRegenerate.items[0].quantity === 0 &&
-      invoiceAfterRegenerate.grand_total === 0,
-    'Regenerate mempertahankan status pembelian dan kuantitas yang sudah dikonfirmasi.'
+    invoiceAfterRegenerate.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).purchased === false &&
+      invoiceAfterRegenerate.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).quantity === 0 &&
+      invoiceAfterRegenerate.grand_total === 1824000,
+    'Regenerate mempertahankan status tidak dibeli yang sudah dikonfirmasi.'
   );
 
   // 32. Invoice can refresh unit prices from a verified purchase recap
@@ -608,25 +676,23 @@ async function runTests() {
     actual_subtotal: 250000
   });
   const recapRefreshedInvoice = await invoiceService.refreshInvoicePrices(
-    invSupplierA._id,
+    marketlistInvoice._id,
     purchasingUser
   );
   assert(
-    recapRefreshedInvoice.items[0].unit_price === 12500 &&
-      recapRefreshedInvoice.items[0].price_source === 'purchase_recap' &&
-      recapRefreshedInvoice.items[0].subtotal === 0,
+    recapRefreshedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).unit_price === 12500 &&
+      recapRefreshedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).price_source === 'purchase_recap' &&
+      recapRefreshedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemBeras._id.toString()).subtotal === 0 &&
+      recapRefreshedInvoice.grand_total === 1824000,
     'Update Harga mengambil harga satuan dari rekap belanja supplier dan item yang sama.'
   );
 
   // 33. If no supplier purchase recap exists, use the product master price
   await Product.findByIdAndUpdate(productAyam._id, { last_purchase_price: 12345 });
-  const masterRefreshedInvoice = await invoiceService.refreshInvoicePrices(
-    invSupplierB._id,
-    purchasingUser
-  );
+  const masterRefreshedInvoice = await invoiceService.refreshInvoicePrices(marketlistInvoice._id, purchasingUser);
   assert(
-    masterRefreshedInvoice.items[0].price_source === 'master_item' &&
-      masterRefreshedInvoice.items[0].unit_price === 12345,
+    masterRefreshedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemAyam._id.toString()).price_source === 'master_item' &&
+      masterRefreshedInvoice.items.find((item) => item.marketlist_item_id.toString() === mlItemAyam._id.toString()).unit_price === 12345,
     'Update Harga menggunakan last purchase price dari master item jika rekap supplier tidak ada.'
   );
 
@@ -662,7 +728,6 @@ async function runTests() {
   }, purchasingUser);
   const syncedInvoice = await Invoice.findOne({
     marketlist_id: purchaseSyncMl._id,
-    supplier_id: supplierA._id,
     status: 'generated'
   });
   const syncedMarketlist = await marketlistService.getMarketlistById(purchaseSyncMl._id);
@@ -691,7 +756,6 @@ async function runTests() {
   await purchaseService.deletePurchase(syncPurchase._id, purchasingUser);
   const afterDeleteInvoice = await Invoice.findOne({
     marketlist_id: purchaseSyncMl._id,
-    supplier_id: supplierA._id,
     status: 'generated'
   });
   const afterDeleteMarketlist = await marketlistService.getMarketlistById(purchaseSyncMl._id);
@@ -733,7 +797,6 @@ async function runTests() {
   const allocatedMarketlist = await marketlistService.getMarketlistById(purchaseSyncMl._id);
   const allocatedInvoice = await Invoice.findOne({
     marketlist_id: purchaseSyncMl._id,
-    supplier_id: supplierA._id,
     status: 'generated'
   });
   assert(
@@ -757,7 +820,6 @@ async function runTests() {
   });
   const invoiceWithManualLine = await Invoice.findOne({
     marketlist_id: purchaseSyncMl._id,
-    supplier_id: supplierA._id,
     status: 'generated'
   });
   assert(
@@ -817,7 +879,6 @@ async function runTests() {
   });
   const invoiceAfterLateAllocation = await Invoice.findOne({
     marketlist_id: purchaseSyncMl._id,
-    supplier_id: supplierA._id,
     status: 'generated'
   });
   assert(
@@ -850,8 +911,50 @@ async function runTests() {
     'Alokasi belakangan otomatis menautkan produk yang cocok dan memperbarui qty belanja Marketlist.'
   );
 
+  // 43. Purchases from multiple suppliers create one invoice containing bought lines only
+  const multiSupplierPurchaseMl = await marketlistService.createMarketlist({
+    date: new Date(),
+    required_date: new Date(),
+    location_id: loc._id,
+    items: [
+      { product_id: productBeras._id, requested_qty: 5, unit_price: 15000, supplier_id: supplierA._id },
+      { product_id: productAyam._id, requested_qty: 4, unit_price: 38000, supplier_id: supplierB._id }
+    ]
+  }, purchasingUser);
+  await marketlistService.submitMarketlist(multiSupplierPurchaseMl._id, purchasingUser);
+  await marketlistService.approveMarketlist(multiSupplierPurchaseMl._id, adminUser, 'Approved');
+  const multiSupplierItems = (await marketlistService.getMarketlistById(multiSupplierPurchaseMl._id)).items;
+  for (const [item, supplierId, quantity, unitPrice] of [
+    [multiSupplierItems[0], supplierA._id, 3, 14000],
+    [multiSupplierItems[1], supplierB._id, 2, 36000]
+  ]) {
+    await purchaseService.createPurchase({
+      marketlist_id: multiSupplierPurchaseMl._id,
+      supplier_id: supplierId,
+      items: [{
+        marketlist_item_id: item._id,
+        actual_qty: quantity,
+        actual_unit_price: unitPrice
+      }]
+    }, purchasingUser);
+  }
+  const multiSupplierPurchaseInvoices = await invoiceService.generateInvoicesFromMarketlist(
+    multiSupplierPurchaseMl._id,
+    {},
+    adminUser
+  );
+  const multiSupplierPurchaseInvoice = multiSupplierPurchaseInvoices[0];
+  assert(
+    multiSupplierPurchaseInvoices.length === 1 &&
+      multiSupplierPurchaseInvoice.items.length === 2 &&
+      multiSupplierPurchaseInvoice.items.every((item) => item.quantity > 0) &&
+      new Set(multiSupplierPurchaseInvoice.items.map((item) => item.supplier_id.toString())).size === 2 &&
+      multiSupplierPurchaseInvoice.grand_total === 114000,
+    'Pembelian dari beberapa supplier menghasilkan satu invoice dengan hanya dua baris yang benar-benar dibeli.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 42/42 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 44/44 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();
