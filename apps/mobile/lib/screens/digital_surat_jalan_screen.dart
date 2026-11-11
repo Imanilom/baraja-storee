@@ -47,26 +47,34 @@ class _ItemReceivingState {
     rejectedController = TextEditingController(text: _formatNum(rejectedQty));
   }
 
-  void updateReceived(double newQty) {
+  void updateReceived(double newQty, {bool updateInput = true}) {
     receivedQty = newQty < 0 ? 0 : newQty;
     acceptedQty = (receivedQty - rejectedQty) < 0
         ? 0
         : (receivedQty - rejectedQty);
     _autoSetCondition();
-    syncControllers();
+    if (updateInput) {
+      syncControllers();
+    } else {
+      acceptedController.text = _formatNum(acceptedQty);
+    }
   }
 
   void adjustReceived(double delta) {
     updateReceived(receivedQty + delta);
   }
 
-  void updateRejected(double newRej) {
+  void updateRejected(double newRej, {bool updateInput = true}) {
     rejectedQty = newRej < 0 ? 0 : newRej;
     acceptedQty = (receivedQty - rejectedQty) < 0
         ? 0
         : (receivedQty - rejectedQty);
     _autoSetCondition();
-    syncControllers();
+    if (updateInput) {
+      syncControllers();
+    } else {
+      acceptedController.text = _formatNum(acceptedQty);
+    }
   }
 
   void _autoSetCondition() {
@@ -89,7 +97,14 @@ class _ItemReceivingState {
 
   static String _formatNum(double val) {
     if (val % 1 == 0) return val.toInt().toString();
-    return val.toStringAsFixed(1);
+    return val
+        .toStringAsFixed(6)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+
+  static double _parseQty(String value) {
+    return double.tryParse(value.trim().replaceAll(',', '.')) ?? 0;
   }
 
   void dispose() {
@@ -784,7 +799,8 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                       onChanged: (val) {
                                         setState(() {
                                           ci.updateReceived(
-                                            double.tryParse(val) ?? 0,
+                                            _ItemReceivingState._parseQty(val),
+                                            updateInput: false,
                                           );
                                         });
                                       },
@@ -849,7 +865,8 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                 ),
                                 onChanged: (val) {
                                   setState(() {
-                                    ci.acceptedQty = double.tryParse(val) ?? 0;
+                                    ci.acceptedQty =
+                                        _ItemReceivingState._parseQty(val);
                                   });
                                 },
                               ),
@@ -893,7 +910,8 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                                 onChanged: (val) {
                                   setState(() {
                                     ci.updateRejected(
-                                      double.tryParse(val) ?? 0,
+                                      _ItemReceivingState._parseQty(val),
+                                      updateInput: false,
                                     );
                                   });
                                 },

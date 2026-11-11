@@ -164,10 +164,24 @@ async function runTests() {
         rejected_qty: 0,
         condition: ITEM_CONDITION.OVERAGE,
         is_checked: true
+      },
+      {
+        marketlist_item_id: mlCreated.items[0]._id.toString(),
+        received_qty: 1.5,
+        accepted_qty: 1.25,
+        rejected_qty: 0.25,
+        condition: ITEM_CONDITION.SHORTAGE,
+        is_checked: true
       }
     ]
   });
-  assert(receiptValidation.success, 'Validasi API menerima kondisi penerimaan shortage dan overage dari Flutter.');
+  assert(
+    receiptValidation.success &&
+      receiptValidation.data.items[2].received_qty === 1.5 &&
+      receiptValidation.data.items[2].accepted_qty === 1.25 &&
+      receiptValidation.data.items[2].rejected_qty === 0.25,
+    'Validasi API menerima kondisi shortage / overage dan kuantitas desimal dari Flutter.'
+  );
 
   // 4. Purchasing dapat submit Marketlist kepada Admin
   const mlSubmitted = await marketlistService.submitMarketlist(mlCreated._id, purchasingUser);
