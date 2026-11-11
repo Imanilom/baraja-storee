@@ -164,7 +164,10 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
             final uName = p is Map && p['unit_id'] is Map
                 ? p['unit_id']['name']
                 : (it['product_snapshot']?['unit_name'] ?? 'Satuan');
-            final reqQty = (it['requested_qty'] as num?)?.toDouble() ?? 1.0;
+            final reqQty =
+                (it['expected_receipt_qty'] as num?)?.toDouble() ??
+                (it['requested_qty'] as num?)?.toDouble() ??
+                1.0;
 
             _checkItems.add(
               _ItemReceivingState(
@@ -179,7 +182,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                 acceptedQty: reqQty,
                 rejectedQty: 0,
                 condition: 'good',
-                isChecked: true,
+                isChecked: reqQty > 0,
               ),
             );
           }
@@ -199,7 +202,10 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
       final uName = p is Map && p['unit_id'] is Map
           ? p['unit_id']['name']
           : 'Satuan';
-      final reqQty = (it['requested_qty'] as num?)?.toDouble() ?? 1.0;
+      final reqQty =
+          (it['expected_receipt_qty'] as num?)?.toDouble() ??
+          (it['requested_qty'] as num?)?.toDouble() ??
+          1.0;
 
       _checkItems.add(
         _ItemReceivingState(
@@ -214,7 +220,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
           acceptedQty: reqQty,
           rejectedQty: 0,
           condition: 'good',
-          isChecked: true,
+          isChecked: reqQty > 0,
         ),
       );
     }

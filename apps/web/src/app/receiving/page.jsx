@@ -189,7 +189,7 @@ export default function ReceivingMonitorPage() {
                     <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
                       <tr>
                         <th className="p-2.5">Nama Barang</th>
-                        <th className="p-2.5">Dipesan</th>
+                        <th className="p-2.5">Dibeli / Target Terima</th>
                         <th className="p-2.5">Supplier</th>
                       </tr>
                     </thead>
@@ -200,7 +200,12 @@ export default function ReceivingMonitorPage() {
                             {item.product_snapshot?.name || item.product_id?.name}
                           </td>
                           <td className="p-2.5 font-semibold text-slate-700">
-                            {item.requested_qty} {item.product_snapshot?.unit_name}
+                            {item.expected_receipt_qty ?? item.requested_qty} {item.product_snapshot?.unit_name}
+                            {selectedMl.purchase_tracking_started && (
+                              <span className="block text-[10px] text-slate-400">
+                                Rencana awal: {item.requested_qty}
+                              </span>
+                            )}
                           </td>
                           <td className="p-2.5 text-slate-600">{item.supplier_id?.name || '-'}</td>
                         </tr>

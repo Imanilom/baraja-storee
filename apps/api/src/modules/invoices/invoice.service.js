@@ -30,6 +30,7 @@ class InvoiceService {
 
     const weightedPrices = new Map();
     for (const purchaseItem of purchaseItems) {
+      if (!purchaseItem.marketlist_item_id) continue;
       const supplierId = purchaseSupplierMap.get(purchaseItem.purchase_id.toString());
       const itemId = purchaseItem.marketlist_item_id.toString();
       const key = `${supplierId}:${itemId}`;
@@ -51,6 +52,36 @@ class InvoiceService {
         }
       ])
     );
+  }
+
+  async getManualPurchaseItems(marketlistId) {
+    const purchases = await Purchase.find({
+      marketlist_id: marketlistId,
+      status: PURCHASE_STATUS.VERIFIED
+    }).select('_id supplier_id');
+    if (purchases.length === 0) return [];
+
+    const purchaseSupplierMap = new Map(
+      purchases.map((purchase) => [purchase._id.toString(), purchase.supplier_id])
+    );
+    const items = await PurchaseItem.find({
+      purchase_id: { $in: purchases.map((purchase) => purchase._id) },
+      marketlist_item_id: null
+    }).populate({
+      path: 'product_id',
+      select: 'name sku unit_id',
+      populate: { path: 'unit_id', select: 'name abbreviation' }
+    });
+    return items.map((item) => ({
+      ...item.toObject(),
+      supplier_id: purchaseSupplierMap.get(item.purchase_id.toString())
+    }));
+  }
+
+  getInvoiceItemKey(item) {
+    return item.marketlist_item_id
+      ? `marketlist:${item.marketlist_item_id.toString()}`
+      : `purchase:${item.purchase_item_id.toString()}`;
   }
 
   getInvoiceItemPrice(item, supplierId, purchasePrices) {
@@ -177,7 +208,8 @@ class InvoiceService {
     }
 
     const purchasePrices = await this.getPurchaseRecapPrices(marketlistId);
-    const hasPurchaseRecap = marketlist.purchase_tracking_started || purchasePrices.size > 0;
+    const manualPurchaseItems = await this.getManualPurchaseItems(marketlistId);
+    const hasPurchaseRecap = marketlist.purchase_tracking_started || purchasePrices.size > 0 || manualPurchaseItems.length > 0;
     const getActualQuantity = (item, supplierId = item.supplier_id.toString()) => {
       const recap = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
       if (hasPurchaseRecap) return recap?.quantity || 0;
@@ -190,7 +222,7 @@ class InvoiceService {
         ([key, recap]) => key.endsWith(`:${itemId}`) && recap.quantity > 0
       );
     });
-    if (invoiceableItems.length === 0 && targetExistingInvoices.length === 0) {
+    if (invoiceableItems.length === 0 && manualPurchaseItems.length === 0 && targetExistingInvoices.length === 0) {
       throw new Error('No accepted goods or purchases exist for this marketlist');
     }
 
@@ -199,6 +231,7 @@ class InvoiceService {
     const supplierIds = new Set();
     if (hasPurchaseRecap) {
       candidateItems.forEach((item) => supplierIds.add(item.supplier_id.toString()));
+      manualPurchaseItems.forEach((item) => supplierIds.add(item.supplier_id.toString()));
       for (const key of purchasePrices.keys()) {
         supplierIds.add(key.split(':')[0]);
       }
@@ -223,20 +256,25 @@ class InvoiceService {
         const recap = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
         return assignedSupplierId === supplierId || (hasPurchaseRecap && recap?.quantity > 0);
       });
-      if (items.length > 0) supplierGroup.set(supplierId, items);
+      const manualItemsForSupplier = manualPurchaseItems.filter(
+        (item) => item.supplier_id.toString() === supplierId
+      );
+      if (items.length > 0 || manualItemsForSupplier.length > 0) {
+        supplierGroup.set(supplierId, { marketlistItems: items, manualItems: manualItemsForSupplier });
+      }
     }
 
     const generatedInvoices = [];
 
     // Target specific supplier if provided, otherwise all
-    for (const [suppKey, items] of supplierGroup.entries()) {
+    for (const [suppKey, group] of supplierGroup.entries()) {
       if (options.supplier_id && options.supplier_id.toString() !== suppKey) {
         continue;
       }
 
       // Calculate totals
       let subtotal = 0;
-      const invoiceItems = items.map((item) => {
+      const invoiceItems = group.marketlistItems.map((item) => {
         const invoicedQty = getActualQuantity(item, suppKey);
         const price = this.getInvoiceItemPrice(item, suppKey, purchasePrices);
         const purchased = invoicedQty > 0;
@@ -244,6 +282,7 @@ class InvoiceService {
         subtotal += itemSubtotal;
         return {
           marketlist_item_id: item._id,
+          product_id: item.product_id?._id || item.product_id,
           product_name: item.product_snapshot?.name || item.product_id?.name || 'Item',
           sku: item.product_snapshot?.sku || '',
           quantity: invoicedQty,
@@ -254,6 +293,24 @@ class InvoiceService {
           subtotal: itemSubtotal
         };
       });
+      for (const item of group.manualItems) {
+        const quantity = Number(item.actual_qty) || 0;
+        const unitPrice = Number(item.actual_unit_price) || 0;
+        const itemSubtotal = quantity * unitPrice;
+        subtotal += itemSubtotal;
+        invoiceItems.push({
+          purchase_item_id: item._id,
+          product_id: item.product_id?._id || item.product_id,
+          product_name: item.product_name || item.product_id?.name || 'Item Manual',
+          sku: item.product_id?.sku || '',
+          quantity,
+          purchased: quantity > 0,
+          unit: item.unit_name || item.product_id?.unit_id?.name || '',
+          unit_price: unitPrice,
+          price_source: 'purchase_recap',
+          subtotal: itemSubtotal
+        });
+      }
 
       const discount = options.discount || 0;
       const tax = options.tax || 0;
@@ -426,12 +483,12 @@ class InvoiceService {
       throw new Error('Only generated invoices can be edited');
     }
 
-    const existingItems = new Map(
-      invoice.items.map((item) => [item.marketlist_item_id?.toString(), item])
-    );
+    const existingItems = new Map(invoice.items.map((item) => [this.getInvoiceItemKey(item), item]));
     const updates = new Map();
     for (const input of data.items) {
-      const itemId = input.marketlist_item_id.toString();
+      const itemId = input.marketlist_item_id
+        ? `marketlist:${input.marketlist_item_id.toString()}`
+        : `purchase:${input.purchase_item_id.toString()}`;
       if (!existingItems.has(itemId) || updates.has(itemId)) {
         throw new Error('Invoice item not found or duplicated');
       }
@@ -453,7 +510,7 @@ class InvoiceService {
     }));
     let subtotal = 0;
     invoice.items = invoice.items.map((item) => {
-      const update = updates.get(item.marketlist_item_id.toString());
+      const update = updates.get(this.getInvoiceItemKey(item));
       const purchased = update.purchased;
       const quantity = purchased ? update.quantity : 0;
       const unitPrice = update.unit_price;
@@ -461,6 +518,8 @@ class InvoiceService {
       subtotal += itemSubtotal;
       return {
         marketlist_item_id: item.marketlist_item_id,
+        purchase_item_id: item.purchase_item_id,
+        product_id: item.product_id,
         product_name: item.product_name,
         sku: item.sku,
         purchased,
@@ -502,7 +561,7 @@ class InvoiceService {
     }
 
     const marketlistItems = await MarketlistItem.find({
-      _id: { $in: invoice.items.map((item) => item.marketlist_item_id) }
+      _id: { $in: invoice.items.map((item) => item.marketlist_item_id).filter(Boolean) }
     }).populate('product_id', 'last_purchase_price');
     const marketlistItemMap = new Map(
       marketlistItems.map((item) => [item._id.toString(), item])
@@ -513,12 +572,21 @@ class InvoiceService {
     );
     const previousItems = invoice.items.map((item) => ({
       marketlist_item_id: item.marketlist_item_id,
+      purchase_item_id: item.purchase_item_id,
       unit_price: item.unit_price,
       subtotal: item.subtotal
     }));
 
     let subtotal = 0;
     invoice.items = invoice.items.map((invoiceItem) => {
+      if (invoiceItem.purchase_item_id) {
+        const itemSubtotal = invoiceItem.quantity * invoiceItem.unit_price;
+        subtotal += itemSubtotal;
+        return {
+          ...invoiceItem.toObject(),
+          subtotal: itemSubtotal
+        };
+      }
       const marketlistItem = marketlistItemMap.get(invoiceItem.marketlist_item_id.toString());
       if (!marketlistItem) {
         throw new Error(`Marketlist item for '${invoiceItem.product_name}' was not found`);
@@ -532,6 +600,8 @@ class InvoiceService {
       subtotal += itemSubtotal;
       return {
         marketlist_item_id: invoiceItem.marketlist_item_id,
+        purchase_item_id: invoiceItem.purchase_item_id,
+        product_id: invoiceItem.product_id,
         product_name: invoiceItem.product_name,
         sku: invoiceItem.sku,
         quantity: invoiceItem.quantity,

@@ -15,7 +15,7 @@ class InvoicePdfService {
       .font('Helvetica')
       .text(`Invoice No: ${invoice.invoice_number}`, 50, 75)
       .text(`Date: ${new Date(invoice.invoice_date).toLocaleDateString('id-ID')}`, 50, 90)
-      .text(`Marketlist Ref: ${invoice.marketlist_id?.marketlist_number || invoice.marketlist_id}`, 50, 105)
+      .text(`Marketlist Ref: ${invoice.marketlist_id?.marketlist_number || invoice.marketlist_id || 'Manual'}`, 50, 105)
       .text(`Status: ${invoice.status.toUpperCase()}`, 50, 120);
 
     // Supplier Info
@@ -106,7 +106,7 @@ class InvoicePdfService {
     doc
       .fontSize(9)
       .font('Helvetica-Oblique')
-      .text('Catatan: Invoice ini dibuat secara otomatis berdasarkan snapshot Marketlist yang telah disetujui Admin.', 50, y);
+      .text('Catatan: Invoice ini merangkum transaksi aktual yang dialokasikan ke Marketlist dan item manual terkait.', 50, y);
 
     doc.end();
   }

@@ -23,11 +23,13 @@ export default function InvoicesPage() {
     try {
       const [invRes, mlRes] = await Promise.all([
         api.getInvoices().catch(() => ({ data: { items: [] } })),
-        api.getMarketlists('?status=approved,received,partially_received,in_progress,completed').catch(() => ({ data: { items: [] } }))
+        api.getMarketlists('?status=approved,received,partially_received,in_progress,completed&all=true').catch(() => ({ data: { items: [] } }))
       ]);
 
       if (invRes?.data?.items) setInvoices(invRes.data.items);
       if (mlRes?.data?.items) setApprovedMarketlists(mlRes.data.items);
+      const marketlistId = new URLSearchParams(window.location.search).get('marketlistId');
+      if (marketlistId) setSelectedMlId(marketlistId);
     } catch (err) {
       console.error(err);
     } finally {
@@ -93,6 +95,7 @@ export default function InvoicesPage() {
     setInvoiceEditError('');
     setInvoiceItemDraft((invoice.items || []).map((item) => ({
       marketlist_item_id: item.marketlist_item_id,
+      purchase_item_id: item.purchase_item_id,
       purchased: item.purchased !== false,
       quantity: item.purchased === false ? 0 : item.quantity,
       unit_price: item.unit_price
@@ -130,9 +133,9 @@ export default function InvoicesPage() {
           <div className="flex items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0" />
             <div>
-              <p className="font-bold">Invoice Awal dari Penerimaan Marketlist</p>
+              <p className="font-bold">Invoice dari Transaksi Belanja Marketlist</p>
               <p className="text-emerald-800/80">
-                Invoice disinkronkan dengan transaksi aktual Marketlist. Periksa status dibeli/tidak dibeli dan kuantitas sebelum invoice diverifikasi.
+                Invoice mengikuti jumlah belanja aktual, termasuk item manual yang dialokasikan ke Marketlist. Periksa status dibeli/tidak dibeli dan kuantitas sebelum verifikasi.
               </p>
             </div>
           </div>
@@ -141,7 +144,7 @@ export default function InvoicesPage() {
         {/* Generator Form */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="font-bold text-sm text-slate-800">Generate Invoice dari Marketlist Approved</h3>
+            <h3 className="font-bold text-sm text-slate-800">Proses Invoice</h3>
             <button
               type="button"
               onClick={handleRegenerateAll}
@@ -159,12 +162,18 @@ export default function InvoicesPage() {
               required
               className="flex-1 text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              <option value="">-- Pilih Marketlist (Approved / Received) --</option>
-              {approvedMarketlists.map((ml) => (
-                <option key={ml._id} value={ml._id}>
-                  {ml.marketlist_number} [{ml.status.toUpperCase()}] &bull; Butuh: {new Date(ml.required_date || ml.date).toLocaleDateString('id-ID')} &bull; Rp {(ml.totals?.estimated_amount || 0).toLocaleString('id-ID')}
-                </option>
-              ))}
+              <option value="">-- Pilih Marketlist yang sudah memiliki transaksi belanja --</option>
+              {approvedMarketlists
+                .filter((ml) =>
+                  ml.has_invoice ||
+                  ml.purchase_tracking_started ||
+                  ml.items?.some((item) => Number(item.purchased_qty) > 0)
+                )
+                .map((ml) => (
+                  <option key={ml._id} value={ml._id}>
+                    {ml.marketlist_number} [{ml.status.toUpperCase()}] &bull; Butuh: {new Date(ml.required_date || ml.date).toLocaleDateString('id-ID')} &bull; Rp {(ml.totals?.estimated_amount || 0).toLocaleString('id-ID')}
+                  </option>
+                ))}
             </select>
             <button
               type="submit"
@@ -291,15 +300,26 @@ export default function InvoicesPage() {
                               )}
                               <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
                                 {(inv.items || []).map((item) => {
-                                  const itemId = item.marketlist_item_id?.toString();
+                                  const itemId = item.marketlist_item_id
+                                    ? `marketlist:${item.marketlist_item_id.toString()}`
+                                    : `purchase:${item.purchase_item_id?.toString()}`;
                                   const draftIndex = invoiceItemDraft.findIndex(
-                                    (draft) => draft.marketlist_item_id?.toString() === itemId
+                                    (draft) => (draft.marketlist_item_id
+                                      ? `marketlist:${draft.marketlist_item_id.toString()}`
+                                      : `purchase:${draft.purchase_item_id?.toString()}`) === itemId
                                   );
                                   const draft = invoiceItemDraft[draftIndex];
                                   return (
                                     <div key={itemId} className="grid grid-cols-1 items-center gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_155px_160px_130px]">
                                       <div>
-                                        <p className="font-semibold text-slate-800">{item.product_name}</p>
+                                        <p className="font-semibold text-slate-800">
+                                          {item.product_name}
+                                          {!item.marketlist_item_id && (
+                                            <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-700">
+                                              Manual
+                                            </span>
+                                          )}
+                                        </p>
                                         <p className="text-[11px] text-slate-500">
                                           Sumber harga: {({
                                             purchase_recap: 'Rekap belanja',

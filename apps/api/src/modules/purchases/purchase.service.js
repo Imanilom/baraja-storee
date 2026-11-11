@@ -7,7 +7,12 @@ const Supplier = require('../suppliers/supplier.model');
 const Product = require('../products/product.model');
 const ActivityLog = require('../audit/activity-log.model');
 const invoiceService = require('../invoices/invoice.service');
-const { PURCHASE_STATUS, PAYMENT_STATUS } = require('@purchasing/constants');
+const receivingService = require('../receiving/receiving.service');
+const {
+  PURCHASE_STATUS,
+  PAYMENT_STATUS,
+  MARKETLIST_STATUS
+} = require('@purchasing/constants');
 
 class PurchaseService {
   async generatePurchaseNumber() {
@@ -425,6 +430,7 @@ class PurchaseService {
     if (!purchase) throw new Error('Transaksi pembelian tidak ditemukan.');
 
     const {
+      marketlist_id,
       supplier_id,
       invoice_ref,
       payment_method,
@@ -435,12 +441,47 @@ class PurchaseService {
       notes
     } = data;
 
+    const previousMarketlistId = purchase.marketlist_id?.toString() || null;
+    const marketlistWasProvided = Object.prototype.hasOwnProperty.call(data, 'marketlist_id');
+    const targetMarketlistId = marketlistWasProvided
+      ? (marketlist_id ? marketlist_id.toString() : null)
+      : previousMarketlistId;
+    const allocationChanged = targetMarketlistId !== previousMarketlistId;
+    let targetMarketlist = null;
+
+    if (allocationChanged) {
+      const allocationStatuses = [
+        MARKETLIST_STATUS.APPROVED,
+        MARKETLIST_STATUS.IN_PROGRESS,
+        MARKETLIST_STATUS.PARTIALLY_RECEIVED,
+        MARKETLIST_STATUS.RECEIVED
+      ];
+      if (targetMarketlistId) {
+        targetMarketlist = await Marketlist.findById(targetMarketlistId);
+        if (!targetMarketlist) throw new Error('Marketlist tidak ditemukan.');
+        if (!allocationStatuses.includes(targetMarketlist.status)) {
+          throw new Error('Transaksi hanya dapat dialokasikan ke Marketlist yang masih aktif.');
+        }
+      }
+
+      if (previousMarketlistId) {
+        const previousMarketlist = await Marketlist.findById(previousMarketlistId);
+        if (
+          previousMarketlist &&
+          [MARKETLIST_STATUS.COMPLETED, MARKETLIST_STATUS.CANCELLED].includes(previousMarketlist.status)
+        ) {
+          throw new Error('Alokasi transaksi pada Marketlist yang sudah selesai atau dibatalkan tidak dapat diubah.');
+        }
+      }
+    }
+
     if (supplier_id) {
       const supplier = await Supplier.findById(supplier_id);
       if (!supplier) throw new Error('Supplier tidak ditemukan.');
       purchase.supplier_id = supplier_id;
     }
 
+    if (allocationChanged) purchase.marketlist_id = targetMarketlistId;
     if (invoice_ref !== undefined) purchase.invoice_ref = invoice_ref;
     if (purchased_at) purchase.purchased_at = new Date(purchased_at);
     if (notes !== undefined) purchase.notes = notes;
@@ -493,7 +534,51 @@ class PurchaseService {
     }
 
     await purchase.save();
-    if (purchase.marketlist_id) {
+
+    if (allocationChanged) {
+      const purchaseItems = await PurchaseItem.find({ purchase_id: purchase._id });
+      const targetItems = targetMarketlistId
+        ? await MarketlistItem.find({
+            marketlist_id: targetMarketlistId,
+            item_status: { $ne: 'rejected' }
+          }).select('_id product_id')
+        : [];
+      const itemsByProduct = new Map();
+      for (const item of targetItems) {
+        const productId = item.product_id?.toString();
+        if (!productId) continue;
+        const candidates = itemsByProduct.get(productId) || [];
+        candidates.push(item);
+        itemsByProduct.set(productId, candidates);
+      }
+
+      await Promise.all(purchaseItems.map((item) => {
+        const matches = item.product_id
+          ? itemsByProduct.get(item.product_id.toString()) || []
+          : [];
+        return PurchaseItem.updateOne(
+          { _id: item._id },
+          { $set: { marketlist_item_id: matches.length === 1 ? matches[0]._id : null } }
+        );
+      }));
+
+      if (targetMarketlist) {
+        targetMarketlist.purchase_tracking_started = true;
+        if (
+          [MARKETLIST_STATUS.APPROVED, MARKETLIST_STATUS.RECEIVED].includes(targetMarketlist.status)
+        ) {
+          targetMarketlist.status = MARKETLIST_STATUS.IN_PROGRESS;
+        }
+        await targetMarketlist.save();
+      }
+
+      for (const affectedMarketlistId of new Set(
+        [previousMarketlistId, targetMarketlistId].filter(Boolean)
+      )) {
+        await receivingService.recalculateMarketlistProgress(affectedMarketlistId);
+        await invoiceService.syncMarketlistPurchaseQuantities(affectedMarketlistId, user);
+      }
+    } else if (purchase.marketlist_id) {
       await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
     }
 
@@ -505,6 +590,8 @@ class PurchaseService {
       entity_id: purchase._id,
       meta_data: {
         purchase_number: purchase.purchase_number,
+        previous_marketlist_id: previousMarketlistId,
+        marketlist_id: purchase.marketlist_id,
         payment_method: purchase.payment_method,
         payment_status: purchase.payment_status,
         amount_paid: purchase.amount_paid,

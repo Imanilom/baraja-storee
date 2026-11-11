@@ -21,7 +21,12 @@ class MarketlistService {
     if (purchases.length === 0) return new Map();
 
     const totals = await PurchaseItem.aggregate([
-      { $match: { purchase_id: { $in: purchases.map((purchase) => purchase._id) } } },
+      {
+        $match: {
+          purchase_id: { $in: purchases.map((purchase) => purchase._id) },
+          marketlist_item_id: { $ne: null }
+        }
+      },
       { $group: { _id: '$marketlist_item_id', quantity: { $sum: '$actual_qty' } } }
     ]);
     return new Map(totals.map((entry) => [entry._id.toString(), entry.quantity]));
@@ -122,7 +127,10 @@ class MarketlistService {
     items.forEach((marketlist) => {
       marketlist.items = marketlist.items.map((item) => ({
         ...item,
-        purchased_qty: purchasedQuantityMap.get(item._id.toString()) || 0
+        purchased_qty: purchasedQuantityMap.get(item._id.toString()) || 0,
+        expected_receipt_qty: marketlist.purchase_tracking_started
+          ? purchasedQuantityMap.get(item._id.toString()) || 0
+          : item.requested_qty
       }));
     });
 
@@ -159,7 +167,10 @@ class MarketlistService {
       ...marketlist.toObject(),
       items: items.map((item) => ({
         ...item.toObject(),
-        purchased_qty: purchasedQuantityMap.get(item._id.toString()) || 0
+        purchased_qty: purchasedQuantityMap.get(item._id.toString()) || 0,
+        expected_receipt_qty: marketlist.purchase_tracking_started
+          ? purchasedQuantityMap.get(item._id.toString()) || 0
+          : item.requested_qty
       })),
       note: note ? note.note : '',
       note_details: note,

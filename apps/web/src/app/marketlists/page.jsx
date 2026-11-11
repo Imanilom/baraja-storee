@@ -15,7 +15,6 @@ import {
   FileText,
   AlertCircle,
   Printer,
-  Receipt,
   PackageCheck,
   Pencil,
   X
@@ -32,6 +31,11 @@ const STATUS_TABS = [
   { id: 'completed', label: 'Selesai' },
 ];
 
+const canManageInvoice = (marketlist) =>
+  marketlist.has_invoice ||
+  marketlist.purchase_tracking_started ||
+  marketlist.items?.some((item) => Number(item.purchased_qty) > 0);
+
 export default function MarketlistPage() {
   const [marketlists, setMarketlists] = useState([]);
   const [selectedMl, setSelectedMl] = useState(null);
@@ -40,7 +44,6 @@ export default function MarketlistPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [user, setUser] = useState(null);
   const [toast, setToast] = useState(null);
-  const [generatingInvoice, setGeneratingInvoice] = useState(null);
   const [completingMarketlist, setCompletingMarketlist] = useState(null);
 
   const showToast = (message, type = 'success') => {
@@ -83,24 +86,6 @@ export default function MarketlistPage() {
       showToast(err.message || 'Gagal mengajukan marketlist', 'error');
     } finally {
       setActionLoading(false);
-    }
-  };
-
-  const handleGenerateInvoice = async (ml) => {
-    if (!confirm(`Generate invoice untuk Marketlist ${ml.marketlist_number}?\n\nInvoice akan dibuat berdasarkan barang yang sudah diterima (received).`)) return;
-    setGeneratingInvoice(ml._id);
-    try {
-      const res = await api.generateInvoice(ml._id, {});
-      showToast(`✅ Invoice berhasil digenerate! (${res.data?.length || 1} invoice)`);
-      fetchMarketlists();
-      if (selectedMl?._id === ml._id) {
-        const detail = await api.getMarketlistById(ml._id);
-        setSelectedMl(detail.data);
-      }
-    } catch (err) {
-      showToast(err.message || 'Gagal generate invoice', 'error');
-    } finally {
-      setGeneratingInvoice(null);
     }
   };
 
@@ -318,16 +303,14 @@ export default function MarketlistPage() {
                               {completingMarketlist === ml._id ? '...' : 'Selesaikan'}
                             </button>
                           )}
-                          {['partially_received', 'received', 'completed'].includes(ml.status) && !ml.has_invoice && (
-                            <button
-                              onClick={() => handleGenerateInvoice(ml)}
-                              disabled={generatingInvoice === ml._id}
-                              className="px-2.5 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors inline-flex items-center gap-1 disabled:opacity-50"
-                              title="Generate Invoice dari Marketlist"
+                          {canManageInvoice(ml) &&
+                            ['in_progress', 'partially_received', 'received', 'completed'].includes(ml.status) && (
+                            <Link
+                              href={`/invoices?marketlistId=${ml._id}`}
+                              className="px-2.5 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors"
                             >
-                              <Receipt className="w-3 h-3" />
-                              {generatingInvoice === ml._id ? '...' : 'Invoice'}
-                            </button>
+                              {ml.has_invoice ? 'Kelola Invoice' : 'Proses Invoice'}
+                            </Link>
                           )}
                           <button
                             onClick={() => handleOpenDetail(ml._id)}
@@ -401,14 +384,14 @@ export default function MarketlistPage() {
                           {completingMarketlist === ml._id ? '...' : 'Selesaikan'}
                         </button>
                       )}
-                      {['partially_received', 'received', 'completed'].includes(ml.status) && !ml.has_invoice && (
-                        <button
-                          onClick={() => handleGenerateInvoice(ml)}
-                          disabled={generatingInvoice === ml._id}
-                          className="px-2.5 py-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded disabled:opacity-50"
+                      {canManageInvoice(ml) &&
+                        ['in_progress', 'partially_received', 'received', 'completed'].includes(ml.status) && (
+                        <Link
+                          href={`/invoices?marketlistId=${ml._id}`}
+                          className="px-2.5 py-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded"
                         >
-                          {generatingInvoice === ml._id ? '...' : '?? Invoice'}
-                        </button>
+                          {ml.has_invoice ? 'Kelola Invoice' : 'Proses Invoice'}
+                        </Link>
                       )}
                       <button
                         onClick={() => handleOpenDetail(ml._id)}
@@ -540,29 +523,14 @@ export default function MarketlistPage() {
                       {completingMarketlist === selectedMl._id ? 'Menyelesaikan...' : 'Selesaikan Marketlist'}
                     </button>
                   )}
-                  {['partially_received', 'received', 'completed'].includes(selectedMl.status) && (
-                    <button
-                      onClick={() => handleGenerateInvoice(selectedMl)}
-                      disabled={generatingInvoice === selectedMl._id}
-                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition disabled:opacity-50"
-                    >
-                      <Receipt className="w-3.5 h-3.5" />
-                      <span>
-                        {generatingInvoice === selectedMl._id
-                          ? 'Generating...'
-                          : selectedMl.has_invoice
-                          ? '🔄 Regenerate Invoice'
-                          : '📄 Generate Invoice'}
-                      </span>
-                    </button>
-                  )}
-                  {selectedMl.has_invoice && (
+                  {canManageInvoice(selectedMl) &&
+                    ['in_progress', 'partially_received', 'received', 'completed'].includes(selectedMl.status) && (
                     <Link
-                      href="/invoices"
+                      href={`/invoices?marketlistId=${selectedMl._id}`}
                       className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      <span>Lihat Invoice</span>
+                      <span>{selectedMl.has_invoice ? 'Kelola Invoice' : 'Proses Invoice'}</span>
                     </Link>
                   )}
                 </div>

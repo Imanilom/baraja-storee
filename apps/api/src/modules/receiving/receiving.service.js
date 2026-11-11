@@ -2,19 +2,50 @@ const GoodsReceipt = require('./goods-receipt.model');
 const GoodsReceiptItem = require('./goods-receipt-item.model');
 const Marketlist = require('../marketlists/marketlist.model');
 const MarketlistItem = require('../marketlists/marketlist-item.model');
+const Purchase = require('../purchases/purchase.model');
+const PurchaseItem = require('../purchases/purchase-item.model');
 const auditService = require('../audit/audit.service');
 const { generateGoodsReceiptNumber } = require('../../utils/number-generator');
-const { MARKETLIST_STATUS, GOODS_RECEIPT_STATUS, RECEIVING_STATUS } = require('@purchasing/constants');
+const { MARKETLIST_STATUS, GOODS_RECEIPT_STATUS, RECEIVING_STATUS, PURCHASE_STATUS } = require('@purchasing/constants');
 
 const getItemReceivingStatus = (accepted, rejected, requested, isChecked) => {
   if (!isChecked) return RECEIVING_STATUS.PENDING;
   if (accepted === 0 && rejected > 0) return RECEIVING_STATUS.REJECTED;
-  if (accepted === requested) return RECEIVING_STATUS.COMPLETE;
+  if (requested <= 0 && accepted <= 0) return RECEIVING_STATUS.PENDING;
+  if (Math.abs(accepted - requested) <= 1e-9) return RECEIVING_STATUS.COMPLETE;
   if (accepted < requested) return RECEIVING_STATUS.PARTIAL;
   return RECEIVING_STATUS.OVER_RECEIVED;
 };
 
 class ReceivingService {
+  async getExpectedQuantityMap(marketlist, marketlistItems) {
+    if (!marketlist.purchase_tracking_started) {
+      return new Map(marketlistItems.map((item) => [item._id.toString(), item.requested_qty]));
+    }
+
+    const purchases = await Purchase.find({
+      marketlist_id: marketlist._id,
+      status: PURCHASE_STATUS.VERIFIED
+    }).select('_id');
+    const purchaseItems = purchases.length
+      ? await PurchaseItem.aggregate([
+          {
+            $match: {
+              purchase_id: { $in: purchases.map((purchase) => purchase._id) },
+              marketlist_item_id: { $ne: null }
+            }
+          },
+          {
+            $group: {
+              _id: '$marketlist_item_id',
+              quantity: { $sum: '$actual_qty' }
+            }
+          }
+        ])
+      : [];
+    return new Map(purchaseItems.map((item) => [item._id.toString(), item.quantity]));
+  }
+
   async getReceiptsByMarketlist(marketlistId) {
     const receipts = await GoodsReceipt.find({ marketlist_id: marketlistId })
       .populate('received_by', 'name email')
@@ -89,6 +120,7 @@ class ReceivingService {
     // 3. Fetch Marketlist items to validate
     const mlItems = await MarketlistItem.find({ marketlist_id: marketlistId });
     const mlItemMap = new Map(mlItems.map((i) => [i._id.toString(), i]));
+    const expectedQuantityMap = await this.getExpectedQuantityMap(marketlist, mlItems);
 
     // Generate receipt number
     const count = await GoodsReceipt.countDocuments();
@@ -120,25 +152,20 @@ class ReceivingService {
       const received = itemInput.received_qty;
       const accepted = itemInput.accepted_qty !== undefined ? itemInput.accepted_qty : received;
       const rejected = itemInput.rejected_qty !== undefined ? itemInput.rejected_qty : Math.max(0, received - accepted);
+      const expectedQty = expectedQuantityMap.get(mlItem._id.toString()) || 0;
 
       // Determine item receiving status
-      let status = RECEIVING_STATUS.PENDING;
-      if (itemInput.is_checked) {
-        if (accepted === 0 && rejected > 0) {
-          status = RECEIVING_STATUS.REJECTED;
-        } else if (accepted === mlItem.requested_qty) {
-          status = RECEIVING_STATUS.COMPLETE;
-        } else if (accepted < mlItem.requested_qty) {
-          status = RECEIVING_STATUS.PARTIAL;
-        } else if (accepted > mlItem.requested_qty) {
-          status = RECEIVING_STATUS.OVER_RECEIVED;
-        }
-      }
+      const status = getItemReceivingStatus(
+        accepted,
+        rejected,
+        expectedQty,
+        itemInput.is_checked
+      );
 
       preparedItems.push({
         receipt_id: receipt._id,
         marketlist_item_id: mlItem._id,
-        ordered_qty: mlItem.requested_qty,
+        ordered_qty: expectedQty,
         received_qty: received,
         accepted_qty: accepted,
         rejected_qty: rejected,
@@ -196,6 +223,12 @@ class ReceivingService {
     const existingItemMap = new Map(
       existingItems.map((item) => [item.marketlist_item_id.toString(), item])
     );
+    const [currentMarketlist, marketlistItems] = await Promise.all([
+      Marketlist.findById(receipt.marketlist_id),
+      MarketlistItem.find({ marketlist_id: receipt.marketlist_id }).select('_id requested_qty')
+    ]);
+    if (!currentMarketlist) throw new Error('Related marketlist not found');
+    const expectedQuantityMap = await this.getExpectedQuantityMap(currentMarketlist, marketlistItems);
     const seenIds = new Set();
     const updates = [];
 
@@ -233,7 +266,7 @@ class ReceivingService {
       const status = getItemReceivingStatus(
         accepted,
         rejected,
-        marketlistItem.requested_qty,
+        expectedQuantityMap.get(existingItem.marketlist_item_id.toString()) || 0,
         isChecked
       );
       updates.push({
@@ -298,6 +331,10 @@ class ReceivingService {
     // Fetch all marketlist items
     const mlItems = await MarketlistItem.find({ marketlist_id: marketlistId });
 
+    // Receiving targets the recorded purchase quantity, with requested quantity
+    // retained as the target for marketlists that predate purchase tracking.
+    const expectedQuantityMap = await this.getExpectedQuantityMap(marketlist, mlItems);
+
     // Fetch all receipt items for this marketlist
     const allReceipts = await GoodsReceipt.find({
       marketlist_id: marketlistId,
@@ -317,18 +354,22 @@ class ReceivingService {
 
     let allCompleted = true;
     let anyReceived = false;
+    let expectedItemsCount = 0;
 
     for (const item of mlItems) {
+      const expectedQty = expectedQuantityMap.get(item._id.toString()) || 0;
+      if (expectedQty <= 0) continue;
+      expectedItemsCount += 1;
       const cumulativeAccepted = acceptedMap.get(item._id.toString()) || 0;
       if (cumulativeAccepted > 0) {
         anyReceived = true;
       }
-      if (cumulativeAccepted < item.requested_qty) {
+      if (cumulativeAccepted + 1e-9 < expectedQty) {
         allCompleted = false;
       }
     }
 
-    if (allCompleted && mlItems.length > 0) {
+    if (allCompleted && expectedItemsCount > 0) {
       marketlist.status = MARKETLIST_STATUS.RECEIVED;
     } else if (anyReceived) {
       marketlist.status = MARKETLIST_STATUS.PARTIALLY_RECEIVED;

@@ -151,6 +151,7 @@ export default function TransactionsPage() {
   const [editPurchaseModal, setEditPurchaseModal] = useState(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState({
+    marketlist_id: '',
     supplier_id: '',
     payment_method: 'cash',
     payment_source: 'cash',
@@ -493,10 +494,8 @@ export default function TransactionsPage() {
 
     setSubmitting(true);
     try {
-      const allocatedToMarketlist = entryMode === 'marketlist' ||
-        selectedItems.some((item) => item.marketlist_item_id);
       const payload = {
-        ...(selectedMlId && allocatedToMarketlist && { marketlist_id: selectedMlId }),
+        ...(selectedMlId && { marketlist_id: selectedMlId }),
         supplier_id: selectedSupplierId,
         invoice_ref: invoiceRef.trim(),
         payment_method: paymentMethod,
@@ -654,6 +653,7 @@ export default function TransactionsPage() {
     const isTempo = p.payment_method === 'tempo';
     setEditPurchaseModal(p);
     setEditForm({
+      marketlist_id: p.marketlist_id?._id || p.marketlist_id || '',
       supplier_id: p.supplier_id?._id || p.supplier_id || '',
       payment_method: p.payment_method || 'cash',
       payment_source: p.payment_source || (p.payment_method === 'transfer' ? 'bank' : 'cash'),
@@ -693,6 +693,7 @@ export default function TransactionsPage() {
     setSavingEdit(true);
     try {
       const payload = {
+        marketlist_id: editForm.marketlist_id || null,
         supplier_id: editForm.supplier_id,
         payment_method: editForm.payment_method,
         payment_source: editForm.payment_method === 'transfer' ? 'bank' : (editForm.payment_method === 'tempo' ? editForm.payment_source : 'cash'),
@@ -1908,11 +1909,32 @@ export default function TransactionsPage() {
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 flex items-start gap-2.5">
                   <CreditCard className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div className="text-[11px]">
-                    <p className="font-bold">Ubah Status Pembayaran & Detail Transaksi</p>
+                    <p className="font-bold">Alokasi Marketlist & Pembayaran</p>
                     <p className="opacity-90 mt-0.5">
-                      Jika sebelumnya salah input sebagai <strong>Tunai / Lunas</strong>, pilih metode <strong>Tempo / Hutang Kredit</strong> di bawah untuk mengaktifkan pencatatan hutang dan jadwal jatuh tempo.
+                      Pilih Marketlist untuk mengalokasikan transaksi ini belakangan. Barang yang cocok akan ditautkan otomatis; barang tanpa pasangan tetap masuk invoice sebagai item manual. Metode Tempo tetap mengatur pencatatan hutang dan tanggal jatuh tempo.
                     </p>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Alokasikan ke Marketlist (opsional)</label>
+                  <select
+                    value={editForm.marketlist_id}
+                    onChange={(e) => setEditForm({ ...editForm, marketlist_id: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold text-slate-800"
+                  >
+                    <option value="">Tanpa Marketlist</option>
+                    {approvedMLs
+                      .filter((ml) =>
+                        ['approved', 'in_progress', 'partially_received', 'received'].includes(ml.status) ||
+                        ml._id === editForm.marketlist_id
+                      )
+                      .map((ml) => (
+                        <option key={ml._id} value={ml._id}>
+                          {ml.marketlist_number} [{ml.status?.replace(/_/g, ' ')}]
+                        </option>
+                      ))}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">

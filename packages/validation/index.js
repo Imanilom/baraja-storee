@@ -126,11 +126,15 @@ const generateInvoiceSchema = z.object({
 
 const updateInvoiceItemsSchema = z.object({
   items: z.array(z.object({
-    marketlist_item_id: zObjectId,
+    marketlist_item_id: zObjectId.optional(),
+    purchase_item_id: zObjectId.optional(),
     purchased: z.boolean(),
     quantity: z.number().min(0),
     unit_price: z.number().min(0)
-  })).min(1)
+  }).refine(
+    (item) => Boolean(item.marketlist_item_id || item.purchase_item_id),
+    'Invoice item must reference a Marketlist or purchase item'
+  )).min(1)
 });
 
 module.exports = {

@@ -7,6 +7,14 @@ const InvoiceItemEmbeddedSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'MarketlistItem'
     },
+    purchase_item_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PurchaseItem'
+    },
+    product_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product'
+    },
     product_name: {
       type: String,
       required: true

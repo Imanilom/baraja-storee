@@ -97,7 +97,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 38 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 42 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -109,7 +109,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/38] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/42] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -742,8 +742,116 @@ async function runTests() {
     'Transaksi manual yang dialokasikan ke item Marketlist memperbarui qty dan invoice terkait.'
   );
 
+  // 39. An unmatched manual purchase line attached to a marketlist is included in its invoice
+  const manualInvoicePurchase = await purchaseService.createPurchase({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    items: [{
+      product_id: productAyam._id,
+      actual_qty: 2,
+      actual_unit_price: 43000
+    }]
+  }, purchasingUser);
+  const manualInvoicePurchaseItem = await PurchaseItem.findOne({
+    purchase_id: manualInvoicePurchase._id
+  });
+  const invoiceWithManualLine = await Invoice.findOne({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    status: 'generated'
+  });
+  assert(
+    manualInvoicePurchaseItem.marketlist_item_id === null &&
+      invoiceWithManualLine.items.some((item) =>
+        item.purchase_item_id?.toString() === manualInvoicePurchaseItem._id.toString() &&
+        item.quantity === 2 &&
+        item.product_name === productAyam.name
+      ),
+    'Item manual tanpa pasangan Marketlist tetap masuk invoice saat transaksi dialokasikan ke Marketlist.'
+  );
+
+  // 40. Goods receiving target follows the actual purchased quantity
+  const receiptQtyMl = await marketlistService.createMarketlist({
+    date: new Date(),
+    required_date: new Date(),
+    location_id: loc._id,
+    items: [{ product_id: productBeras._id, requested_qty: 10, unit_price: 15000, supplier_id: supplierA._id }]
+  }, purchasingUser);
+  await marketlistService.submitMarketlist(receiptQtyMl._id, purchasingUser);
+  await marketlistService.approveMarketlist(receiptQtyMl._id, adminUser, 'Approved');
+  const receiptQtyItem = (await marketlistService.getMarketlistById(receiptQtyMl._id)).items[0];
+  await purchaseService.createPurchase({
+    marketlist_id: receiptQtyMl._id,
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: receiptQtyItem._id,
+      actual_qty: 5,
+      actual_unit_price: 15000
+    }]
+  }, purchasingUser);
+  const receiptForPurchasedQty = await receivingService.createReceipt(receiptQtyMl._id, {
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: receiptQtyItem._id,
+      received_qty: 5,
+      accepted_qty: 5,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  }, receiverUser);
+  const receiptQtyMlAfter = await marketlistService.getMarketlistById(receiptQtyMl._id);
+  assert(
+    receiptForPurchasedQty.items[0].ordered_qty === 5 &&
+      receiptForPurchasedQty.items[0].status === RECEIVING_STATUS.COMPLETE &&
+      receiptQtyMlAfter.status === MARKETLIST_STATUS.RECEIVED,
+    'Target penerimaan dan status Marketlist mengikuti qty yang dibeli, bukan qty rencana awal.'
+  );
+
+  // 41. Existing standalone purchases can be allocated to a Marketlist later
+  await purchaseService.updatePurchase(manualPurchase._id, {
+    marketlist_id: purchaseSyncMl._id
+  }, purchasingUser);
+  const allocatedExistingPurchase = await Purchase.findById(manualPurchase._id);
+  const allocatedExistingItem = await PurchaseItem.findOne({
+    purchase_id: manualPurchase._id
+  });
+  const invoiceAfterLateAllocation = await Invoice.findOne({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    status: 'generated'
+  });
+  assert(
+    allocatedExistingPurchase.marketlist_id.toString() === purchaseSyncMl._id.toString() &&
+      allocatedExistingItem.marketlist_item_id === null &&
+      invoiceAfterLateAllocation.items.some((item) =>
+        item.purchase_item_id?.toString() === allocatedExistingItem._id.toString() &&
+        item.quantity === 3
+      ),
+    'Transaksi manual yang sudah tersimpan dapat dialokasikan belakangan dan muncul sebagai item manual di invoice Marketlist.'
+  );
+  const lateMatchingPurchase = await purchaseService.createPurchase({
+    supplier_id: supplierA._id,
+    items: [{
+      product_id: productBeras._id,
+      actual_qty: 4,
+      actual_unit_price: 16000
+    }]
+  }, purchasingUser);
+  await purchaseService.updatePurchase(lateMatchingPurchase._id, {
+    marketlist_id: purchaseSyncMl._id
+  }, purchasingUser);
+  const lateMatchingItem = await PurchaseItem.findOne({
+    purchase_id: lateMatchingPurchase._id
+  });
+  const marketlistAfterLateMatch = await marketlistService.getMarketlistById(purchaseSyncMl._id);
+  assert(
+    lateMatchingItem.marketlist_item_id.toString() === purchaseSyncItem._id.toString() &&
+      marketlistAfterLateMatch.items[0].purchased_qty === 7,
+    'Alokasi belakangan otomatis menautkan produk yang cocok dan memperbarui qty belanja Marketlist.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 38/38 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 42/42 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();
