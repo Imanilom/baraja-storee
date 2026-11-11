@@ -94,7 +94,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 28 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 31 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -106,7 +106,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/28] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/31] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -539,8 +539,53 @@ async function runTests() {
     'Regenerate menghapus dan membatalkan invoice generated saat tidak ada barang diterima yang tersisa.'
   );
 
+  // 29. Invoice items can be marked purchased with an actual quantity
+  const updatedInvoice = await invoiceService.updateInvoiceItems(invSupplierA._id, {
+    items: [{
+      marketlist_item_id: mlItemBeras._id,
+      purchased: true,
+      quantity: 5
+    }]
+  }, purchasingUser);
+  assert(
+    updatedInvoice.items[0].purchased === true &&
+      updatedInvoice.items[0].quantity === 5 &&
+      updatedInvoice.subtotal === 75000 &&
+      updatedInvoice.grand_total === 75000,
+    'Invoice menyimpan status dibeli, kuantitas aktual, dan menghitung ulang total.'
+  );
+
+  // 30. Marking an item not purchased removes it from the bill
+  const notPurchasedInvoice = await invoiceService.updateInvoiceItems(invSupplierA._id, {
+    items: [{
+      marketlist_item_id: mlItemBeras._id,
+      purchased: false,
+      quantity: 0
+    }]
+  }, purchasingUser);
+  assert(
+    notPurchasedInvoice.items[0].purchased === false &&
+      notPurchasedInvoice.items[0].quantity === 0 &&
+      notPurchasedInvoice.items[0].subtotal === 0 &&
+      notPurchasedInvoice.grand_total === 0,
+    'Invoice barang tidak dibeli bernilai nol dan tidak masuk tagihan.'
+  );
+
+  // 31. Regenerating does not overwrite confirmed purchase quantities
+  const invoiceAfterRegenerate = (await invoiceService.generateInvoicesFromMarketlist(
+    mlCreated._id,
+    {},
+    adminUser
+  )).find((invoice) => invoice._id.toString() === invSupplierA._id.toString());
+  assert(
+    invoiceAfterRegenerate.items[0].purchased === false &&
+      invoiceAfterRegenerate.items[0].quantity === 0 &&
+      invoiceAfterRegenerate.grand_total === 0,
+    'Regenerate mempertahankan status pembelian dan kuantitas yang sudah dikonfirmasi.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 28/28 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 31/31 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();

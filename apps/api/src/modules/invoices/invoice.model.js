@@ -16,6 +16,10 @@ const InvoiceItemEmbeddedSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
+    purchased: {
+      type: Boolean,
+      default: true
+    },
     unit: String,
     unit_price: {
       type: Number,
@@ -76,6 +80,10 @@ const InvoiceSchema = new mongoose.Schema(
       enum: Object.values(INVOICE_STATUS),
       default: INVOICE_STATUS.GENERATED
     },
+    purchases_confirmed: {
+      type: Boolean,
+      default: false
+    },
     pdf_url: String,
     generated_by: {
       type: mongoose.Schema.Types.ObjectId,
@@ -93,4 +101,3 @@ InvoiceSchema.index({ marketlist_id: 1, supplier_id: 1, marketlist_version: 1 },
 InvoiceSchema.index({ status: 1, invoice_date: -1 });
 
 module.exports = mongoose.model('Invoice', InvoiceSchema);
-

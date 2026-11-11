@@ -174,7 +174,10 @@ class InvoiceService {
 
       if (existing) {
         // If still in generated status, update with latest received quantities
-        if (existing.status === INVOICE_STATUS.GENERATED) {
+        if (
+          existing.status === INVOICE_STATUS.GENERATED &&
+          existing.purchases_confirmed !== true
+        ) {
           existing.items = invoiceItems;
           existing.subtotal = subtotal;
           existing.grand_total = grand_total;
@@ -220,6 +223,7 @@ class InvoiceService {
     for (const existing of existingInvoices) {
       if (
         existing.status !== INVOICE_STATUS.GENERATED ||
+        existing.purchases_confirmed === true ||
         supplierGroup.has(existing.supplier_id.toString()) ||
         (options.supplier_id &&
           existing.supplier_id.toString() !== options.supplier_id.toString())
@@ -262,6 +266,79 @@ class InvoiceService {
       description: `Invoice ${invoice.invoice_number} verified by ${user.name}`
     });
 
+    return invoice;
+  }
+
+  async updateInvoiceItems(id, data, user) {
+    const invoice = await Invoice.findById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+    if (invoice.status !== INVOICE_STATUS.GENERATED) {
+      throw new Error('Only generated invoices can be edited');
+    }
+
+    const existingItems = new Map(
+      invoice.items.map((item) => [item.marketlist_item_id?.toString(), item])
+    );
+    const updates = new Map();
+    for (const input of data.items) {
+      const itemId = input.marketlist_item_id.toString();
+      if (!existingItems.has(itemId) || updates.has(itemId)) {
+        throw new Error('Invoice item not found or duplicated');
+      }
+      if (input.purchased && input.quantity <= 0) {
+        throw new Error('Purchased items must have a quantity greater than zero');
+      }
+      updates.set(itemId, input);
+    }
+    if (updates.size !== existingItems.size) {
+      throw new Error('All invoice items must be included in the update');
+    }
+
+    const previousItems = invoice.items.map((item) => ({
+      marketlist_item_id: item.marketlist_item_id,
+      purchased: item.purchased !== false,
+      quantity: item.quantity,
+      subtotal: item.subtotal
+    }));
+    let subtotal = 0;
+    invoice.items = invoice.items.map((item) => {
+      const update = updates.get(item.marketlist_item_id.toString());
+      const purchased = update.purchased;
+      const quantity = purchased ? update.quantity : 0;
+      const itemSubtotal = quantity * item.unit_price;
+      subtotal += itemSubtotal;
+      return {
+        marketlist_item_id: item.marketlist_item_id,
+        product_name: item.product_name,
+        sku: item.sku,
+        purchased,
+        quantity,
+        unit: item.unit,
+        unit_price: item.unit_price,
+        subtotal: itemSubtotal
+      };
+    });
+    invoice.subtotal = subtotal;
+    invoice.grand_total = subtotal - invoice.discount + invoice.tax;
+    invoice.purchases_confirmed = true;
+    await invoice.save();
+
+    await auditService.log({
+      entity_type: 'invoice',
+      entity_id: invoice._id,
+      action: 'invoice_items_updated',
+      performed_by: user._id,
+      old_value: previousItems,
+      new_value: invoice.items.map((item) => ({
+        marketlist_item_id: item.marketlist_item_id,
+        purchased: item.purchased,
+        quantity: item.quantity,
+        subtotal: item.subtotal
+      })),
+      description: `Invoice ${invoice.invoice_number} purchase quantities updated`
+    });
     return invoice;
   }
 }

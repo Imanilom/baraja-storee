@@ -42,6 +42,15 @@ class InvoiceController {
     }
   }
 
+  async updateItems(req, res) {
+    try {
+      const invoice = await invoiceService.updateInvoiceItems(req.params.id, req.body, req.user);
+      return sendSuccess(res, 'Invoice items updated successfully', invoice);
+    } catch (error) {
+      return sendError(res, 'Failed to update invoice items', error.message, 400);
+    }
+  }
+
   async downloadPdf(req, res) {
     try {
       const invoice = await invoiceService.getInvoiceById(req.params.id);
@@ -60,4 +69,3 @@ class InvoiceController {
 }
 
 module.exports = new InvoiceController();
-

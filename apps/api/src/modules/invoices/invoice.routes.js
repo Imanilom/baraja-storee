@@ -4,7 +4,7 @@ const invoiceController = require('./invoice.controller');
 const authenticate = require('../../middleware/auth');
 const authorize = require('../../middleware/rbac');
 const validate = require('../../middleware/validate');
-const { generateInvoiceSchema } = require('@purchasing/validation');
+const { generateInvoiceSchema, updateInvoiceItemsSchema } = require('@purchasing/validation');
 const { ROLES } = require('@purchasing/constants');
 
 // PDF download route allows direct viewing/downloading in browser (window.open or direct URL)
@@ -16,6 +16,12 @@ router.use(authenticate);
 router.get('/', invoiceController.list);
 router.get('/:id', invoiceController.getById);
 router.post('/:id/verify', authorize(ROLES.ACCOUNTING), invoiceController.verify);
+router.patch(
+  '/:id/items',
+  authorize(ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.PURCHASING, ROLES.MANAGEMENT),
+  validate(updateInvoiceItemsSchema),
+  invoiceController.updateItems
+);
 
 // Mounted under /api/v1/marketlists/:marketlistId/invoices
 const marketlistInvoiceRouter = express.Router({ mergeParams: true });
@@ -39,4 +45,3 @@ module.exports = {
   invoiceRouter: router,
   marketlistInvoiceRouter
 };
-

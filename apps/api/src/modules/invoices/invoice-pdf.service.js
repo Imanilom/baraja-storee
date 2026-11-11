@@ -51,7 +51,8 @@ class InvoicePdfService {
 
     // Items
     doc.font('Helvetica');
-    for (const item of invoice.items) {
+    const purchasedItems = invoice.items.filter((item) => item.purchased !== false);
+    for (const item of purchasedItems) {
       if (y > 700) {
         doc.addPage();
         y = 50;
@@ -64,6 +65,10 @@ class InvoicePdfService {
         .text(`Rp ${item.unit_price.toLocaleString('id-ID')}`, 380, y, { width: 70, align: 'right' })
         .text(`Rp ${item.subtotal.toLocaleString('id-ID')}`, 460, y, { width: 90, align: 'right' });
 
+      y += 20;
+    }
+    if (purchasedItems.length === 0) {
+      doc.font('Helvetica-Oblique').text('Tidak ada item yang dibeli.', 50, y);
       y += 20;
     }
 
@@ -108,4 +113,3 @@ class InvoicePdfService {
 }
 
 module.exports = new InvoicePdfService();
-

@@ -124,6 +124,14 @@ const generateInvoiceSchema = z.object({
   tax: z.number().min(0).default(0)
 });
 
+const updateInvoiceItemsSchema = z.object({
+  items: z.array(z.object({
+    marketlist_item_id: zObjectId,
+    purchased: z.boolean(),
+    quantity: z.number().min(0)
+  })).min(1)
+});
+
 module.exports = {
   zObjectId,
   loginSchema,
@@ -140,5 +148,6 @@ module.exports = {
   goodsReceiptItemInputSchema,
   createGoodsReceiptSchema,
   updateGoodsReceiptSchema,
-  generateInvoiceSchema
+  generateInvoiceSchema,
+  updateInvoiceItemsSchema
 };

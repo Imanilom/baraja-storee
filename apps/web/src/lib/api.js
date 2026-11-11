@@ -147,6 +147,11 @@ export const api = {
   // Invoices
   getInvoices: (params = '') => fetchApi(`/invoices${params}`),
   getInvoiceById: (id) => fetchApi(`/invoices/${id}`),
+  updateInvoiceItems: (id, items) =>
+    fetchApi(`/invoices/${id}/items`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items })
+    }),
   generateInvoice: (marketlistId, options = {}) =>
     fetchApi(`/marketlists/${marketlistId}/invoices/generate`, {
       method: 'POST',
