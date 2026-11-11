@@ -112,6 +112,11 @@ const createGoodsReceiptSchema = z.object({
   items: z.array(goodsReceiptItemInputSchema).min(1, 'Must include at least one receiving item')
 });
 
+const updateGoodsReceiptSchema = z.object({
+  general_condition: z.string().optional(),
+  items: z.array(goodsReceiptItemInputSchema).min(1, 'Must include at least one receiving item')
+});
+
 // Generate Invoice schema
 const generateInvoiceSchema = z.object({
   supplier_id: zObjectId.optional(), // If provided, only generates for this supplier. Otherwise generates for all suppliers in ML
@@ -134,5 +139,6 @@ module.exports = {
   marketlistNoteSchema,
   goodsReceiptItemInputSchema,
   createGoodsReceiptSchema,
+  updateGoodsReceiptSchema,
   generateInvoiceSchema
 };

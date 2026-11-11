@@ -306,12 +306,12 @@ export default function MarketlistPage() {
                               Submit
                             </button>
                           )}
-                          {ml.status === 'partially_received' && canCompleteMarketlists && (
+                          {['partially_received', 'received'].includes(ml.status) && canCompleteMarketlists && (
                             <button
                               onClick={() => handleCompleteMarketlist(ml)}
                               disabled={completingMarketlist === ml._id}
                               className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors inline-flex items-center gap-1 disabled:opacity-50"
-                              title="Selesaikan penerimaan parsial"
+                              title="Selesaikan penerimaan"
                             >
                               <PackageCheck className="w-3 h-3" />
                               {completingMarketlist === ml._id ? '...' : 'Selesaikan'}
@@ -391,7 +391,7 @@ export default function MarketlistPage() {
                           Submit
                         </button>
                       )}
-                      {ml.status === 'partially_received' && canCompleteMarketlists && (
+                      {['partially_received', 'received'].includes(ml.status) && canCompleteMarketlists && (
                         <button
                           onClick={() => handleCompleteMarketlist(ml)}
                           disabled={completingMarketlist === ml._id}
@@ -520,7 +520,7 @@ export default function MarketlistPage() {
                     <Printer className="w-3.5 h-3.5" />
                     <span>Cetak PDF</span>
                   </Link>
-                  {selectedMl.status === 'partially_received' && canCompleteMarketlists && (
+                  {['partially_received', 'received'].includes(selectedMl.status) && canCompleteMarketlists && (
                     <button
                       onClick={() => handleCompleteMarketlist(selectedMl)}
                       disabled={completingMarketlist === selectedMl._id}

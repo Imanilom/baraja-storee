@@ -137,6 +137,11 @@ export const api = {
 
   // Receiving (Surat Jalan Digital)
   getReceiptsByMarketlist: (marketlistId) => fetchApi(`/marketlists/${marketlistId}/receipts`),
+  updateReceipt: (receiptId, data) =>
+    fetchApi(`/receipts/${receiptId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
   getReceiptById: (id) => fetchApi(`/receipts/${id}`),
 
   // Invoices

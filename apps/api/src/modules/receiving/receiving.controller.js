@@ -31,7 +31,21 @@ class ReceivingController {
       return sendError(res, 'Failed to record goods receipt', error.message, 400);
     }
   }
+
+  async update(req, res) {
+    try {
+      const receiptId = req.params.receiptId || req.params.id;
+      const receipt = await receivingService.updateReceipt(
+        receiptId,
+        req.body,
+        req.user,
+        req.params.marketlistId
+      );
+      return sendSuccess(res, 'Goods receipt updated successfully', receipt);
+    } catch (error) {
+      return sendError(res, 'Failed to update goods receipt', error.message, 400);
+    }
+  }
 }
 
 module.exports = new ReceivingController();
-

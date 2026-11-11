@@ -416,10 +416,15 @@ class MarketlistService {
       return marketlist;
     }
 
-    if (marketlist.status !== MARKETLIST_STATUS.PARTIALLY_RECEIVED) {
-      throw new Error(`Only partially received marketlists can be completed. Current status: '${marketlist.status}'.`);
+    const completableStatuses = [
+      MARKETLIST_STATUS.PARTIALLY_RECEIVED,
+      MARKETLIST_STATUS.RECEIVED
+    ];
+    if (!completableStatuses.includes(marketlist.status)) {
+      throw new Error(`Only partially or fully received marketlists can be completed. Current status: '${marketlist.status}'.`);
     }
 
+    const previousStatus = marketlist.status;
     marketlist.status = MARKETLIST_STATUS.COMPLETED;
     marketlist.completed_at = new Date();
     await marketlist.save();
@@ -429,9 +434,9 @@ class MarketlistService {
       entity_id: marketlist._id,
       action: 'marketlist_completed',
       performed_by: user._id,
-      old_value: { status: MARKETLIST_STATUS.PARTIALLY_RECEIVED },
+      old_value: { status: previousStatus },
       new_value: { status: MARKETLIST_STATUS.COMPLETED },
-      description: `Marketlist ${marketlist.marketlist_number} completed with partial receiving`
+      description: `Marketlist ${marketlist.marketlist_number} completed from ${previousStatus}`
     });
 
     return marketlist;

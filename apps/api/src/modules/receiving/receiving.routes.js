@@ -4,7 +4,7 @@ const receivingController = require('./receiving.controller');
 const authenticate = require('../../middleware/auth');
 const authorize = require('../../middleware/rbac');
 const validate = require('../../middleware/validate');
-const { createGoodsReceiptSchema } = require('@purchasing/validation');
+const { createGoodsReceiptSchema, updateGoodsReceiptSchema } = require('@purchasing/validation');
 const { ROLES } = require('@purchasing/constants');
 
 router.use(authenticate);
@@ -20,6 +20,12 @@ router.post(
   validate(createGoodsReceiptSchema),
   receivingController.create
 );
+router.patch(
+  '/:id',
+  authorize(ROLES.ADMIN, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF, ROLES.PURCHASING),
+  validate(updateGoodsReceiptSchema),
+  receivingController.update
+);
 
 // Mounted under /api/v1/marketlists/:marketlistId/receipts in app.js
 const marketlistReceiptRouter = express.Router({ mergeParams: true });
@@ -32,9 +38,14 @@ marketlistReceiptRouter.post(
   validate(createGoodsReceiptSchema),
   receivingController.create
 );
+marketlistReceiptRouter.patch(
+  '/:receiptId',
+  authorize(ROLES.ADMIN, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF, ROLES.PURCHASING),
+  validate(updateGoodsReceiptSchema),
+  receivingController.update
+);
 
 module.exports = {
   receivingRouter: router,
   marketlistReceiptRouter
 };
-

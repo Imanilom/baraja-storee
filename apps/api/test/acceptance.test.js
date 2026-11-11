@@ -19,7 +19,7 @@ const receivingService = require('../src/modules/receiving/receiving.service');
 const invoiceService = require('../src/modules/invoices/invoice.service');
 
 const { ROLES, MARKETLIST_STATUS, RECEIVING_STATUS, ITEM_CONDITION } = require('@purchasing/constants');
-const { createGoodsReceiptSchema } = require('@purchasing/validation');
+const { createGoodsReceiptSchema, updateGoodsReceiptSchema } = require('@purchasing/validation');
 
 let mongod;
 let adminUser, purchasingUser, receiverUser;
@@ -94,7 +94,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 20 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 24 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -106,7 +106,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/20] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/24] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -317,7 +317,35 @@ async function runTests() {
   const mlStatusCheck = await Marketlist.findById(mlCreated._id);
   assert(mlStatusCheck.status === MARKETLIST_STATUS.PARTIALLY_RECEIVED, 'Marketlist parsial tidak otomatis dianggap selesai sebelum ditutup.');
 
-  // 19. Sinkronisasi offline tidak membuat penerimaan ganda (client_request_id idempotency)
+  // 19. Penerimaan dapat dikoreksi dan progres Marketlist dihitung ulang
+  const receiptUpdate = updateGoodsReceiptSchema.safeParse({
+    items: [{
+      marketlist_item_id: mlItemBeras._id.toString(),
+      received_qty: 0,
+      accepted_qty: 0,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  });
+  assert(receiptUpdate.success, 'Validasi menerima bentuk data koreksi penerimaan.');
+  const correctedReceipt = await receivingService.updateReceipt(receipt1._id, receiptUpdate.data, receiverUser);
+  const correctedMarketlist = await Marketlist.findById(mlCreated._id);
+  assert(
+    correctedReceipt.items[0].accepted_qty === 0 &&
+      correctedMarketlist.status === MARKETLIST_STATUS.PARTIALLY_RECEIVED,
+    'Koreksi penerimaan tersimpan dan status Marketlist dihitung ulang.'
+  );
+  await receivingService.updateReceipt(receipt1._id, {
+    items: [{
+      marketlist_item_id: mlItemBeras._id.toString(),
+      received_qty: 100,
+      accepted_qty: 100,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  }, receiverUser);
+
+  // 20. Sinkronisasi offline tidak membuat penerimaan ganda (client_request_id idempotency)
   const offlineReceipt1 = await receivingService.createReceipt(mlCreated._id, {
     client_request_id: 'REQ-OFFLINE-UUID-999',
     supplier_id: supplierA._id,
@@ -335,7 +363,7 @@ async function runTests() {
   }, receiverUser);
   assert(offlineReceipt1._id.toString() === offlineReceipt2._id.toString(), 'Sinkronisasi offline tidak membuat penerimaan ganda (client_request_id idempotency).');
 
-  // 20. Marketlist parsial dapat diselesaikan dan tidak menerima barang lagi setelahnya
+  // 21. Marketlist parsial dapat diselesaikan dan tidak menerima barang lagi setelahnya
   const completedMarketlist = await marketlistService.completePartiallyReceivedMarketlist(mlCreated._id, purchasingUser);
   let receiptAfterCompletionRejected = false;
   try {
@@ -355,8 +383,66 @@ async function runTests() {
     'Marketlist partially received bisa diselesaikan dan penerimaan baru ditolak setelah selesai.'
   );
 
+  // 22. Marketlist fully received dapat diselesaikan
+  const fullyReceivedMl = await marketlistService.createMarketlist({
+    date: new Date(),
+    required_date: new Date(),
+    location_id: loc._id,
+    items: [{
+      product_id: productBeras._id,
+      requested_qty: 2,
+      unit_price: 15000,
+      supplier_id: supplierA._id
+    }]
+  }, purchasingUser);
+  await marketlistService.submitMarketlist(fullyReceivedMl._id, purchasingUser);
+  await marketlistService.approveMarketlist(fullyReceivedMl._id, adminUser, 'Approved');
+  const fullyReceivedItem = (await marketlistService.getMarketlistById(fullyReceivedMl._id)).items[0];
+  const fullReceipt = await receivingService.createReceipt(fullyReceivedMl._id, {
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: fullyReceivedItem._id,
+      received_qty: 2,
+      accepted_qty: 2,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  }, receiverUser);
+  const correctedFullReceipt = await receivingService.updateReceipt(fullReceipt._id, {
+    items: [{
+      marketlist_item_id: fullyReceivedItem._id.toString(),
+      received_qty: 0,
+      accepted_qty: 0,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  }, receiverUser);
+  const statusAfterCorrection = await Marketlist.findById(fullyReceivedMl._id);
+  assert(
+    correctedFullReceipt.items[0].accepted_qty === 0 &&
+      statusAfterCorrection.status === MARKETLIST_STATUS.IN_PROGRESS,
+    'Koreksi barang yang tidak datang mengubah status received menjadi in progress.'
+  );
+  await receivingService.updateReceipt(fullReceipt._id, {
+    items: [{
+      marketlist_item_id: fullyReceivedItem._id.toString(),
+      received_qty: 2,
+      accepted_qty: 2,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  }, receiverUser);
+  const completedReceivedMl = await marketlistService.completePartiallyReceivedMarketlist(
+    fullyReceivedMl._id,
+    purchasingUser
+  );
+  assert(
+    completedReceivedMl.status === MARKETLIST_STATUS.COMPLETED,
+    'Marketlist dengan status received dapat diselesaikan.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 20/20 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 24/24 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();

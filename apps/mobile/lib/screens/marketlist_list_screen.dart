@@ -91,6 +91,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
   Color _getStatusColor(String? status) {
     switch (status) {
       case 'approved':
+      case 'received':
       case 'completed':
         return const Color(0xFF16A34A);
       case 'submitted':
@@ -108,6 +109,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
   Color _getStatusBg(String? status) {
     switch (status) {
       case 'approved':
+      case 'received':
       case 'completed':
         return const Color(0xFFDCFCE7);
       case 'submitted':
@@ -122,7 +124,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
     }
   }
 
-  Future<void> _completePartiallyReceivedMarketlist(dynamic marketlist) async {
+  Future<void> _completeMarketlist(dynamic marketlist) async {
     final code = marketlist['marketlist_number'] ?? marketlist['code'] ?? 'Marketlist';
     final confirmed = await showDialog<bool>(
       context: context,
@@ -143,6 +145,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
         ],
       ),
     );
+    if (!mounted) return;
     if (confirmed != true) return;
 
     final marketlistId = marketlist['_id']?.toString();
@@ -379,7 +382,9 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                                       ),
                                     ],
                                   ),
-                                  if (isApproved || status == 'partially_received') ...[
+                                  if (isApproved ||
+                                      status == 'partially_received' ||
+                                      status == 'received') ...[
                                     const Divider(height: 16),
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -414,11 +419,11 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                                               ],
                                             ),
                                           ),
-                                        if (status == 'partially_received')
+                                        if (status == 'partially_received' || status == 'received')
                                           TextButton.icon(
                                             onPressed: _completingMarketlistId == ml['_id']?.toString()
                                                 ? null
-                                                : () => _completePartiallyReceivedMarketlist(ml),
+                                                : () => _completeMarketlist(ml),
                                             icon: _completingMarketlistId == ml['_id']?.toString()
                                                 ? const SizedBox(
                                                     width: 14,

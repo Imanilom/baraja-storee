@@ -6,6 +6,14 @@ const auditService = require('../audit/audit.service');
 const { generateGoodsReceiptNumber } = require('../../utils/number-generator');
 const { MARKETLIST_STATUS, GOODS_RECEIPT_STATUS, RECEIVING_STATUS } = require('@purchasing/constants');
 
+const getItemReceivingStatus = (accepted, rejected, requested, isChecked) => {
+  if (!isChecked) return RECEIVING_STATUS.PENDING;
+  if (accepted === 0 && rejected > 0) return RECEIVING_STATUS.REJECTED;
+  if (accepted === requested) return RECEIVING_STATUS.COMPLETE;
+  if (accepted < requested) return RECEIVING_STATUS.PARTIAL;
+  return RECEIVING_STATUS.OVER_RECEIVED;
+};
+
 class ReceivingService {
   async getReceiptsByMarketlist(marketlistId) {
     const receipts = await GoodsReceipt.find({ marketlist_id: marketlistId })
@@ -159,6 +167,124 @@ class ReceivingService {
     return this.getReceiptById(receipt._id);
   }
 
+  async updateReceipt(receiptId, data, user, expectedMarketlistId) {
+    const receipt = await GoodsReceipt.findById(receiptId);
+    if (!receipt) {
+      throw new Error('Goods receipt not found');
+    }
+
+    if (receipt.status === GOODS_RECEIPT_STATUS.CANCELLED) {
+      throw new Error('Cancelled goods receipts cannot be edited');
+    }
+
+    const marketlist = await Marketlist.findById(receipt.marketlist_id);
+    if (!marketlist) {
+      throw new Error('Marketlist not found');
+    }
+    if (expectedMarketlistId && marketlist._id.toString() !== expectedMarketlistId) {
+      throw new Error('Goods receipt does not belong to this marketlist');
+    }
+    if (marketlist.status === MARKETLIST_STATUS.COMPLETED || marketlist.status === MARKETLIST_STATUS.CANCELLED) {
+      throw new Error(`Cannot edit receipts for marketlist with status '${marketlist.status}'`);
+    }
+
+    if (!Array.isArray(data.items) || data.items.length === 0) {
+      throw new Error('At least one receipt item is required');
+    }
+
+    const existingItems = await GoodsReceiptItem.find({ receipt_id: receipt._id });
+    const existingItemMap = new Map(
+      existingItems.map((item) => [item.marketlist_item_id.toString(), item])
+    );
+    const seenIds = new Set();
+    const updates = [];
+
+    for (const itemInput of data.items) {
+      const itemId = itemInput.marketlist_item_id;
+      const existingItem = existingItemMap.get(itemId?.toString());
+      if (!existingItem || seenIds.has(existingItem._id.toString())) {
+        throw new Error('Receipt item not found or duplicated');
+      }
+      seenIds.add(existingItem._id.toString());
+
+      const received = Number(itemInput.received_qty);
+      const accepted = Number(itemInput.accepted_qty);
+      const rejected = Number(itemInput.rejected_qty);
+      if (![received, accepted, rejected].every(Number.isFinite) || [received, accepted, rejected].some((qty) => qty < 0)) {
+        throw new Error('Receipt quantities must be finite, non-negative numbers');
+      }
+      if (accepted + rejected > received + 1e-9) {
+        throw new Error('Accepted and rejected quantities cannot exceed received quantity');
+      }
+
+      const isChecked = itemInput.is_checked ?? existingItem.is_checked;
+      const marketlistItem = await MarketlistItem.findById(existingItem.marketlist_item_id)
+        .select('requested_qty');
+      if (!marketlistItem) {
+        throw new Error('Related marketlist item not found');
+      }
+
+      const status = getItemReceivingStatus(
+        accepted,
+        rejected,
+        marketlistItem.requested_qty,
+        isChecked
+      );
+      updates.push({
+        updateOne: {
+          filter: { _id: existingItem._id, receipt_id: receipt._id },
+          update: {
+            $set: {
+              received_qty: received,
+              accepted_qty: accepted,
+              rejected_qty: rejected,
+              is_checked: isChecked,
+              condition: itemInput.condition || existingItem.condition,
+              status,
+              item_note: itemInput.item_note ?? existingItem.item_note
+            }
+          }
+        }
+      });
+    }
+
+    const before = existingItems
+      .filter((item) => seenIds.has(item._id.toString()))
+      .map((item) => ({
+        marketlist_item_id: item.marketlist_item_id,
+        received_qty: item.received_qty,
+        accepted_qty: item.accepted_qty,
+        rejected_qty: item.rejected_qty
+      }));
+
+    await GoodsReceiptItem.bulkWrite(updates);
+    if (data.general_condition !== undefined) {
+      receipt.general_condition = data.general_condition;
+      await receipt.save();
+    }
+
+    const updatedItems = existingItems.filter((item) => seenIds.has(item._id.toString()));
+    const updatedItemIds = updatedItems.map((item) => item._id);
+    const persistedItems = await GoodsReceiptItem.find({ _id: { $in: updatedItemIds } });
+    await auditService.log({
+      entity_type: 'goods_receipt',
+      entity_id: receipt._id,
+      action: 'goods_receipt_corrected',
+      performed_by: user._id,
+      old_value: before,
+      new_value: persistedItems.map((item) => ({
+        marketlist_item_id: item.marketlist_item_id,
+        received_qty: item.received_qty,
+        accepted_qty: item.accepted_qty,
+        rejected_qty: item.rejected_qty
+      })),
+      description: `Goods Receipt ${receipt.receipt_number} quantities corrected`
+    });
+
+    await this.recalculateMarketlistProgress(receipt.marketlist_id);
+    return this.getReceiptById(receipt._id);
+  }
+
   async recalculateMarketlistProgress(marketlistId) {
     const marketlist = await Marketlist.findById(marketlistId);
     if (!marketlist) return;
@@ -209,4 +335,3 @@ class ReceivingService {
 }
 
 module.exports = new ReceivingService();
-

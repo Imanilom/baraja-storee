@@ -3,13 +3,17 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
-import { Truck, CheckCircle2, AlertTriangle, FileText, Smartphone } from 'lucide-react';
+import { Truck, CheckCircle2, AlertTriangle, FileText, Smartphone, Pencil, Save, X } from 'lucide-react';
 
 export default function ReceivingMonitorPage() {
   const [activeMarketlists, setActiveMarketlists] = useState([]);
   const [selectedMl, setSelectedMl] = useState(null);
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingReceiptId, setEditingReceiptId] = useState(null);
+  const [receiptEditItems, setReceiptEditItems] = useState([]);
+  const [savingReceipt, setSavingReceipt] = useState(false);
+  const [receiptEditError, setReceiptEditError] = useState('');
 
   useEffect(() => {
     async function loadReceivingMl() {
@@ -40,9 +44,53 @@ export default function ReceivingMonitorPage() {
       ]);
       setSelectedMl(detailRes.data);
       setReceipts(receiptRes?.data || []);
+      setEditingReceiptId(null);
+      setReceiptEditItems([]);
+      setReceiptEditError('');
     } catch (err) {
       alert('Gagal memuat detail penerimaan');
     }
+  };
+
+  const handleStartReceiptEdit = (receipt) => {
+    setEditingReceiptId(receipt._id);
+    setReceiptEditError('');
+    setReceiptEditItems((receipt.items || []).map((item) => ({
+      marketlist_item_id: item.marketlist_item_id?._id || item.marketlist_item_id,
+      received_qty: item.received_qty,
+      accepted_qty: item.accepted_qty,
+      rejected_qty: item.rejected_qty,
+      is_checked: item.is_checked,
+      condition: item.condition,
+      item_note: item.item_note || ''
+    })));
+  };
+
+  const handleSaveReceiptEdit = async () => {
+    if (!selectedMl || !editingReceiptId) return;
+    setSavingReceipt(true);
+    setReceiptEditError('');
+    try {
+      await api.updateReceipt(editingReceiptId, { items: receiptEditItems });
+      const [receiptRes, marketlistRes] = await Promise.all([
+        api.getReceiptsByMarketlist(selectedMl._id),
+        api.getMarketlistById(selectedMl._id)
+      ]);
+      setReceipts(receiptRes?.data || []);
+      setSelectedMl(marketlistRes.data);
+      setEditingReceiptId(null);
+      setReceiptEditItems([]);
+    } catch (error) {
+      setReceiptEditError(error.message || 'Gagal memperbarui penerimaan.');
+    } finally {
+      setSavingReceipt(false);
+    }
+  };
+
+  const handleCancelReceiptEdit = () => {
+    setEditingReceiptId(null);
+    setReceiptEditItems([]);
+    setReceiptEditError('');
   };
 
   return (
@@ -84,6 +132,7 @@ export default function ReceivingMonitorPage() {
                   <button
                     key={ml._id}
                     onClick={() => handleSelectMarketlist(ml)}
+                    disabled={savingReceipt}
                     className={`w-full p-3 text-left rounded-xl border text-xs transition-all ${
                       selectedMl?._id === ml._id
                         ? 'bg-emerald-50 border-emerald-500 shadow-sm'
@@ -158,6 +207,12 @@ export default function ReceivingMonitorPage() {
                 {/* Surat Jalan Receipts Log */}
                 <div className="space-y-3">
                   <h4 className="font-bold text-slate-800">Bukti Surat Jalan & Checklist Datang:</h4>
+                  {selectedMl.has_invoice && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800">
+                      Marketlist ini sudah memiliki invoice. Koreksi penerimaan tidak mengubah invoice secara otomatis;
+                      periksa status invoice dan generate ulang jika invoice belum diverifikasi.
+                    </p>
+                  )}
                   {receipts.length === 0 ? (
                     <p className="p-4 bg-slate-50 rounded-xl text-slate-400 text-center">
                       Belum ada penerimaan yang diinput oleh petugas receiver mobile.
@@ -167,11 +222,49 @@ export default function ReceivingMonitorPage() {
                       <div key={rcv._id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                         <div className="flex items-center justify-between font-bold text-slate-800">
                           <span className="text-emerald-700">{rcv.receipt_number}</span>
-                          <span className="text-[11px] text-slate-500 font-normal">
-                            {new Date(rcv.received_at).toLocaleString('id-ID')} &bull; Petugas: {rcv.received_by?.name}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-slate-500 font-normal">
+                              {new Date(rcv.received_at).toLocaleString('id-ID')} &bull; Petugas: {rcv.received_by?.name}
+                            </span>
+                            {!['completed', 'cancelled'].includes(selectedMl.status) &&
+                              rcv.status !== 'cancelled' &&
+                              (editingReceiptId === rcv._id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={handleSaveReceiptEdit}
+                                    disabled={savingReceipt}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-50"
+                                  >
+                                    <Save className="h-3 w-3" />
+                                    {savingReceipt ? 'Menyimpan...' : 'Simpan'}
+                                  </button>
+                                  <button
+                                    onClick={handleCancelReceiptEdit}
+                                    disabled={savingReceipt}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 disabled:opacity-50"
+                                  >
+                                    <X className="h-3 w-3" />
+                                    Batal
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleStartReceiptEdit(rcv)}
+                                  disabled={editingReceiptId !== null && editingReceiptId !== rcv._id}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                  Edit Penerimaan
+                                </button>
+                              ))}
+                          </div>
                         </div>
                         <p className="text-slate-600 italic">Kondisi: {rcv.general_condition || 'Normal'}</p>
+                        {editingReceiptId === rcv._id && receiptEditError && (
+                          <p role="alert" className="rounded-lg bg-rose-50 p-2 text-[11px] font-semibold text-rose-700">
+                            {receiptEditError}
+                          </p>
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                           {rcv.items?.map((it, idx) => (
@@ -182,9 +275,42 @@ export default function ReceivingMonitorPage() {
                                   {it.status}
                                 </span>
                               </div>
-                              <p className="text-slate-500">
-                                Diterima: {it.received_qty} &bull; Layak: <strong className="text-emerald-700">{it.accepted_qty}</strong> &bull; Ditolak: <strong className="text-rose-600">{it.rejected_qty}</strong>
-                              </p>
+                              {editingReceiptId === rcv._id ? (
+                                <div className="grid grid-cols-3 gap-2 pt-1">
+                                  {[
+                                    ['received_qty', 'Diterima'],
+                                    ['accepted_qty', 'Layak'],
+                                    ['rejected_qty', 'Ditolak']
+                                  ].map(([field, label]) => {
+                                    const editIndex = receiptEditItems.findIndex(
+                                      (item) => item.marketlist_item_id?.toString() ===
+                                        (it.marketlist_item_id?._id || it.marketlist_item_id)?.toString()
+                                    );
+                                    return (
+                                      <label key={field} className="space-y-1 text-slate-500">
+                                        <span>{label}</span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          value={receiptEditItems[editIndex]?.[field] ?? ''}
+                                          onChange={(event) => {
+                                            const value = event.target.value === '' ? '' : Number(event.target.value);
+                                            setReceiptEditItems((items) => items.map((item, itemIndex) =>
+                                              itemIndex === editIndex ? { ...item, [field]: value } : item
+                                            ));
+                                          }}
+                                          className="w-full rounded border border-slate-300 px-2 py-1 text-slate-800"
+                                        />
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="text-slate-500">
+                                  Diterima: {it.received_qty} &bull; Layak: <strong className="text-emerald-700">{it.accepted_qty}</strong> &bull; Ditolak: <strong className="text-rose-600">{it.rejected_qty}</strong>
+                                </p>
+                              )}
                               {it.item_note && <p className="text-slate-400 italic">Catatan: {it.item_note}</p>}
                             </div>
                           ))}
@@ -201,4 +327,3 @@ export default function ReceivingMonitorPage() {
     </div>
   );
 }
-
