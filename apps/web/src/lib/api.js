@@ -161,6 +161,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(options)
     }),
+  regenerateAllInvoices: () =>
+    fetchApi('/invoices/generate-all', {
+      method: 'POST'
+    }),
   getInvoicePdfUrl: (id) => {
     const token = getStoredToken();
     return `${API_BASE}/invoices/${id}/pdf${token ? `?token=${encodeURIComponent(token)}` : ''}`;

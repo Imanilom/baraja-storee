@@ -122,6 +122,7 @@ export default function TransactionsPage() {
   const [selectedMlId, setSelectedMlId] = useState('');
   const [selectedMlDetail, setSelectedMlDetail] = useState(null);
   const [mlFilterTab, setMlFilterTab] = useState('all'); // 'all' | 'active' | 'delivered'
+  const [mlSearch, setMlSearch] = useState('');
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentSource, setPaymentSource] = useState('cash'); // 'cash' | 'bank'
@@ -264,13 +265,16 @@ export default function TransactionsPage() {
       const ml = res.data;
       setSelectedMlDetail(ml);
 
-      // Map which marketlist_item_id have already been purchased
+      // Aggregate purchased quantities so partially purchased items remain selectable.
       const alreadyPurchasedMap = {};
       const existingPurchases = purchaseRes.data || [];
       existingPurchases.forEach((p) => {
         (p.items || []).forEach((pItem) => {
           if (pItem.marketlist_item_id) {
-            alreadyPurchasedMap[pItem.marketlist_item_id.toString()] = {
+            const itemId = pItem.marketlist_item_id.toString();
+            const previous = alreadyPurchasedMap[itemId] || { quantity: 0 };
+            alreadyPurchasedMap[itemId] = {
+              quantity: previous.quantity + (Number(pItem.actual_qty) || 0),
               supplierName: p.supplier_id?.name || 'Supplier Lain',
               purchaseNumber: p.purchase_number
             };
@@ -296,26 +300,32 @@ export default function TransactionsPage() {
       const items = (ml.items || []).map((it) => {
         const p = it.product_id;
         const itemIdStr = it._id.toString();
-        const already = alreadyPurchasedMap[itemIdStr];
+        const purchase = alreadyPurchasedMap[itemIdStr];
+        const purchasedQty = Number(it.purchased_qty ?? purchase?.quantity ?? 0);
+        const remainingQty = Math.max(0, (Number(it.requested_qty) || 0) - purchasedQty);
+        const already = remainingQty <= 0;
         const receivedQty = receivedQtyMap[itemIdStr] || 0;
 
-        // Default actual qty:
-        // Jika status ML sudah delivered dan ada penerimaan gudang > 0, otomatis gunakan qty diterima
-        const initialQty = (isDeliveredMl && receivedQty > 0) ? receivedQty : (it.requested_qty || 0);
+        const initialQty = (isDeliveredMl && receivedQty > 0)
+          ? Math.min(receivedQty, remainingQty)
+          : remainingQty;
 
         return {
           marketlist_item_id: it._id,
           product_id: p?._id || '',
+          supplier_id: it.supplier_id?._id || it.supplier_id || '',
           product_name: p?.name || it.product_name || 'Barang',
           unit_name: p?.unit_id?.abbreviation || p?.unit_id?.name || 'Satuan',
           requested_qty: it.requested_qty || 0,
+          purchased_qty: purchasedQty,
+          remaining_qty: remainingQty,
           received_qty: receivedQty,
           unit_price_ml: it.unit_price || 0,
           actual_qty: initialQty,
           actual_unit_price: it.unit_price || 0,
           notes: '',
-          selected: !already, // pre-selected if available
-          alreadyPurchased: already || null
+          selected: !already,
+          alreadyPurchased: already ? purchase || { quantity: purchasedQty } : null
         };
       });
       setFormItems(items);
@@ -651,9 +661,11 @@ export default function TransactionsPage() {
   const activeMLCount = approvedMLs.filter((m) => ['approved', 'in_progress'].includes(m.status)).length;
   const deliveredMLCount = approvedMLs.filter((m) => ['partially_received', 'received', 'completed'].includes(m.status)).length;
   const filteredMLs = approvedMLs.filter((m) => {
-    if (mlFilterTab === 'active') return ['approved', 'in_progress'].includes(m.status);
-    if (mlFilterTab === 'delivered') return ['partially_received', 'received', 'completed'].includes(m.status);
-    return true;
+    if (mlFilterTab === 'active' && !['approved', 'in_progress'].includes(m.status)) return false;
+    if (mlFilterTab === 'delivered' && !['partially_received', 'received', 'completed'].includes(m.status)) return false;
+    const search = mlSearch.trim().toLowerCase();
+    return !search || [m.marketlist_number, m.status, m.location_id?.name]
+      .some((value) => String(value || '').toLowerCase().includes(search));
   });
   const hasAnyReceived = formItems.some((it) => (it.received_qty || 0) > 0);
   const isDeliveredSelectedMl = selectedMlDetail && ['partially_received', 'received', 'completed'].includes(selectedMlDetail.status);
@@ -842,6 +854,13 @@ export default function TransactionsPage() {
                     </div>
                   </div>
 
+                  <input
+                    type="search"
+                    value={mlSearch}
+                    onChange={(e) => setMlSearch(e.target.value)}
+                    placeholder="Cari nomor Marketlist, gudang, atau status..."
+                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
                   <select
                     value={selectedMlId}
                     onChange={(e) => handleSelectMarketlist(e.target.value)}
@@ -853,9 +872,13 @@ export default function TransactionsPage() {
                       const meta = getMlStatusMeta(ml.status);
                       const reqDateStr = new Date(ml.required_date || ml.date).toLocaleDateString('id-ID');
                       const estStr = fmt(ml.estimated_total || ml.totals?.estimated_amount);
+                      const remainingItems = (ml.items || []).filter(
+                        (item) => item.item_status !== 'rejected' &&
+                          (Number(item.requested_qty) || 0) > (Number(item.purchased_qty) || 0)
+                      ).length;
                       return (
                         <option key={ml._id} value={ml._id}>
-                          {meta.tag} | {ml.code || ml.marketlist_number} • Tgl: {reqDateStr} • Est: {estStr}
+                          {meta.tag} | {ml.code || ml.marketlist_number} • Sisa {remainingItems} barang • Tgl: {reqDateStr} • Est: {estStr}
                         </option>
                       );
                     })}
@@ -1140,6 +1163,7 @@ export default function TransactionsPage() {
                                 <th className="px-3 py-2.5 text-center w-10">Pilih</th>
                                 <th className="px-3 py-2.5 text-left text-slate-500 font-semibold">Nama Barang</th>
                                 <th className="px-3 py-2.5 text-center text-slate-500 font-semibold">Req ML</th>
+                                <th className="px-3 py-2.5 text-center text-slate-500 font-semibold">Sudah Dibeli</th>
                                 <th className="px-3 py-2.5 text-center text-slate-500 font-semibold">Diterima Gudang</th>
                                 <th className="px-3 py-2.5 text-center text-slate-500 font-semibold">Harga ML</th>
                                 <th className="px-3 py-2.5 text-center text-amber-600 font-bold min-w-[140px]">Qty Beli Aktual</th>
@@ -1191,6 +1215,14 @@ export default function TransactionsPage() {
                                     </td>
                                     <td className="px-3 py-2.5 text-center text-slate-500 font-medium">
                                       {it.requested_qty} {it.unit_name}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center text-slate-600">
+                                      {it.purchased_qty > 0 ? `${it.purchased_qty} / ${it.requested_qty}` : '-'}
+                                      {it.remaining_qty > 0 && (
+                                        <span className="block text-[10px] text-amber-700">
+                                          Sisa {it.remaining_qty} {it.unit_name}
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="px-3 py-2.5 text-center">
                                       {it.received_qty > 0 ? (
@@ -1288,7 +1320,7 @@ export default function TransactionsPage() {
                             </tbody>
                             <tfoot className="border-t-2 border-slate-300 bg-amber-50/50">
                               <tr>
-                                <td colSpan="7" className="px-3 py-3 text-right font-black text-slate-700 text-sm">
+                                <td colSpan="8" className="px-3 py-3 text-right font-black text-slate-700 text-sm">
                                   TOTAL TRANSAKSI SUPPLIER INI ({selectedItems.length} BARANG):
                                 </td>
                                 <td className="px-3 py-3 text-right font-black text-amber-700 text-sm">{fmt(formTotal)}</td>
@@ -1296,11 +1328,11 @@ export default function TransactionsPage() {
                               {paymentMethod === 'tempo' && (
                                 <>
                                   <tr className="text-xs">
-                                    <td colSpan="7" className="px-3 py-1 text-right text-slate-500">Uang Muka / DP:</td>
+                                    <td colSpan="8" className="px-3 py-1 text-right text-slate-500">Uang Muka / DP:</td>
                                     <td className="px-3 py-1 text-right text-green-700 font-bold">{fmt(Number(downPayment) || 0)}</td>
                                   </tr>
                                   <tr className="text-xs">
-                                    <td colSpan="7" className="px-3 py-1 text-right text-red-700 font-bold">Sisa Hutang:</td>
+                                    <td colSpan="8" className="px-3 py-1 text-right text-red-700 font-bold">Sisa Hutang:</td>
                                     <td className="px-3 py-1 text-right text-red-700 font-black">{fmt(formTotal - (Number(downPayment) || 0))}</td>
                                   </tr>
                                 </>

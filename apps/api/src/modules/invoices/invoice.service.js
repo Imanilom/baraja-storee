@@ -11,12 +11,13 @@ const { generateInvoiceNumber } = require('../../utils/number-generator');
 const { MARKETLIST_STATUS, INVOICE_STATUS, PURCHASE_STATUS } = require('@purchasing/constants');
 
 class InvoiceService {
-  async getPurchaseRecapPrices(marketlistId, supplierIds) {
-    const purchases = await Purchase.find({
+  async getPurchaseRecapPrices(marketlistId, supplierIds = []) {
+    const filter = {
       marketlist_id: marketlistId,
-      supplier_id: { $in: supplierIds },
       status: PURCHASE_STATUS.VERIFIED
-    }).select('_id supplier_id');
+    };
+    if (supplierIds.length > 0) filter.supplier_id = { $in: supplierIds };
+    const purchases = await Purchase.find(filter).select('_id supplier_id');
     const purchaseIds = purchases.map((purchase) => purchase._id);
     if (purchaseIds.length === 0) return new Map();
 
@@ -24,9 +25,7 @@ class InvoiceService {
       purchases.map((purchase) => [purchase._id.toString(), purchase.supplier_id.toString()])
     );
     const purchaseItems = await PurchaseItem.find({
-      purchase_id: { $in: purchaseIds },
-      actual_qty: { $gt: 0 },
-      actual_unit_price: { $gt: 0 }
+      purchase_id: { $in: purchaseIds }
     }).select('purchase_id marketlist_item_id actual_qty actual_unit_price');
 
     const weightedPrices = new Map();
@@ -35,22 +34,28 @@ class InvoiceService {
       const itemId = purchaseItem.marketlist_item_id.toString();
       const key = `${supplierId}:${itemId}`;
       const total = weightedPrices.get(key) || { quantity: 0, amount: 0 };
-      total.quantity += purchaseItem.actual_qty;
-      total.amount += purchaseItem.actual_qty * purchaseItem.actual_unit_price;
+      total.quantity += Number(purchaseItem.actual_qty) || 0;
+      if (purchaseItem.actual_qty > 0 && purchaseItem.actual_unit_price > 0) {
+        total.amount += purchaseItem.actual_qty * purchaseItem.actual_unit_price;
+      }
       weightedPrices.set(key, total);
     }
 
     return new Map(
       [...weightedPrices].map(([key, total]) => [
         key,
-        { unit_price: total.amount / total.quantity, price_source: 'purchase_recap' }
+        {
+          quantity: total.quantity,
+          unit_price: total.quantity > 0 ? total.amount / total.quantity : null,
+          price_source: total.quantity > 0 && total.amount > 0 ? 'purchase_recap' : null
+        }
       ])
     );
   }
 
   getInvoiceItemPrice(item, supplierId, purchasePrices) {
     const purchasePrice = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
-    if (purchasePrice) return purchasePrice;
+    if (purchasePrice?.unit_price > 0) return purchasePrice;
     if (Number(item.product_id?.last_purchase_price) > 0) {
       return {
         unit_price: Number(item.product_id.last_purchase_price),
@@ -139,10 +144,7 @@ class InvoiceService {
       }
     });
 
-    const invoiceableItems = mlItems.filter((item) =>
-      item.item_status !== 'rejected' &&
-      (acceptedMap.get(item._id.toString()) || 0) > 0
-    );
+    const candidateItems = mlItems.filter((item) => item.item_status !== 'rejected');
     const existingInvoices = await Invoice.find({
       marketlist_id: marketlistId,
       marketlist_version: version
@@ -152,13 +154,9 @@ class InvoiceService {
           (invoice) => invoice.supplier_id.toString() === options.supplier_id.toString()
         )
       : existingInvoices;
-    if (invoiceableItems.length === 0 && targetExistingInvoices.length === 0) {
-      throw new Error('No accepted goods have been received for this marketlist');
-    }
-
-    // Check if any items are missing supplier_id and resolve with fallback
+    // Resolve missing suppliers using receipt and product history.
     let defaultSupplierId = null;
-    for (const item of invoiceableItems) {
+    for (const item of candidateItems) {
       if (!item.supplier_id) {
         if (!defaultSupplierId) {
           const recWithSupp = allReceipts.find((r) => r.supplier_id);
@@ -178,20 +176,56 @@ class InvoiceService {
       }
     }
 
-    // Group items by supplier_id
-    const supplierGroup = new Map();
-    for (const item of invoiceableItems) {
-      const suppKey = item.supplier_id ? item.supplier_id.toString() : defaultSupplierId.toString();
-      if (!supplierGroup.has(suppKey)) {
-        supplierGroup.set(suppKey, []);
-      }
-      supplierGroup.get(suppKey).push(item);
+    const purchasePrices = await this.getPurchaseRecapPrices(marketlistId);
+    const hasPurchaseRecap = marketlist.purchase_tracking_started || purchasePrices.size > 0;
+    const getActualQuantity = (item, supplierId = item.supplier_id.toString()) => {
+      const recap = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
+      if (hasPurchaseRecap) return recap?.quantity || 0;
+      return acceptedMap.get(item._id.toString()) || 0;
+    };
+    const invoiceableItems = candidateItems.filter((item) => {
+      if (!hasPurchaseRecap) return getActualQuantity(item) > 0;
+      const itemId = item._id.toString();
+      return [...purchasePrices.entries()].some(
+        ([key, recap]) => key.endsWith(`:${itemId}`) && recap.quantity > 0
+      );
+    });
+    if (invoiceableItems.length === 0 && targetExistingInvoices.length === 0) {
+      throw new Error('No accepted goods or purchases exist for this marketlist');
     }
 
-    const purchasePrices = await this.getPurchaseRecapPrices(
-      marketlistId,
-      [...supplierGroup.keys()]
-    );
+    // Group items by supplier_id
+    const supplierGroup = new Map();
+    const supplierIds = new Set();
+    if (hasPurchaseRecap) {
+      candidateItems.forEach((item) => supplierIds.add(item.supplier_id.toString()));
+      for (const key of purchasePrices.keys()) {
+        supplierIds.add(key.split(':')[0]);
+      }
+      for (const item of candidateItems) {
+        const itemId = item._id.toString();
+        const itemRecaps = [...purchasePrices.entries()].filter(([key]) => key.endsWith(`:${itemId}`));
+        if (itemRecaps.some(([, recap]) => recap.quantity > 0)) {
+          itemRecaps.forEach(([key, recap]) => {
+            if (recap.quantity > 0) supplierIds.add(key.split(':')[0]);
+          });
+        }
+      }
+    } else {
+      invoiceableItems.forEach((item) => supplierIds.add(item.supplier_id.toString()));
+    }
+    if (hasPurchaseRecap) {
+      existingInvoices.forEach((invoice) => supplierIds.add(invoice.supplier_id.toString()));
+    }
+    for (const supplierId of supplierIds) {
+      const items = candidateItems.filter((item) => {
+        const assignedSupplierId = item.supplier_id.toString();
+        const recap = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
+        return assignedSupplierId === supplierId || (hasPurchaseRecap && recap?.quantity > 0);
+      });
+      if (items.length > 0) supplierGroup.set(supplierId, items);
+    }
+
     const generatedInvoices = [];
 
     // Target specific supplier if provided, otherwise all
@@ -203,8 +237,9 @@ class InvoiceService {
       // Calculate totals
       let subtotal = 0;
       const invoiceItems = items.map((item) => {
-        const invoicedQty = acceptedMap.get(item._id.toString()) || 0;
+        const invoicedQty = getActualQuantity(item, suppKey);
         const price = this.getInvoiceItemPrice(item, suppKey, purchasePrices);
+        const purchased = invoicedQty > 0;
         const itemSubtotal = invoicedQty * price.unit_price;
         subtotal += itemSubtotal;
         return {
@@ -212,6 +247,7 @@ class InvoiceService {
           product_name: item.product_snapshot?.name || item.product_id?.name || 'Item',
           sku: item.product_snapshot?.sku || '',
           quantity: invoicedQty,
+          purchased,
           unit: item.product_snapshot?.unit_name || '',
           unit_price: price.unit_price,
           price_source: price.price_source,
@@ -232,11 +268,12 @@ class InvoiceService {
         // If still in generated status, update with latest received quantities
         if (
           existing.status === INVOICE_STATUS.GENERATED &&
-          existing.purchases_confirmed !== true
+          (existing.purchases_confirmed !== true || options.syncPurchases === true)
         ) {
           existing.items = invoiceItems;
           existing.subtotal = subtotal;
           existing.grand_total = grand_total;
+          if (options.syncPurchases === true) existing.purchases_confirmed = false;
           await existing.save();
         }
         generatedInvoices.push(existing);
@@ -279,7 +316,7 @@ class InvoiceService {
     for (const existing of existingInvoices) {
       if (
         existing.status !== INVOICE_STATUS.GENERATED ||
-        existing.purchases_confirmed === true ||
+        (existing.purchases_confirmed === true && options.syncPurchases !== true) ||
         supplierGroup.has(existing.supplier_id.toString()) ||
         (options.supplier_id &&
           existing.supplier_id.toString() !== options.supplier_id.toString())
@@ -305,6 +342,61 @@ class InvoiceService {
     }
 
     return generatedInvoices;
+  }
+
+  async syncMarketlistPurchaseQuantities(marketlistId, user) {
+    const invoiceCount = await Invoice.countDocuments({
+      marketlist_id: marketlistId,
+      status: INVOICE_STATUS.GENERATED
+    });
+    if (invoiceCount === 0) return [];
+    return this.generateInvoicesFromMarketlist(
+      marketlistId,
+      { syncPurchases: true },
+      user
+    );
+  }
+
+  async regenerateAllInvoices(user) {
+    const eligibleStatuses = [
+      MARKETLIST_STATUS.APPROVED,
+      MARKETLIST_STATUS.IN_PROGRESS,
+      MARKETLIST_STATUS.PARTIALLY_RECEIVED,
+      MARKETLIST_STATUS.RECEIVED,
+      MARKETLIST_STATUS.COMPLETED
+    ];
+    const marketlists = await Marketlist.find({ status: { $in: eligibleStatuses } })
+      .select('_id');
+    const marketlistIds = marketlists.map((marketlist) => marketlist._id);
+    if (marketlistIds.length === 0) return [];
+
+    const [invoiceMarketlistIds, purchaseMarketlistIds, receiptMarketlistIds] = await Promise.all([
+      Invoice.distinct('marketlist_id', {
+        marketlist_id: { $in: marketlistIds },
+        status: INVOICE_STATUS.GENERATED
+      }),
+      Purchase.distinct('marketlist_id', { marketlist_id: { $in: marketlistIds } }),
+      GoodsReceipt.distinct('marketlist_id', {
+        marketlist_id: { $in: marketlistIds },
+        status: { $ne: 'cancelled' }
+      })
+    ]);
+    const eligibleIds = new Set(
+      [...invoiceMarketlistIds, ...purchaseMarketlistIds, ...receiptMarketlistIds]
+        .map((id) => id.toString())
+    );
+
+    const results = [];
+    for (const marketlistId of marketlistIds) {
+      if (!eligibleIds.has(marketlistId.toString())) continue;
+      const invoices = await this.generateInvoicesFromMarketlist(
+        marketlistId,
+        { syncPurchases: true },
+        user
+      );
+      results.push(...invoices);
+    }
+    return results;
   }
 
   async verifyInvoice(id, user) {

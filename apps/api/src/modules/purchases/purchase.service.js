@@ -6,6 +6,7 @@ const MarketlistItem = require('../marketlists/marketlist-item.model');
 const Supplier = require('../suppliers/supplier.model');
 const Product = require('../products/product.model');
 const ActivityLog = require('../audit/activity-log.model');
+const invoiceService = require('../invoices/invoice.service');
 const { PURCHASE_STATUS, PAYMENT_STATUS } = require('@purchasing/constants');
 
 class PurchaseService {
@@ -134,6 +135,9 @@ class PurchaseService {
         purchase_id: purchase._id
       }))
     );
+    await Marketlist.findByIdAndUpdate(marketlist_id, {
+      $set: { purchase_tracking_started: true }
+    });
 
     // If tempo & uang muka dibayar, record first debt payment
     if (payment_method === 'tempo' && amountPaid > 0 && amountPaid < totalActual) {
@@ -193,6 +197,8 @@ class PurchaseService {
         items_count: items.length
       }
     }).catch(() => null);
+
+    await invoiceService.syncMarketlistPurchaseQuantities(marketlist_id, user);
 
     return {
       ...purchase.toObject(),
@@ -463,6 +469,7 @@ class PurchaseService {
     }
 
     await purchase.save();
+    await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
 
     // Audit log
     await ActivityLog.create({
@@ -505,6 +512,11 @@ class PurchaseService {
         total_actual: purchase.total_actual
       }
     }).catch(() => null);
+
+    await Marketlist.findByIdAndUpdate(purchase.marketlist_id, {
+      $set: { purchase_tracking_started: true }
+    });
+    await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
 
     return { message: `Transaksi ${purchase.purchase_number} berhasil dihapus.` };
   }

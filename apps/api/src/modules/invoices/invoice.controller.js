@@ -33,6 +33,15 @@ class InvoiceController {
     }
   }
 
+  async regenerateAll(req, res) {
+    try {
+      const invoices = await invoiceService.regenerateAllInvoices(req.user);
+      return sendSuccess(res, 'All eligible invoices generated or refreshed', invoices);
+    } catch (error) {
+      return sendError(res, 'Failed to generate all invoices', error.message, 400);
+    }
+  }
+
   async verify(req, res) {
     try {
       const invoice = await invoiceService.verifyInvoice(req.params.id, req.user);

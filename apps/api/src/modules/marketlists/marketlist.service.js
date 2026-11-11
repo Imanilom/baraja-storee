@@ -6,11 +6,27 @@ const MarketlistNote = require('../notes/marketlist-note.model');
 const Product = require('../products/product.model');
 const ProductPrice = require('../prices/product-price.model');
 const Invoice = require('../invoices/invoice.model');
+const Purchase = require('../purchases/purchase.model');
+const PurchaseItem = require('../purchases/purchase-item.model');
 const auditService = require('../audit/audit.service');
 const { generateMarketlistNumber } = require('../../utils/number-generator');
-const { MARKETLIST_STATUS, ROLES, PRICE_SOURCES } = require('@purchasing/constants');
+const { MARKETLIST_STATUS, ROLES, PRICE_SOURCES, PURCHASE_STATUS } = require('@purchasing/constants');
 
 class MarketlistService {
+  async getPurchasedQuantityMap(marketlistIds) {
+    const purchases = await Purchase.find({
+      marketlist_id: { $in: marketlistIds },
+      status: PURCHASE_STATUS.VERIFIED
+    }).select('_id');
+    if (purchases.length === 0) return new Map();
+
+    const totals = await PurchaseItem.aggregate([
+      { $match: { purchase_id: { $in: purchases.map((purchase) => purchase._id) } } },
+      { $group: { _id: '$marketlist_item_id', quantity: { $sum: '$actual_qty' } } }
+    ]);
+    return new Map(totals.map((entry) => [entry._id.toString(), entry.quantity]));
+  }
+
   async getAllMarketlists(query = {}, user = null) {
     const filter = {};
     if (query.status) {
@@ -102,6 +118,14 @@ class MarketlistService {
       })
     );
 
+    const purchasedQuantityMap = await this.getPurchasedQuantityMap(mlIds);
+    items.forEach((marketlist) => {
+      marketlist.items = marketlist.items.map((item) => ({
+        ...item,
+        purchased_qty: purchasedQuantityMap.get(item._id.toString()) || 0
+      }));
+    });
+
     return { items, total, page, limit };
   }
 
@@ -129,10 +153,14 @@ class MarketlistService {
       MarketlistApproval.find({ marketlist_id: id }).populate('admin_id', 'name email').sort({ created_at: -1 }),
       Invoice.find({ marketlist_id: id }).populate('supplier_id', 'name code').lean()
     ]);
+    const purchasedQuantityMap = await this.getPurchasedQuantityMap([marketlist._id]);
 
     return {
       ...marketlist.toObject(),
-      items,
+      items: items.map((item) => ({
+        ...item.toObject(),
+        purchased_qty: purchasedQuantityMap.get(item._id.toString()) || 0
+      })),
       note: note ? note.note : '',
       note_details: note,
       approvals,

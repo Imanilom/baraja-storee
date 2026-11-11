@@ -3,7 +3,7 @@
 import { Fragment, useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
-import { Receipt, FileDown, Plus, CheckCircle, ShieldCheck, ExternalLink, Pencil, Save, X } from 'lucide-react';
+import { Receipt, FileDown, Plus, CheckCircle, ShieldCheck, ExternalLink, Pencil, Save, X, RotateCcw } from 'lucide-react';
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState([]);
@@ -16,6 +16,7 @@ export default function InvoicesPage() {
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [invoiceEditError, setInvoiceEditError] = useState('');
   const [refreshingInvoiceId, setRefreshingInvoiceId] = useState(null);
+  const [regeneratingAll, setRegeneratingAll] = useState(false);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -69,6 +70,19 @@ export default function InvoicesPage() {
     }
   };
 
+  const handleRegenerateAll = async () => {
+    setRegeneratingAll(true);
+    try {
+      const result = await api.regenerateAllInvoices();
+      await fetchInvoices();
+      alert(`Invoice diperbarui untuk ditinjau. ${result.data?.length || 0} dokumen diproses.`);
+    } catch (error) {
+      alert(error.message || 'Gagal memperbarui semua invoice.');
+    } finally {
+      setRegeneratingAll(false);
+    }
+  };
+
   const handleDownloadPdf = (id) => {
     const url = api.getInvoicePdfUrl(id);
     window.open(url, '_blank');
@@ -118,7 +132,7 @@ export default function InvoicesPage() {
             <div>
               <p className="font-bold">Invoice Awal dari Penerimaan Marketlist</p>
               <p className="text-emerald-800/80">
-                Invoice dibuat per supplier berdasarkan barang yang diterima. Sebelum diverifikasi, status dibeli/tidak dibeli dan kuantitas aktual dapat disesuaikan melalui Atur Pembelian.
+                Invoice disinkronkan dengan transaksi aktual Marketlist. Periksa status dibeli/tidak dibeli dan kuantitas sebelum invoice diverifikasi.
               </p>
             </div>
           </div>
@@ -126,7 +140,18 @@ export default function InvoicesPage() {
 
         {/* Generator Form */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <h3 className="font-bold text-sm text-slate-800">Generate Invoice dari Marketlist Approved</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-bold text-sm text-slate-800">Generate Invoice dari Marketlist Approved</h3>
+            <button
+              type="button"
+              onClick={handleRegenerateAll}
+              disabled={regeneratingAll || generating}
+              className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${regeneratingAll ? 'animate-spin' : ''}`} />
+              {regeneratingAll ? 'Memperbarui...' : 'Perbarui Semua Invoice'}
+            </button>
+          </div>
           <form onSubmit={handleGenerate} className="flex flex-col sm:flex-row gap-3">
             <select
               value={selectedMlId}

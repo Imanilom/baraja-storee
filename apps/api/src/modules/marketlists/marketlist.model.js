@@ -57,7 +57,11 @@ const MarketlistSchema = new mongoose.Schema(
       default: 1
     },
     submitted_at: Date,
-    completed_at: Date
+    completed_at: Date,
+    purchase_tracking_started: {
+      type: Boolean,
+      default: false
+    }
   },
   { timestamps: true }
 );
@@ -75,4 +79,3 @@ MarketlistSchema.set('toJSON', { virtuals: true });
 MarketlistSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Marketlist', MarketlistSchema);
-

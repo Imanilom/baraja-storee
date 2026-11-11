@@ -19,6 +19,7 @@ const marketlistService = require('../src/modules/marketlists/marketlist.service
 const marketlistNoteService = require('../src/modules/notes/marketlist-note.service');
 const receivingService = require('../src/modules/receiving/receiving.service');
 const invoiceService = require('../src/modules/invoices/invoice.service');
+const purchaseService = require('../src/modules/purchases/purchase.service');
 
 const { ROLES, MARKETLIST_STATUS, RECEIVING_STATUS, ITEM_CONDITION } = require('@purchasing/constants');
 const { createGoodsReceiptSchema, updateGoodsReceiptSchema } = require('@purchasing/validation');
@@ -96,7 +97,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 33 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 36 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -108,7 +109,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/33] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/36] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -629,8 +630,79 @@ async function runTests() {
     'Update Harga menggunakan last purchase price dari master item jika rekap supplier tidak ada.'
   );
 
+  // 34. Recording a purchase immediately synchronizes the generated invoice quantity
+  const purchaseSyncMl = await marketlistService.createMarketlist({
+    date: new Date(),
+    required_date: new Date(),
+    location_id: loc._id,
+    items: [{ product_id: productBeras._id, requested_qty: 10, unit_price: 15000, supplier_id: supplierA._id }]
+  }, purchasingUser);
+  await marketlistService.submitMarketlist(purchaseSyncMl._id, purchasingUser);
+  await marketlistService.approveMarketlist(purchaseSyncMl._id, adminUser, 'Approved');
+  const purchaseSyncItem = (await marketlistService.getMarketlistById(purchaseSyncMl._id)).items[0];
+  await receivingService.createReceipt(purchaseSyncMl._id, {
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: purchaseSyncItem._id,
+      received_qty: 10,
+      accepted_qty: 10,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  }, receiverUser);
+  await invoiceService.generateInvoicesFromMarketlist(purchaseSyncMl._id, {}, adminUser);
+  const syncPurchase = await purchaseService.createPurchase({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: purchaseSyncItem._id,
+      actual_qty: 4,
+      actual_unit_price: 16000
+    }]
+  }, purchasingUser);
+  const syncedInvoice = await Invoice.findOne({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    status: 'generated'
+  });
+  const syncedMarketlist = await marketlistService.getMarketlistById(purchaseSyncMl._id);
+  assert(
+    syncedInvoice.items[0].quantity === 4 &&
+      syncedInvoice.items[0].unit_price === 16000 &&
+      syncedMarketlist.items[0].purchased_qty === 4,
+    'Transaksi pembelian langsung memperbarui qty dan harga invoice serta menampilkan qty dibeli di Marketlist.'
+  );
+
+  // 35. Partial purchases can continue and aggregate, then update when a transaction is deleted
+  await purchaseService.createPurchase({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: purchaseSyncItem._id,
+      actual_qty: 2,
+      actual_unit_price: 17000
+    }]
+  }, purchasingUser);
+  const afterSecondPurchase = await marketlistService.getMarketlistById(purchaseSyncMl._id);
+  assert(
+    afterSecondPurchase.items[0].purchased_qty === 6,
+    'Qty pembelian bertahap dijumlahkan tanpa mengubah qty rencana Marketlist.'
+  );
+  await purchaseService.deletePurchase(syncPurchase._id, purchasingUser);
+  const afterDeleteInvoice = await Invoice.findOne({
+    marketlist_id: purchaseSyncMl._id,
+    supplier_id: supplierA._id,
+    status: 'generated'
+  });
+  const afterDeleteMarketlist = await marketlistService.getMarketlistById(purchaseSyncMl._id);
+  assert(
+    afterDeleteInvoice.items[0].quantity === 2 &&
+      afterDeleteMarketlist.items[0].purchased_qty === 2,
+    'Menghapus transaksi langsung menghitung ulang qty beli dan invoice.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 33/33 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 36/36 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();
