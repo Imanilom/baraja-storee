@@ -184,7 +184,7 @@ class ReceivingService {
     if (expectedMarketlistId && marketlist._id.toString() !== expectedMarketlistId) {
       throw new Error('Goods receipt does not belong to this marketlist');
     }
-    if (marketlist.status === MARKETLIST_STATUS.COMPLETED || marketlist.status === MARKETLIST_STATUS.CANCELLED) {
+    if (marketlist.status === MARKETLIST_STATUS.CANCELLED) {
       throw new Error(`Cannot edit receipts for marketlist with status '${marketlist.status}'`);
     }
 

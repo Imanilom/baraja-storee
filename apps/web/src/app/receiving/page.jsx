@@ -226,7 +226,7 @@ export default function ReceivingMonitorPage() {
                             <span className="text-[11px] text-slate-500 font-normal">
                               {new Date(rcv.received_at).toLocaleString('id-ID')} &bull; Petugas: {rcv.received_by?.name}
                             </span>
-                            {!['completed', 'cancelled'].includes(selectedMl.status) &&
+                            {selectedMl.status !== 'cancelled' &&
                               rcv.status !== 'cancelled' &&
                               (editingReceiptId === rcv._id ? (
                                 <div className="flex items-center gap-1">

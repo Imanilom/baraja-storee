@@ -94,7 +94,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 24 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 25 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -106,7 +106,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/24] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/25] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -440,9 +440,24 @@ async function runTests() {
     completedReceivedMl.status === MARKETLIST_STATUS.COMPLETED,
     'Marketlist dengan status received dapat diselesaikan.'
   );
+  const editedCompletedReceipt = await receivingService.updateReceipt(fullReceipt._id, {
+    items: [{
+      marketlist_item_id: fullyReceivedItem._id.toString(),
+      received_qty: 1,
+      accepted_qty: 1,
+      rejected_qty: 0,
+      is_checked: true
+    }]
+  }, receiverUser);
+  const reopenedCompletedMl = await Marketlist.findById(fullyReceivedMl._id);
+  assert(
+    editedCompletedReceipt.items[0].accepted_qty === 1 &&
+      reopenedCompletedMl.status === MARKETLIST_STATUS.PARTIALLY_RECEIVED,
+    'Penerimaan pada marketlist completed dapat dikoreksi dan status dihitung ulang.'
+  );
 
   console.log('===========================================================');
-  console.log(`🎉 ALL 24/24 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 25/25 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();
