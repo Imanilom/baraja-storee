@@ -51,6 +51,15 @@ class InvoiceController {
     }
   }
 
+  async refreshPrices(req, res) {
+    try {
+      const invoice = await invoiceService.refreshInvoicePrices(req.params.id, req.user);
+      return sendSuccess(res, 'Invoice prices refreshed successfully', invoice);
+    } catch (error) {
+      return sendError(res, 'Failed to refresh invoice prices', error.message, 400);
+    }
+  }
+
   async downloadPdf(req, res) {
     try {
       const invoice = await invoiceService.getInvoiceById(req.params.id);

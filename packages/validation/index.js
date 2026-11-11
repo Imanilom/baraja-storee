@@ -128,7 +128,8 @@ const updateInvoiceItemsSchema = z.object({
   items: z.array(z.object({
     marketlist_item_id: zObjectId,
     purchased: z.boolean(),
-    quantity: z.number().min(0)
+    quantity: z.number().min(0),
+    unit_price: z.number().min(0)
   })).min(1)
 });
 

@@ -3,12 +3,63 @@ const Marketlist = require('../marketlists/marketlist.model');
 const MarketlistItem = require('../marketlists/marketlist-item.model');
 const GoodsReceipt = require('../receiving/goods-receipt.model');
 const GoodsReceiptItem = require('../receiving/goods-receipt-item.model');
+const Purchase = require('../purchases/purchase.model');
+const PurchaseItem = require('../purchases/purchase-item.model');
 const Supplier = require('../suppliers/supplier.model');
 const auditService = require('../audit/audit.service');
 const { generateInvoiceNumber } = require('../../utils/number-generator');
-const { MARKETLIST_STATUS, INVOICE_STATUS } = require('@purchasing/constants');
+const { MARKETLIST_STATUS, INVOICE_STATUS, PURCHASE_STATUS } = require('@purchasing/constants');
 
 class InvoiceService {
+  async getPurchaseRecapPrices(marketlistId, supplierIds) {
+    const purchases = await Purchase.find({
+      marketlist_id: marketlistId,
+      supplier_id: { $in: supplierIds },
+      status: PURCHASE_STATUS.VERIFIED
+    }).select('_id supplier_id');
+    const purchaseIds = purchases.map((purchase) => purchase._id);
+    if (purchaseIds.length === 0) return new Map();
+
+    const purchaseSupplierMap = new Map(
+      purchases.map((purchase) => [purchase._id.toString(), purchase.supplier_id.toString()])
+    );
+    const purchaseItems = await PurchaseItem.find({
+      purchase_id: { $in: purchaseIds },
+      actual_qty: { $gt: 0 },
+      actual_unit_price: { $gt: 0 }
+    }).select('purchase_id marketlist_item_id actual_qty actual_unit_price');
+
+    const weightedPrices = new Map();
+    for (const purchaseItem of purchaseItems) {
+      const supplierId = purchaseSupplierMap.get(purchaseItem.purchase_id.toString());
+      const itemId = purchaseItem.marketlist_item_id.toString();
+      const key = `${supplierId}:${itemId}`;
+      const total = weightedPrices.get(key) || { quantity: 0, amount: 0 };
+      total.quantity += purchaseItem.actual_qty;
+      total.amount += purchaseItem.actual_qty * purchaseItem.actual_unit_price;
+      weightedPrices.set(key, total);
+    }
+
+    return new Map(
+      [...weightedPrices].map(([key, total]) => [
+        key,
+        { unit_price: total.amount / total.quantity, price_source: 'purchase_recap' }
+      ])
+    );
+  }
+
+  getInvoiceItemPrice(item, supplierId, purchasePrices) {
+    const purchasePrice = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
+    if (purchasePrice) return purchasePrice;
+    if (Number(item.product_id?.last_purchase_price) > 0) {
+      return {
+        unit_price: Number(item.product_id.last_purchase_price),
+        price_source: 'master_item'
+      };
+    }
+    return { unit_price: Number(item.unit_price) || 0, price_source: 'marketlist' };
+  }
+
   async getAllInvoices(query = {}) {
     const filter = {};
     if (query.status) filter.status = query.status;
@@ -137,6 +188,10 @@ class InvoiceService {
       supplierGroup.get(suppKey).push(item);
     }
 
+    const purchasePrices = await this.getPurchaseRecapPrices(
+      marketlistId,
+      [...supplierGroup.keys()]
+    );
     const generatedInvoices = [];
 
     // Target specific supplier if provided, otherwise all
@@ -149,8 +204,8 @@ class InvoiceService {
       let subtotal = 0;
       const invoiceItems = items.map((item) => {
         const invoicedQty = acceptedMap.get(item._id.toString()) || 0;
-
-        const itemSubtotal = invoicedQty * item.unit_price;
+        const price = this.getInvoiceItemPrice(item, suppKey, purchasePrices);
+        const itemSubtotal = invoicedQty * price.unit_price;
         subtotal += itemSubtotal;
         return {
           marketlist_item_id: item._id,
@@ -158,7 +213,8 @@ class InvoiceService {
           sku: item.product_snapshot?.sku || '',
           quantity: invoicedQty,
           unit: item.product_snapshot?.unit_name || '',
-          unit_price: item.unit_price,
+          unit_price: price.unit_price,
+          price_source: price.price_source,
           subtotal: itemSubtotal
         };
       });
@@ -300,6 +356,7 @@ class InvoiceService {
       marketlist_item_id: item.marketlist_item_id,
       purchased: item.purchased !== false,
       quantity: item.quantity,
+      unit_price: item.unit_price,
       subtotal: item.subtotal
     }));
     let subtotal = 0;
@@ -307,7 +364,8 @@ class InvoiceService {
       const update = updates.get(item.marketlist_item_id.toString());
       const purchased = update.purchased;
       const quantity = purchased ? update.quantity : 0;
-      const itemSubtotal = quantity * item.unit_price;
+      const unitPrice = update.unit_price;
+      const itemSubtotal = quantity * unitPrice;
       subtotal += itemSubtotal;
       return {
         marketlist_item_id: item.marketlist_item_id,
@@ -316,7 +374,8 @@ class InvoiceService {
         purchased,
         quantity,
         unit: item.unit,
-        unit_price: item.unit_price,
+        unit_price: unitPrice,
+        price_source: 'manual',
         subtotal: itemSubtotal
       };
     });
@@ -335,9 +394,79 @@ class InvoiceService {
         marketlist_item_id: item.marketlist_item_id,
         purchased: item.purchased,
         quantity: item.quantity,
+        unit_price: item.unit_price,
         subtotal: item.subtotal
       })),
       description: `Invoice ${invoice.invoice_number} purchase quantities updated`
+    });
+    return invoice;
+  }
+
+  async refreshInvoicePrices(id, user) {
+    const invoice = await Invoice.findById(id);
+    if (!invoice) throw new Error('Invoice not found');
+    if (invoice.status !== INVOICE_STATUS.GENERATED) {
+      throw new Error('Only generated invoices can refresh prices');
+    }
+
+    const marketlistItems = await MarketlistItem.find({
+      _id: { $in: invoice.items.map((item) => item.marketlist_item_id) }
+    }).populate('product_id', 'last_purchase_price');
+    const marketlistItemMap = new Map(
+      marketlistItems.map((item) => [item._id.toString(), item])
+    );
+    const purchasePrices = await this.getPurchaseRecapPrices(
+      invoice.marketlist_id,
+      [invoice.supplier_id]
+    );
+    const previousItems = invoice.items.map((item) => ({
+      marketlist_item_id: item.marketlist_item_id,
+      unit_price: item.unit_price,
+      subtotal: item.subtotal
+    }));
+
+    let subtotal = 0;
+    invoice.items = invoice.items.map((invoiceItem) => {
+      const marketlistItem = marketlistItemMap.get(invoiceItem.marketlist_item_id.toString());
+      if (!marketlistItem) {
+        throw new Error(`Marketlist item for '${invoiceItem.product_name}' was not found`);
+      }
+      const price = this.getInvoiceItemPrice(
+        marketlistItem,
+        invoice.supplier_id.toString(),
+        purchasePrices
+      );
+      const itemSubtotal = invoiceItem.quantity * price.unit_price;
+      subtotal += itemSubtotal;
+      return {
+        marketlist_item_id: invoiceItem.marketlist_item_id,
+        product_name: invoiceItem.product_name,
+        sku: invoiceItem.sku,
+        quantity: invoiceItem.quantity,
+        purchased: invoiceItem.purchased,
+        unit: invoiceItem.unit,
+        unit_price: price.unit_price,
+        price_source: price.price_source,
+        subtotal: itemSubtotal
+      };
+    });
+    invoice.subtotal = subtotal;
+    invoice.grand_total = subtotal - invoice.discount + invoice.tax;
+    await invoice.save();
+
+    await auditService.log({
+      entity_type: 'invoice',
+      entity_id: invoice._id,
+      action: 'invoice_prices_refreshed',
+      performed_by: user._id,
+      old_value: previousItems,
+      new_value: invoice.items.map((item) => ({
+        marketlist_item_id: item.marketlist_item_id,
+        unit_price: item.unit_price,
+        price_source: item.price_source,
+        subtotal: item.subtotal
+      })),
+      description: `Invoice ${invoice.invoice_number} unit prices refreshed from purchase recap and master items`
     });
     return invoice;
   }

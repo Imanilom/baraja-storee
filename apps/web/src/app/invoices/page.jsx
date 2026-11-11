@@ -15,6 +15,7 @@ export default function InvoicesPage() {
   const [invoiceItemDraft, setInvoiceItemDraft] = useState([]);
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [invoiceEditError, setInvoiceEditError] = useState('');
+  const [refreshingInvoiceId, setRefreshingInvoiceId] = useState(null);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -30,6 +31,20 @@ export default function InvoicesPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshInvoicePrices = async (invoiceId) => {
+    setRefreshingInvoiceId(invoiceId);
+    try {
+      await api.refreshInvoicePrices(invoiceId);
+      if (editingInvoiceId === invoiceId) handleCancelInvoiceEdit();
+      await fetchInvoices();
+      alert('Harga invoice diperbarui dari rekap belanja, master item, atau harga marketlist.');
+    } catch (error) {
+      alert(error.message || 'Gagal memperbarui harga invoice.');
+    } finally {
+      setRefreshingInvoiceId(null);
     }
   };
 
@@ -65,7 +80,8 @@ export default function InvoicesPage() {
     setInvoiceItemDraft((invoice.items || []).map((item) => ({
       marketlist_item_id: item.marketlist_item_id,
       purchased: item.purchased !== false,
-      quantity: item.purchased === false ? 0 : item.quantity
+      quantity: item.purchased === false ? 0 : item.quantity,
+      unit_price: item.unit_price
     })));
   };
 
@@ -197,16 +213,26 @@ export default function InvoicesPage() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {inv.status === 'generated' && (
-                              <button
-                                onClick={() => editingInvoiceId === inv._id
-                                  ? handleCancelInvoiceEdit()
-                                  : handleStartInvoiceEdit(inv)}
-                                disabled={savingInvoice}
-                                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                                {editingInvoiceId === inv._id ? 'Batal' : 'Atur Pembelian'}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleRefreshInvoicePrices(inv._id)}
+                                  disabled={savingInvoice || refreshingInvoiceId !== null}
+                                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                  <Receipt className="w-3.5 h-3.5" />
+                                  {refreshingInvoiceId === inv._id ? 'Memperbarui...' : 'Update Harga'}
+                                </button>
+                                <button
+                                  onClick={() => editingInvoiceId === inv._id
+                                    ? handleCancelInvoiceEdit()
+                                    : handleStartInvoiceEdit(inv)}
+                                  disabled={savingInvoice || refreshingInvoiceId !== null}
+                                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  {editingInvoiceId === inv._id ? 'Batal' : 'Atur Pembelian'}
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => handleDownloadPdf(inv._id)}
@@ -246,11 +272,16 @@ export default function InvoicesPage() {
                                   );
                                   const draft = invoiceItemDraft[draftIndex];
                                   return (
-                                    <div key={itemId} className="grid grid-cols-1 items-center gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
+                                    <div key={itemId} className="grid grid-cols-1 items-center gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_155px_160px_130px]">
                                       <div>
                                         <p className="font-semibold text-slate-800">{item.product_name}</p>
                                         <p className="text-[11px] text-slate-500">
-                                          Harga satuan Rp {item.unit_price.toLocaleString('id-ID')} / {item.unit}
+                                          Sumber harga: {({
+                                            purchase_recap: 'Rekap belanja',
+                                            master_item: 'Master item',
+                                            marketlist: 'Marketlist',
+                                            manual: 'Input manual'
+                                          })[item.price_source] || 'Marketlist'}
                                         </p>
                                       </div>
                                       <label className="space-y-1 text-[11px] font-semibold text-slate-500">
@@ -270,6 +301,22 @@ export default function InvoicesPage() {
                                           <option value="yes">Dibeli</option>
                                           <option value="no">Tidak dibeli</option>
                                         </select>
+                                      </label>
+                                      <label className="space-y-1 text-[11px] font-semibold text-slate-500">
+                                        <span>Harga satuan ({item.unit})</span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          value={draft?.unit_price ?? 0}
+                                          onChange={(event) => {
+                                            const unit_price = event.target.value === '' ? 0 : Number(event.target.value);
+                                            setInvoiceItemDraft((items) => items.map((entry, index) =>
+                                              index === draftIndex ? { ...entry, unit_price } : entry
+                                            ));
+                                          }}
+                                          className="w-full rounded border border-slate-300 px-2 py-1.5 text-slate-800"
+                                        />
                                       </label>
                                       <label className="space-y-1 text-[11px] font-semibold text-slate-500">
                                         <span>Qty dibeli</span>

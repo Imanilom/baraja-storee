@@ -152,6 +152,10 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ items })
     }),
+  refreshInvoicePrices: (id) =>
+    fetchApi(`/invoices/${id}/refresh-prices`, {
+      method: 'POST'
+    }),
   generateInvoice: (marketlistId, options = {}) =>
     fetchApi(`/marketlists/${marketlistId}/invoices/generate`, {
       method: 'POST',

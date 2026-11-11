@@ -22,6 +22,11 @@ router.patch(
   validate(updateInvoiceItemsSchema),
   invoiceController.updateItems
 );
+router.post(
+  '/:id/refresh-prices',
+  authorize(ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.PURCHASING, ROLES.MANAGEMENT),
+  invoiceController.refreshPrices
+);
 
 // Mounted under /api/v1/marketlists/:marketlistId/invoices
 const marketlistInvoiceRouter = express.Router({ mergeParams: true });

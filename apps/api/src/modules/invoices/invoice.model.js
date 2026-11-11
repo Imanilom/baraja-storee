@@ -25,6 +25,11 @@ const InvoiceItemEmbeddedSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
+    price_source: {
+      type: String,
+      enum: ['purchase_recap', 'master_item', 'marketlist', 'manual'],
+      default: 'marketlist'
+    },
     subtotal: {
       type: Number,
       required: true

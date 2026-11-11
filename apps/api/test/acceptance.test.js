@@ -11,6 +11,8 @@ const Marketlist = require('../src/modules/marketlists/marketlist.model');
 const MarketlistItem = require('../src/modules/marketlists/marketlist-item.model');
 const MarketlistNote = require('../src/modules/notes/marketlist-note.model');
 const Invoice = require('../src/modules/invoices/invoice.model');
+const Purchase = require('../src/modules/purchases/purchase.model');
+const PurchaseItem = require('../src/modules/purchases/purchase-item.model');
 const ActivityLog = require('../src/modules/audit/activity-log.model');
 
 const marketlistService = require('../src/modules/marketlists/marketlist.service');
@@ -94,7 +96,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 31 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 33 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -106,7 +108,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/31] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/33] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -544,7 +546,8 @@ async function runTests() {
     items: [{
       marketlist_item_id: mlItemBeras._id,
       purchased: true,
-      quantity: 5
+      quantity: 5,
+      unit_price: 15000
     }]
   }, purchasingUser);
   assert(
@@ -560,7 +563,8 @@ async function runTests() {
     items: [{
       marketlist_item_id: mlItemBeras._id,
       purchased: false,
-      quantity: 0
+      quantity: 0,
+      unit_price: 15000
     }]
   }, purchasingUser);
   assert(
@@ -584,8 +588,49 @@ async function runTests() {
     'Regenerate mempertahankan status pembelian dan kuantitas yang sudah dikonfirmasi.'
   );
 
+  // 32. Invoice can refresh unit prices from a verified purchase recap
+  const recapPurchase = await Purchase.create({
+    purchase_number: 'TRX-TEST-INVOICE-PRICE',
+    marketlist_id: mlCreated._id,
+    supplier_id: supplierA._id,
+    total_actual: 250000,
+    status: 'verified'
+  });
+  await PurchaseItem.create({
+    purchase_id: recapPurchase._id,
+    marketlist_item_id: mlItemBeras._id,
+    product_id: productBeras._id,
+    product_name: 'Beras Ramos',
+    unit_name: 'Kilogram',
+    actual_qty: 20,
+    actual_unit_price: 12500,
+    actual_subtotal: 250000
+  });
+  const recapRefreshedInvoice = await invoiceService.refreshInvoicePrices(
+    invSupplierA._id,
+    purchasingUser
+  );
+  assert(
+    recapRefreshedInvoice.items[0].unit_price === 12500 &&
+      recapRefreshedInvoice.items[0].price_source === 'purchase_recap' &&
+      recapRefreshedInvoice.items[0].subtotal === 0,
+    'Update Harga mengambil harga satuan dari rekap belanja supplier dan item yang sama.'
+  );
+
+  // 33. If no supplier purchase recap exists, use the product master price
+  await Product.findByIdAndUpdate(productAyam._id, { last_purchase_price: 12345 });
+  const masterRefreshedInvoice = await invoiceService.refreshInvoicePrices(
+    invSupplierB._id,
+    purchasingUser
+  );
+  assert(
+    masterRefreshedInvoice.items[0].price_source === 'master_item' &&
+      masterRefreshedInvoice.items[0].unit_price === 12345,
+    'Update Harga menggunakan last purchase price dari master item jika rekap supplier tidak ada.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 31/31 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 33/33 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();
