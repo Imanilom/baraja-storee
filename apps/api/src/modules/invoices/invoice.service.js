@@ -89,9 +89,19 @@ class InvoiceService {
     });
 
     const invoiceableItems = mlItems.filter((item) =>
+      item.item_status !== 'rejected' &&
       (acceptedMap.get(item._id.toString()) || 0) > 0
     );
-    if (invoiceableItems.length === 0) {
+    const existingInvoices = await Invoice.find({
+      marketlist_id: marketlistId,
+      marketlist_version: version
+    });
+    const targetExistingInvoices = options.supplier_id
+      ? existingInvoices.filter(
+          (invoice) => invoice.supplier_id.toString() === options.supplier_id.toString()
+        )
+      : existingInvoices;
+    if (invoiceableItems.length === 0 && targetExistingInvoices.length === 0) {
       throw new Error('No accepted goods have been received for this marketlist');
     }
 
@@ -158,11 +168,9 @@ class InvoiceService {
       const grand_total = subtotal - discount + tax;
 
       // Check if invoice for this supplier and version already exists
-      const existing = await Invoice.findOne({
-        marketlist_id: marketlistId,
-        supplier_id: suppKey,
-        marketlist_version: version
-      });
+      const existing = existingInvoices.find(
+        (invoice) => invoice.supplier_id.toString() === suppKey
+      );
 
       if (existing) {
         // If still in generated status, update with latest received quantities
@@ -207,6 +215,33 @@ class InvoiceService {
       });
 
       generatedInvoices.push(invoice);
+    }
+
+    for (const existing of existingInvoices) {
+      if (
+        existing.status !== INVOICE_STATUS.GENERATED ||
+        supplierGroup.has(existing.supplier_id.toString()) ||
+        (options.supplier_id &&
+          existing.supplier_id.toString() !== options.supplier_id.toString())
+      ) {
+        continue;
+      }
+
+      existing.items = [];
+      existing.subtotal = 0;
+      existing.discount = 0;
+      existing.tax = 0;
+      existing.grand_total = 0;
+      existing.status = INVOICE_STATUS.CANCELLED;
+      await existing.save();
+      await auditService.log({
+        entity_type: 'invoice',
+        entity_id: existing._id,
+        action: 'invoice_cancelled',
+        performed_by: user._id,
+        description: `Invoice ${existing.invoice_number} cancelled because no accepted goods remain for its supplier`
+      });
+      generatedInvoices.push(existing);
     }
 
     return generatedInvoices;

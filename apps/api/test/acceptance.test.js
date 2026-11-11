@@ -94,7 +94,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 25 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 28 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -106,7 +106,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/25] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/28] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -456,8 +456,91 @@ async function runTests() {
     'Penerimaan pada marketlist completed dapat dikoreksi dan status dihitung ulang.'
   );
 
+  // 26. Regenerate invoice excludes items rejected during marketlist review
+  const invoiceCorrectionMl = await marketlistService.createMarketlist({
+    date: new Date(),
+    required_date: new Date(),
+    location_id: loc._id,
+    items: [
+      { product_id: productBeras._id, requested_qty: 1, unit_price: 15000, supplier_id: supplierA._id },
+      { product_id: productAyam._id, requested_qty: 1, unit_price: 50000, supplier_id: supplierA._id }
+    ]
+  }, purchasingUser);
+  await marketlistService.submitMarketlist(invoiceCorrectionMl._id, purchasingUser);
+  await marketlistService.approveMarketlist(invoiceCorrectionMl._id, adminUser, 'Approved');
+  const correctionItems = (await marketlistService.getMarketlistById(invoiceCorrectionMl._id)).items;
+  const correctionBeras = correctionItems.find(
+    (item) => item.product_id._id.toString() === productBeras._id.toString()
+  );
+  const correctionAyam = correctionItems.find(
+    (item) => item.product_id._id.toString() === productAyam._id.toString()
+  );
+  const correctionReceipt = await receivingService.createReceipt(invoiceCorrectionMl._id, {
+    supplier_id: supplierA._id,
+    items: [correctionBeras, correctionAyam].map((item) => ({
+      marketlist_item_id: item._id,
+      received_qty: 1,
+      accepted_qty: 1,
+      rejected_qty: 0,
+      is_checked: true
+    }))
+  }, receiverUser);
+  await invoiceService.generateInvoicesFromMarketlist(invoiceCorrectionMl._id, {}, adminUser);
+  await MarketlistItem.findByIdAndUpdate(correctionBeras._id, { item_status: 'rejected' });
+  const rejectedItemInvoice = (await invoiceService.generateInvoicesFromMarketlist(
+    invoiceCorrectionMl._id,
+    {},
+    adminUser
+  )).find((invoice) => invoice.supplier_id.toString() === supplierA._id.toString());
+  assert(
+    rejectedItemInvoice.items.length === 1 &&
+      rejectedItemInvoice.items[0].product_name === correctionAyam.product_snapshot.name,
+    'Regenerate invoice menghapus item yang ditolak saat review.'
+  );
+
+  // 27. Mengoreksi kuantitas ke nol menandai item diperiksa, bukan pending
+  const correctedZeroReceipt = await receivingService.updateReceipt(correctionReceipt._id, {
+    items: [
+      {
+        marketlist_item_id: correctionBeras._id.toString(),
+        received_qty: 1,
+        accepted_qty: 1,
+        rejected_qty: 0,
+        is_checked: true
+      },
+      {
+        marketlist_item_id: correctionAyam._id.toString(),
+        received_qty: 0,
+        accepted_qty: 0,
+        rejected_qty: 0,
+        is_checked: false
+      }
+    ]
+  }, receiverUser);
+  const correctedAyamReceiptItem = correctedZeroReceipt.items.find(
+    (item) => item.marketlist_item_id._id.toString() === correctionAyam._id.toString()
+  );
+  assert(
+    correctedAyamReceiptItem.status === RECEIVING_STATUS.PARTIAL &&
+      correctedAyamReceiptItem.is_checked,
+    'Item dengan kuantitas yang dikoreksi tidak lagi berstatus pending.'
+  );
+
+  // 28. Regenerate invoice membatalkan invoice generated yang tidak lagi memiliki barang diterima
+  const zeroQtyInvoice = (await invoiceService.generateInvoicesFromMarketlist(
+    invoiceCorrectionMl._id,
+    {},
+    adminUser
+  )).find((invoice) => invoice.supplier_id.toString() === supplierA._id.toString());
+  assert(
+    zeroQtyInvoice.status === 'cancelled' &&
+      zeroQtyInvoice.items.length === 0 &&
+      zeroQtyInvoice.grand_total === 0,
+    'Regenerate menghapus dan membatalkan invoice generated saat tidak ada barang diterima yang tersisa.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 25/25 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 28/28 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();

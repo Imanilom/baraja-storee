@@ -217,7 +217,13 @@ class ReceivingService {
         throw new Error('Accepted and rejected quantities cannot exceed received quantity');
       }
 
-      const isChecked = itemInput.is_checked ?? existingItem.is_checked;
+      const quantitiesChanged =
+        received !== existingItem.received_qty ||
+        accepted !== existingItem.accepted_qty ||
+        rejected !== existingItem.rejected_qty;
+      const isChecked = quantitiesChanged
+        ? true
+        : itemInput.is_checked ?? existingItem.is_checked;
       const marketlistItem = await MarketlistItem.findById(existingItem.marketlist_item_id)
         .select('requested_qty');
       if (!marketlistItem) {
