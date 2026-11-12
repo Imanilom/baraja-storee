@@ -1,6 +1,7 @@
 const Overhead = require('./overhead.model');
 const OverheadPayment = require('./overhead-payment.model');
 const { PAYMENT_STATUS, PAYMENT_METHOD } = require('@purchasing/constants');
+const ActivityLog = require('../audit/activity-log.model');
 
 class OverheadService {
   async createOverhead(data, user) {
@@ -156,9 +157,60 @@ class OverheadService {
     if (data.receipt_url !== undefined) overhead.receipt_url = data.receipt_url;
     if (data.notes !== undefined) overhead.notes = data.notes;
     if (data.branch_name !== undefined) overhead.branch_name = data.branch_name;
-    if (data.due_date !== undefined) overhead.due_date = data.due_date ? new Date(data.due_date) : null;
+    if (data.expense_date !== undefined) {
+      const expenseDate = new Date(data.expense_date);
+      if (!Number.isFinite(expenseDate.getTime())) {
+        const err = new Error('Tanggal pengeluaran tidak valid');
+        err.statusCode = 400;
+        throw err;
+      }
+      overhead.expense_date = expenseDate;
+    }
+    if (data.amount !== undefined) {
+      const amount = Number(data.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        const err = new Error('Nominal pengeluaran harus lebih besar dari 0');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const paymentsTotal = await OverheadPayment.aggregate([
+        { $match: { overhead_id: overhead._id } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      const amountPaid = paymentsTotal[0]?.total ?? Number(overhead.amount_paid) ?? 0;
+      if (amount < amountPaid) {
+        const err = new Error('Nominal biaya tidak boleh lebih kecil dari jumlah yang sudah dibayar');
+        err.statusCode = 400;
+        throw err;
+      }
+      overhead.amount = amount;
+      overhead.amount_paid = amountPaid;
+    }
+    if (data.due_date !== undefined) {
+      const dueDate = data.due_date ? new Date(data.due_date) : null;
+      if (dueDate && !Number.isFinite(dueDate.getTime())) {
+        const err = new Error('Tanggal jatuh tempo tidak valid');
+        err.statusCode = 400;
+        throw err;
+      }
+      overhead.due_date = dueDate;
+    }
 
     await overhead.save();
+    await ActivityLog.create({
+      entity_type: 'overhead',
+      performed_by: user?._id,
+      action: 'OVERHEAD_UPDATED',
+      entity_id: overhead._id,
+      new_value: {
+        title: overhead.title,
+        amount: overhead.amount,
+        expense_date: overhead.expense_date,
+        payment_status: overhead.payment_status
+      },
+      description: `Overhead ${overhead.title} diperbarui`
+    });
     return overhead.populate('recorded_by', 'name email role');
   }
 
@@ -347,4 +399,3 @@ class OverheadService {
 }
 
 module.exports = new OverheadService();
-

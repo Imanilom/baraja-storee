@@ -19,6 +19,7 @@ import {
   Filter,
   Search,
   Trash2,
+  Pencil,
   History,
   X
 } from 'lucide-react';
@@ -50,6 +51,7 @@ export default function OverheadPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [editingOverhead, setEditingOverhead] = useState(null);
   const [selectedOverhead, setSelectedOverhead] = useState(null);
 
   // Create form state
@@ -114,6 +116,7 @@ export default function OverheadPage() {
   };
 
   const handleOpenCreateModal = () => {
+    setEditingOverhead(null);
     setFormData({
       title: '',
       category: 'listrik_air_gas',
@@ -125,6 +128,30 @@ export default function OverheadPage() {
       due_date: '',
       amount_paid: '',
       notes: ''
+    });
+    setErrorMessage('');
+    setShowCreateModal(true);
+  };
+
+  const handleOpenEditModal = (item) => {
+    setEditingOverhead(item);
+    setFormData({
+      title: item.title || '',
+      category: item.category || 'lain_lain',
+      amount: String(item.amount ?? ''),
+      expense_date: item.expense_date
+        ? new Date(new Date(item.expense_date).getTime() - new Date(item.expense_date).getTimezoneOffset() * 60000)
+          .toISOString().slice(0, 10)
+        : new Date().toISOString().split('T')[0],
+      vendor_recipient: item.vendor_recipient === '-' ? '' : item.vendor_recipient || '',
+      invoice_ref: item.invoice_ref || '',
+      payment_method: item.payment_method || 'cash',
+      due_date: item.due_date
+        ? new Date(new Date(item.due_date).getTime() - new Date(item.due_date).getTimezoneOffset() * 60000)
+          .toISOString().slice(0, 10)
+        : '',
+      amount_paid: String(item.amount_paid ?? 0),
+      notes: item.notes || ''
     });
     setErrorMessage('');
     setShowCreateModal(true);
@@ -148,12 +175,26 @@ export default function OverheadPage() {
     }
 
     try {
-      await api.createOverhead({
-        ...formData,
-        amount: Number(formData.amount),
-        amount_paid: formData.amount_paid ? Number(formData.amount_paid) : 0
-      });
+      if (editingOverhead) {
+        await api.updateOverhead(editingOverhead._id, {
+          title: formData.title.trim(),
+          category: formData.category,
+          amount: Number(formData.amount),
+          expense_date: formData.expense_date,
+          vendor_recipient: formData.vendor_recipient.trim() || '-',
+          invoice_ref: formData.invoice_ref.trim(),
+          due_date: formData.payment_method === 'tempo' ? formData.due_date : null,
+          notes: formData.notes.trim()
+        });
+      } else {
+        await api.createOverhead({
+          ...formData,
+          amount: Number(formData.amount),
+          amount_paid: formData.amount_paid ? Number(formData.amount_paid) : 0
+        });
+      }
       setShowCreateModal(false);
+      setEditingOverhead(null);
       loadData();
     } catch (err) {
       setErrorMessage(err.message || 'Gagal menyimpan data overhead');
@@ -535,6 +576,13 @@ export default function OverheadPage() {
                                 Detail
                               </button>
                               <button
+                                onClick={() => handleOpenEditModal(item)}
+                                className="p-1 text-slate-400 hover:text-amber-600 transition"
+                                title="Edit Catatan"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => handleDelete(item._id, item.title)}
                                 className="p-1 text-slate-400 hover:text-rose-600 transition"
                                 title="Hapus Catatan"
@@ -740,17 +788,20 @@ export default function OverheadPage() {
           </div>
         )}
 
-        {/* MODAL: Catat Biaya Overhead Baru */}
+        {/* MODAL: Catat / Edit Biaya Overhead */}
         {showCreateModal && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b pb-3">
                 <h3 className="font-bold text-base text-slate-800 flex items-center gap-2">
                   <Wallet className="w-5 h-5 text-amber-600" />
-                  Catat Biaya Overhead Baru
+                  {editingOverhead ? 'Edit Biaya Overhead' : 'Catat Biaya Overhead Baru'}
                 </h3>
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setEditingOverhead(null);
+                  }}
                   className="text-slate-400 hover:text-slate-600"
                 >
                   <X className="w-5 h-5" />
@@ -801,12 +852,17 @@ export default function OverheadPage() {
                     <input
                       type="number"
                       required
-                      min="1"
+                      min={editingOverhead ? Math.max(1, Number(editingOverhead.amount_paid) || 0) : 1}
                       placeholder="0"
                       value={formData.amount}
                       onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-xs font-bold text-slate-800"
                     />
+                    {editingOverhead && (
+                      <p className="mt-1 text-[10px] text-slate-500">
+                        Nominal tidak boleh kurang dari jumlah yang sudah dibayar ({formatRupiah(editingOverhead.amount_paid)}).
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -833,40 +889,48 @@ export default function OverheadPage() {
                   </div>
                 </div>
 
-                {/* Payment Method Selector */}
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                   <div className="flex items-center justify-between">
                     <label className="block font-semibold text-slate-700">Sumber Dana / Pembayaran</label>
                     <span className="text-[10px] text-slate-500 font-medium">Terkoneksi ke Arus Kas</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'cash', label: '💵 Kas Tunai', sub: 'Potong kas fisik' },
-                      { id: 'transfer', label: '🏦 Rekening Bank', sub: 'Potong saldo bank' },
-                      { id: 'tempo', label: '⏳ Tempo / Hutang', sub: 'Bayar nanti' }
-                    ].map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, payment_method: m.id })}
-                        className={`py-2 px-1.5 rounded-lg font-bold text-[11px] border text-center transition flex flex-col items-center justify-center ${
-                          formData.payment_method === m.id
-                            ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span>{m.label}</span>
-                        <span className={`text-[9px] font-normal ${formData.payment_method === m.id ? 'text-amber-100' : 'text-slate-400'}`}>
-                          {m.sub}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  {editingOverhead ? (
+                    <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-700">
+                      {formData.payment_method === 'cash' ? 'Kas Tunai' : formData.payment_method === 'transfer' ? 'Rekening Bank' : 'Tempo / Hutang'}
+                      <span className="ml-1 font-normal text-slate-500">
+                        (metode tidak dapat diubah karena sudah tercatat di riwayat arus kas)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'cash', label: '💵 Kas Tunai', sub: 'Potong kas fisik' },
+                        { id: 'transfer', label: '🏦 Rekening Bank', sub: 'Potong saldo bank' },
+                        { id: 'tempo', label: '⏳ Tempo / Hutang', sub: 'Bayar nanti' }
+                      ].map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, payment_method: m.id })}
+                          className={`py-2 px-1.5 rounded-lg font-bold text-[11px] border text-center transition flex flex-col items-center justify-center ${
+                            formData.payment_method === m.id
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span>{m.label}</span>
+                          <span className={`text-[9px] font-normal ${formData.payment_method === m.id ? 'text-amber-100' : 'text-slate-400'}`}>
+                            {m.sub}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Fields if Tempo */}
                   {formData.payment_method === 'tempo' && (
                     <div className="space-y-3 pt-2 border-t border-slate-200">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className={`grid grid-cols-1 ${editingOverhead ? '' : 'sm:grid-cols-2'} gap-3`}>
                         <div>
                           <label className="block font-semibold text-rose-700 mb-1">
                             Tanggal Jatuh Tempo <span className="text-rose-500">*</span>
@@ -880,19 +944,21 @@ export default function OverheadPage() {
                           />
                         </div>
 
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1">
-                            Uang Muka / DP Dibayar (Rp)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="0 jika belum bayar sama sekali"
-                            value={formData.amount_paid}
-                            onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-xs bg-white font-bold"
-                          />
-                        </div>
+                        {!editingOverhead && (
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">
+                              Uang Muka / DP Dibayar (Rp)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0 jika belum bayar sama sekali"
+                              value={formData.amount_paid}
+                              onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-xs bg-white font-bold"
+                            />
+                          </div>
+                        )}
                       </div>
 
                       <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg flex justify-between items-center text-xs">
@@ -934,7 +1000,10 @@ export default function OverheadPage() {
                 <div className="flex justify-end gap-2 pt-3 border-t">
                   <button
                     type="button"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setEditingOverhead(null);
+                    }}
                     className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-50"
                   >
                     Batal
@@ -944,7 +1013,7 @@ export default function OverheadPage() {
                     disabled={submitting}
                     className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shadow-sm disabled:opacity-50"
                   >
-                    {submitting ? 'Menyimpan...' : 'Simpan Biaya Overhead'}
+                    {submitting ? 'Menyimpan...' : editingOverhead ? 'Simpan Perubahan' : 'Simpan Biaya Overhead'}
                   </button>
                 </div>
               </form>
@@ -1201,4 +1270,3 @@ export default function OverheadPage() {
     </div>
   );
 }
-

@@ -1304,6 +1304,58 @@ async function runTests() {
     'Ringkasan transaksi harian menghitung uang tunai keluar dan sisa hutang tempo secara terpisah.'
   );
 
+  // 52. Overhead edits and payments are reflected in cash flow without duplicate DP
+  const overheadFlowDate = new Date('2024-08-03T10:00:00.000Z');
+  const cashOverhead = await overheadService.createOverhead({
+    title: 'Biaya operasional tunai',
+    category: 'lain_lain',
+    amount: 1000,
+    payment_method: 'cash',
+    expense_date: overheadFlowDate
+  }, adminUser);
+  const tempoOverhead = await overheadService.createOverhead({
+    title: 'Tagihan operasional tempo',
+    category: 'listrik_air_gas',
+    amount: 5000,
+    amount_paid: 300,
+    payment_method: 'tempo',
+    due_date: '2024-08-30T00:00:00.000Z',
+    expense_date: overheadFlowDate
+  }, adminUser);
+  await overheadService.recordPayment(tempoOverhead._id, {
+    amount: 200,
+    payment_method: 'transfer',
+    paid_at: overheadFlowDate
+  }, adminUser);
+  const overheadCashFlow = await cashFlowService.getSummary({
+    startDate: '2024-08-03T00:00:00.000Z',
+    endDate: '2024-08-03T23:59:59.999Z'
+  });
+  const overheadMutations = await cashFlowService.getMutations({
+    type: 'overhead',
+    startDate: '2024-08-03T00:00:00.000Z',
+    endDate: '2024-08-03T23:59:59.999Z',
+    limit: 20
+  });
+  const editedOverhead = await overheadService.updateOverhead(cashOverhead._id, {
+    title: 'Biaya operasional tunai diperbarui',
+    amount: 1500,
+    expense_date: '2024-08-03'
+  }, adminUser);
+  const lowerThanPaidRejected = await overheadService.updateOverhead(tempoOverhead._id, {
+    amount: 200
+  }, adminUser).then(() => false, () => true);
+  assert(
+    overheadCashFlow.total_overhead_cash === 1000 &&
+      overheadCashFlow.total_overhead_bank === 500 &&
+      overheadMutations.total === 3 &&
+      overheadMutations.data.reduce((sum, item) => sum + item.amount, 0) === 1500 &&
+      editedOverhead.amount === 1500 &&
+      editedOverhead.title === 'Biaya operasional tunai diperbarui' &&
+      lowerThanPaidRejected,
+    'Overhead dapat diedit, masuk arus kas sesuai pembayaran, dan uang muka tidak dihitung dua kali.'
+  );
+
   console.log('===========================================================');
   console.log(`🎉 ALL 50/50 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');

@@ -442,7 +442,7 @@ class CashFlowService {
     overheads.forEach((overhead) => {
       const account = overhead.payment_method === 'transfer' ? 'bank' : 'cash';
       const amount = overhead.payment_method === 'tempo'
-        ? Number(overhead.amount_paid) || 0
+        ? 0
         : Number(overhead.amount) || 0;
       addExpense(account, amount, overhead.expense_date, 'overhead');
     });
@@ -749,67 +749,65 @@ class CashFlowService {
 
     // 4. Overheads
     if (!type || type === 'all' || type === 'overhead') {
-      try {
-        const overheads = await Overhead.find()
-          .populate('created_by', 'name')
-          .sort({ expense_date: -1 })
-          .lean();
+      const overheads = await Overhead.find()
+        .populate('recorded_by', 'name')
+        .sort({ expense_date: -1 })
+        .lean();
 
-        overheads.forEach((ov) => {
-          if (!isWithinDate(ov.expense_date)) return;
-          const src = ov.payment_method === 'transfer' ? 'bank' : 'cash';
-          if (account && account !== 'all' && src !== account) return;
+      overheads.forEach((ov) => {
+        if (!isWithinDate(ov.expense_date)) return;
+        const src = ov.payment_method === 'transfer' ? 'bank' : 'cash';
+        if (account && account !== 'all' && src !== account) return;
 
-          const amt = ov.payment_method === 'tempo' ? (Number(ov.amount_paid) || 0) : Number(ov.amount || 0);
-          if (amt <= 0) return;
+        const amt = ov.payment_method === 'tempo' ? 0 : Number(ov.amount || 0);
+        if (amt <= 0) return;
 
-          list.push({
-            _id: ov._id,
-            source_type: 'overhead',
-            trx_type: 'overhead',
-            direction: 'out',
-            account: src,
-            account_label: src === 'bank' ? 'Rekening Bank' : 'Kas Tunai',
-            category: 'overhead',
-            category_label: 'Biaya Overhead ⚡',
-            title: `${ov.title} (${ov.category})`,
-            reference_number: ov.receipt_number || '',
-            amount: amt,
-            date: ov.expense_date,
-            notes: ov.notes,
-            creator: ov.created_by?.name || 'Staff'
-          });
+        list.push({
+          _id: ov._id,
+          source_type: 'overhead',
+          trx_type: 'overhead',
+          direction: 'out',
+          account: src,
+          account_label: src === 'bank' ? 'Rekening Bank' : 'Kas Tunai',
+          category: 'overhead',
+          category_label: 'Biaya Overhead ⚡',
+          title: `${ov.title} (${ov.category})`,
+          reference_number: ov.receipt_number || '',
+          amount: amt,
+          date: ov.expense_date,
+          notes: ov.notes,
+          creator: ov.recorded_by?.name || 'Staff'
         });
+      });
 
-        const ovPayments = await OverheadPayment.find()
-          .populate('overhead_id', 'title category')
-          .populate('recorded_by', 'name')
-          .sort({ paid_at: -1 })
-          .lean();
+      const ovPayments = await OverheadPayment.find()
+        .populate('overhead_id', 'title category')
+        .populate('recorded_by', 'name')
+        .sort({ paid_at: -1 })
+        .lean();
 
-        ovPayments.forEach((op) => {
-          if (!isWithinDate(op.paid_at)) return;
-          const src = op.payment_method === 'transfer' ? 'bank' : 'cash';
-          if (account && account !== 'all' && src !== account) return;
+      ovPayments.forEach((op) => {
+        if (!isWithinDate(op.paid_at)) return;
+        const src = op.payment_method === 'transfer' ? 'bank' : 'cash';
+        if (account && account !== 'all' && src !== account) return;
 
-          list.push({
-            _id: op._id,
-            source_type: 'overhead_payment',
-            trx_type: 'overhead_payment',
-            direction: 'out',
-            account: src,
-            account_label: src === 'bank' ? 'Rekening Bank' : 'Kas Tunai',
-            category: 'overhead',
-            category_label: 'Bayar Hutang Overhead ⚡',
-            title: `Bayar ${op.overhead_id?.title || 'Overhead'}`,
-            reference_number: op.reference_number || '',
-            amount: op.amount,
-            date: op.paid_at,
-            notes: op.notes,
-            creator: op.recorded_by?.name || 'Staff'
-          });
+        list.push({
+          _id: op._id,
+          source_type: 'overhead_payment',
+          trx_type: 'overhead_payment',
+          direction: 'out',
+          account: src,
+          account_label: src === 'bank' ? 'Rekening Bank' : 'Kas Tunai',
+          category: 'overhead',
+          category_label: 'Bayar Hutang Overhead ⚡',
+          title: `Bayar ${op.overhead_id?.title || 'Overhead'}`,
+          reference_number: op.reference_number || '',
+          amount: op.amount,
+          date: op.paid_at,
+          notes: op.notes,
+          creator: op.recorded_by?.name || 'Staff'
         });
-      } catch (_) {}
+      });
     }
 
     // Sort chronologically (terbaru di atas)

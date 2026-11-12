@@ -4,7 +4,7 @@ const ActivityLogSchema = new mongoose.Schema({
   entity_type: {
     type: String,
     required: true,
-    enum: ['marketlist', 'goods_receipt', 'invoice', 'product', 'supplier', 'note', 'user']
+    enum: ['marketlist', 'goods_receipt', 'invoice', 'product', 'supplier', 'note', 'user', 'overhead']
   },
   entity_id: {
     type: mongoose.Schema.Types.ObjectId,
@@ -30,4 +30,3 @@ const ActivityLogSchema = new mongoose.Schema({
 ActivityLogSchema.index({ entity_type: 1, entity_id: 1, created_at: -1 });
 
 module.exports = mongoose.model('ActivityLog', ActivityLogSchema);
-
