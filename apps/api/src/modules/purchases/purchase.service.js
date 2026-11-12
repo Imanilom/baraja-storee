@@ -360,6 +360,64 @@ class PurchaseService {
     return { data: debts, total, page: Number(page), limit: Number(limit) };
   }
 
+  async getDailySummary(query = {}) {
+    const start = new Date(query.start);
+    const end = new Date(query.end);
+    if (
+      !query.start ||
+      !query.end ||
+      !Number.isFinite(start.getTime()) ||
+      !Number.isFinite(end.getTime()) ||
+      start >= end
+    ) {
+      throw new Error('Rentang tanggal ringkasan harian tidak valid.');
+    }
+
+    const dateFilter = { $gte: start, $lt: end };
+    const [purchases, payments] = await Promise.all([
+      Purchase.find({ purchased_at: dateFilter })
+        .select('_id payment_method total_actual amount_remaining')
+        .lean(),
+      DebtPayment.find({ paid_at: dateFilter })
+        .select('purchase_id amount')
+        .lean()
+    ]);
+
+    const paidPurchaseIds = [...new Set(payments.map((payment) => payment.purchase_id.toString()))];
+    const tempoPurchaseIds = paidPurchaseIds.length
+      ? new Set((await Purchase.find({
+          _id: { $in: paidPurchaseIds },
+          payment_method: 'tempo'
+        }).distinct('_id')).map((id) => id.toString()))
+      : new Set();
+
+    const cashOutFromPurchases = purchases.reduce(
+      (total, purchase) => total + (
+        purchase.payment_method === 'tempo' ? 0 : Number(purchase.total_actual) || 0
+      ),
+      0
+    );
+    const cashOutFromDebtPayments = payments.reduce(
+      (total, payment) => total + (
+        tempoPurchaseIds.has(payment.purchase_id.toString())
+          ? Number(payment.amount) || 0
+          : 0
+      ),
+      0
+    );
+    const debtCreated = purchases.reduce(
+      (total, purchase) => total + (
+        purchase.payment_method === 'tempo' ? Number(purchase.amount_remaining) || 0 : 0
+      ),
+      0
+    );
+
+    return {
+      cash_out: cashOutFromPurchases + cashOutFromDebtPayments,
+      debt_created: debtCreated
+    };
+  }
+
   async getPurchases(query = {}) {
     const {
       marketlist_id,
@@ -464,6 +522,57 @@ class PurchaseService {
       ? (marketlist_id ? marketlist_id.toString() : null)
       : previousMarketlistId;
     const allocationChanged = targetMarketlistId !== previousMarketlistId;
+    const itemsWereProvided = Object.prototype.hasOwnProperty.call(data, 'items');
+    let updatedItems = [];
+
+    if (itemsWereProvided) {
+      if (!Array.isArray(data.items) || data.items.length === 0) {
+        throw new Error('Transaksi harus memiliki minimal satu barang.');
+      }
+
+      const existingItems = await PurchaseItem.find({ purchase_id: purchase._id });
+      if (data.items.length !== existingItems.length) {
+        throw new Error('Jumlah barang transaksi tidak boleh diubah saat mengedit rincian.');
+      }
+
+      const existingItemsById = new Map(
+        existingItems.map((item) => [item._id.toString(), item])
+      );
+      const submittedIds = new Set();
+      updatedItems = data.items.map((item) => {
+        const itemId = item?._id?.toString();
+        const existingItem = existingItemsById.get(itemId);
+        if (!existingItem || submittedIds.has(itemId)) {
+          throw new Error('Rincian barang transaksi tidak valid.');
+        }
+        submittedIds.add(itemId);
+
+        const actualQty = Number(item.actual_qty);
+        const actualUnitPrice = Number(item.actual_unit_price);
+        if (
+          !Number.isFinite(actualQty) ||
+          actualQty < 0 ||
+          !Number.isFinite(actualUnitPrice) ||
+          actualUnitPrice < 0
+        ) {
+          throw new Error('Kuantitas dan harga barang harus berupa angka nol atau lebih.');
+        }
+
+        return {
+          _id: existingItem._id,
+          actual_qty: actualQty,
+          actual_unit_price: actualUnitPrice,
+          actual_subtotal: actualQty * actualUnitPrice,
+          notes: typeof item.notes === 'string' ? item.notes : existingItem.notes
+        };
+      });
+
+      purchase.total_actual = updatedItems.reduce(
+        (total, item) => total + item.actual_subtotal,
+        0
+      );
+    }
+
     let targetMarketlist = null;
 
     if (allocationChanged) {
@@ -574,6 +683,21 @@ class PurchaseService {
     }
 
     await purchase.save();
+    if (itemsWereProvided) {
+      await PurchaseItem.bulkWrite(updatedItems.map((item) => ({
+        updateOne: {
+          filter: { _id: item._id, purchase_id: purchase._id },
+          update: {
+            $set: {
+              actual_qty: item.actual_qty,
+              actual_unit_price: item.actual_unit_price,
+              actual_subtotal: item.actual_subtotal,
+              notes: item.notes
+            }
+          }
+        }
+      })));
+    }
 
     if (allocationChanged) {
       const purchaseItems = await PurchaseItem.find({ purchase_id: purchase._id });
@@ -619,6 +743,9 @@ class PurchaseService {
         await invoiceService.syncMarketlistPurchaseQuantities(affectedMarketlistId, user);
       }
     } else if (purchase.marketlist_id) {
+      if (itemsWereProvided) {
+        await receivingService.recalculateMarketlistProgress(purchase.marketlist_id);
+      }
       await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
     }
 

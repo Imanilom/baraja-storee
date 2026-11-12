@@ -21,6 +21,12 @@ router.get(
   purchaseController.listDebts
 );
 
+router.get(
+  '/daily-summary',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.RECEIVER, ROLES.LEADER, ROLES.STAFF),
+  purchaseController.dailySummary
+);
+
 // Buat transaksi baru
 router.post(
   '/',

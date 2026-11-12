@@ -185,6 +185,7 @@ export const api = {
 
   // Purchase Transactions (Pencatatan Pembelian ke Supplier)
   getPurchases: (params = '') => fetchApi(`/purchases${params}`),
+  getDailyPurchaseSummary: (params = '') => fetchApi(`/purchases/daily-summary${params}`),
   getPurchaseById: (id) => fetchApi(`/purchases/${id}`),
   createPurchase: (data) =>
     fetchApi('/purchases', {

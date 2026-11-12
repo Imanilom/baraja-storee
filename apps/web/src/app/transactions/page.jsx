@@ -110,6 +110,7 @@ export default function TransactionsPage() {
 
   // ---------- Transactions State ----------
   const [purchases, setPurchases] = useState([]);
+  const [dailySummary, setDailySummary] = useState({ cash_out: 0, debt_created: 0 });
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [detailPurchase, setDetailPurchase] = useState(null);
@@ -163,6 +164,7 @@ export default function TransactionsPage() {
   const [editForm, setEditForm] = useState({
     marketlist_id: '',
     supplier_id: '',
+    items: [],
     payment_method: 'cash',
     payment_source: 'cash',
     due_date: '',
@@ -183,6 +185,24 @@ export default function TransactionsPage() {
     d.setDate(d.getDate() + 7);
     return d.toISOString().split('T')[0];
   };
+
+  const fetchDailySummary = useCallback(async () => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    const params = new URLSearchParams({
+      start: start.toISOString(),
+      end: end.toISOString()
+    });
+
+    try {
+      const response = await api.getDailyPurchaseSummary(`?${params.toString()}`);
+      setDailySummary(response.data);
+    } catch (error) {
+      console.error('Gagal memuat ringkasan transaksi hari ini:', error);
+    }
+  }, []);
 
   const handlePaymentMethodChange = (method) => {
     setPaymentMethod(method);
@@ -205,6 +225,7 @@ export default function TransactionsPage() {
 
   // ---------- data loading ----------
   const fetchPurchases = useCallback(async () => {
+    fetchDailySummary();
     setLoading(true);
     try {
       let params = '?limit=50';
@@ -218,7 +239,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterSupplier, filterStartDate, filterEndDate]);
+  }, [filterSupplier, filterStartDate, filterEndDate, fetchDailySummary]);
 
   const fetchDebts = useCallback(async () => {
     setDebtsLoading(true);
@@ -666,20 +687,46 @@ export default function TransactionsPage() {
   };
 
   // ---------- edit & delete purchase ----------
-  const handleOpenEditModal = (p) => {
-    const isTempo = p.payment_method === 'tempo';
-    setEditPurchaseModal(p);
+  const handleOpenEditModal = async (p) => {
+    let purchase = p;
+    try {
+      const response = await api.getPurchaseById(p._id);
+      purchase = response.data;
+    } catch (error) {
+      alert(`Gagal memuat item transaksi: ${error.message}`);
+      return;
+    }
+
+    const isTempo = purchase.payment_method === 'tempo';
+    setEditPurchaseModal(purchase);
     setEditForm({
-      marketlist_id: p.marketlist_id?._id || p.marketlist_id || '',
-      supplier_id: p.supplier_id?._id || p.supplier_id || '',
-      payment_method: p.payment_method || 'cash',
-      payment_source: p.payment_source || (p.payment_method === 'transfer' ? 'bank' : 'cash'),
-      due_date: p.due_date ? p.due_date.split('T')[0] : getDefaultDueDate(p.purchased_at),
-      amount_paid: isTempo ? String(p.amount_paid ?? 0) : '0',
-      invoice_ref: p.invoice_ref || '',
-      purchased_at: p.purchased_at ? p.purchased_at.split('T')[0] : new Date().toISOString().split('T')[0],
-      notes: p.notes || ''
+      marketlist_id: purchase.marketlist_id?._id || purchase.marketlist_id || '',
+      supplier_id: purchase.supplier_id?._id || purchase.supplier_id || '',
+      items: (purchase.items || []).map((item) => ({
+        _id: item._id,
+        product_name: item.product_name || item.product_id?.name || 'Barang',
+        unit_name: item.unit_name || '',
+        actual_qty: String(item.actual_qty ?? 0),
+        actual_unit_price: String(item.actual_unit_price ?? 0),
+        notes: item.notes || ''
+      })),
+      payment_method: purchase.payment_method || 'cash',
+      payment_source: purchase.payment_source || (purchase.payment_method === 'transfer' ? 'bank' : 'cash'),
+      due_date: purchase.due_date ? purchase.due_date.split('T')[0] : getDefaultDueDate(purchase.purchased_at),
+      amount_paid: isTempo ? String(purchase.amount_paid ?? 0) : '0',
+      invoice_ref: purchase.invoice_ref || '',
+      purchased_at: purchase.purchased_at ? purchase.purchased_at.split('T')[0] : new Date().toISOString().split('T')[0],
+      notes: purchase.notes || ''
     });
+  };
+
+  const handleEditItemChange = (index, field, value) => {
+    setEditForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item
+      )
+    }));
   };
 
   const handleEditPaymentMethodChange = (method) => {
@@ -706,6 +753,19 @@ export default function TransactionsPage() {
       alert('Untuk metode tempo / hutang, tanggal jatuh tempo wajib diisi!');
       return;
     }
+    if (editForm.items.length === 0) {
+      alert('Transaksi harus memiliki minimal satu barang.');
+      return;
+    }
+    if (editForm.items.some((item) =>
+      !Number.isFinite(Number(item.actual_qty)) ||
+      Number(item.actual_qty) < 0 ||
+      !Number.isFinite(Number(item.actual_unit_price)) ||
+      Number(item.actual_unit_price) < 0
+    )) {
+      alert('Kuantitas dan harga barang harus berupa angka nol atau lebih.');
+      return;
+    }
 
     setSavingEdit(true);
     try {
@@ -717,6 +777,12 @@ export default function TransactionsPage() {
         invoice_ref: editForm.invoice_ref.trim(),
         purchased_at: editForm.purchased_at,
         notes: editForm.notes.trim(),
+        items: editForm.items.map((item) => ({
+          _id: item._id,
+          actual_qty: Number(item.actual_qty),
+          actual_unit_price: Number(item.actual_unit_price),
+          notes: item.notes.trim()
+        })),
         ...(editForm.payment_method === 'tempo' && {
           due_date: editForm.due_date,
           amount_paid: Number(editForm.amount_paid) || 0
@@ -789,12 +855,16 @@ export default function TransactionsPage() {
   // Debt summary
   const totalDebt = debts.reduce((s, d) => s + (d.amount_remaining || 0), 0);
   const overdueCount = debts.filter((d) => d.payment_status === 'overdue').length;
+  const editItemsTotal = editForm.items.reduce(
+    (sum, item) => sum + (Number(item.actual_qty) || 0) * (Number(item.actual_unit_price) || 0),
+    0
+  );
 
   return (
     <div className="flex-1 flex flex-col">
       <Navbar title="Transaksi Pembelian & Hutang Supplier" />
 
-      <main className="p-8 space-y-6 max-w-7xl">
+      <main className="w-full min-w-0 p-4 sm:p-8 space-y-6 max-w-7xl">
         {/* Info Banner */}
         <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl flex items-start gap-3 text-xs text-amber-900">
           <ShoppingCart className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -908,13 +978,31 @@ export default function TransactionsPage() {
           )}
         </div>
 
+        {activeTab === 'transactions' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="min-w-0 rounded-xl border border-emerald-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-500">Uang Keluar Hari Ini</p>
+              <p className="mt-1 break-words text-xl font-black text-emerald-700">{fmt(dailySummary.cash_out)}</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Pembelian tunai/transfer dan pembayaran hutang yang tercatat hari ini.
+              </p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-amber-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-500">Sisa Hutang dari Transaksi Hari Ini</p>
+              <p className="mt-1 break-words text-xl font-black text-amber-700">{fmt(dailySummary.debt_created)}</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Sisa hutang pada pembelian tempo yang dibuat hari ini.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ===== FORM MODAL ===== */}
         {showForm && (
-          <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-y-auto py-8 px-4">
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-4xl">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                  <ShoppingCart className="w-4 h-4 text-amber-600" />
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-y-auto p-2 sm:py-8 sm:px-4">
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-4xl max-h-[calc(100dvh-1rem)] overflow-y-auto">
+              <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200">
+                <h3 className="font-bold text-sm text-slate-800">
                   Formulir Pencatatan Transaksi Pembelian
                 </h3>
                 <button onClick={resetForm} className="p-1 hover:bg-slate-100 rounded-lg">
@@ -922,7 +1010,7 @@ export default function TransactionsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-6 space-y-5">
+              <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div>
                     <p className="text-xs font-bold text-slate-800">Cara input transaksi</p>
@@ -1068,7 +1156,7 @@ export default function TransactionsPage() {
 
                 {(selectedMlDetail || entryMode === 'manual') && (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -1947,16 +2035,16 @@ export default function TransactionsPage() {
 
         {/* ===== EDIT MODAL ===== */}
         {editPurchaseModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl my-8">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-amber-50/50 rounded-t-2xl">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[calc(100dvh-1rem)] overflow-y-auto my-2 sm:my-4">
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 bg-amber-50/95 rounded-t-2xl">
                 <div>
                   <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
                     <Pencil className="w-4 h-4 text-amber-600" />
                     Edit Transaksi Belanja
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5 font-mono font-semibold">
-                    {editPurchaseModal.purchase_number} • Total: {fmt(editPurchaseModal.total_actual)}
+                    {editPurchaseModal.purchase_number} • Total: {fmt(editItemsTotal)}
                   </p>
                 </div>
                 <button
@@ -1967,7 +2055,7 @@ export default function TransactionsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveEdit} className="p-6 space-y-4 text-xs">
+              <form onSubmit={handleSaveEdit} className="p-4 sm:p-6 space-y-4 text-xs">
                 {/* Info alert */}
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 flex items-start gap-2.5">
                   <CreditCard className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -1978,6 +2066,66 @@ export default function TransactionsPage() {
                     </p>
                   </div>
                 </div>
+
+                <section className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="font-bold text-slate-800">Rincian Barang Transaksi</h4>
+                    <span className="font-bold text-amber-800">Total baru: {fmt(editItemsTotal)}</span>
+                  </div>
+                  {editForm.items.length === 0 ? (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                      Rincian barang tidak ditemukan. Tutup lalu buka kembali transaksi untuk memuat ulang.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {editForm.items.map((item, index) => (
+                        <div key={item._id} className="min-w-0 rounded-xl border border-slate-200 p-3 sm:p-4">
+                          <p className="mb-3 break-words font-bold text-slate-800">
+                            {item.product_name}
+                            {item.unit_name ? <span className="ml-1 font-normal text-slate-500">({item.unit_name})</span> : null}
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <label className="block font-semibold text-slate-600">
+                              Kuantitas
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={item.actual_qty}
+                                onChange={(event) => handleEditItemChange(index, 'actual_qty', event.target.value)}
+                                className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              />
+                            </label>
+                            <label className="block font-semibold text-slate-600">
+                              Harga Satuan
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={item.actual_unit_price}
+                                onChange={(event) => handleEditItemChange(index, 'actual_unit_price', event.target.value)}
+                                className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              />
+                            </label>
+                            <label className="block font-semibold text-slate-600 sm:col-span-2 lg:col-span-1">
+                              Catatan Barang
+                              <input
+                                type="text"
+                                value={item.notes}
+                                onChange={(event) => handleEditItemChange(index, 'notes', event.target.value)}
+                                placeholder="Catatan opsional"
+                                className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              />
+                            </label>
+                          </div>
+                          <p className="mt-2 text-right font-semibold text-slate-700">
+                            Subtotal: {fmt((Number(item.actual_qty) || 0) * (Number(item.actual_unit_price) || 0))}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Alokasikan ke Marketlist (opsional)</label>
@@ -2094,7 +2242,7 @@ export default function TransactionsPage() {
                           value={editForm.amount_paid}
                           onChange={(e) => setEditForm({ ...editForm, amount_paid: e.target.value })}
                           min="0"
-                          max={editPurchaseModal.total_actual}
+                          max={editItemsTotal}
                           placeholder="0 = Belum bayar sama sekali"
                           className="w-full p-2.5 bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold text-slate-900"
                         />
@@ -2144,9 +2292,9 @@ export default function TransactionsPage() {
                     </div>
 
                     <div className="bg-white/80 border border-amber-200 p-2.5 rounded-lg flex items-center justify-between text-xs">
-                      <span className="text-slate-600">Total Transaksi: <strong className="text-slate-900">{fmt(editPurchaseModal.total_actual)}</strong></span>
+                      <span className="text-slate-600">Total Transaksi: <strong className="text-slate-900">{fmt(editItemsTotal)}</strong></span>
                       <span className="text-red-700 font-black">
-                        Sisa Hutang: {fmt(Math.max(0, editPurchaseModal.total_actual - (Number(editForm.amount_paid) || 0)))}
+                        Sisa Hutang: {fmt(Math.max(0, editItemsTotal - (Number(editForm.amount_paid) || 0)))}
                       </span>
                     </div>
                   </div>

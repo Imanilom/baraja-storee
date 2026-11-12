@@ -790,6 +790,33 @@ async function runTests() {
       manualPurchase.total_actual === 126000,
     'Transaksi manual tersimpan dengan master barang dan supplier tanpa wajib terhubung ke Marketlist.'
   );
+  await purchaseService.updatePurchase(manualPurchase._id, {
+    items: [{
+      _id: manualPurchaseItem._id,
+      actual_qty: 4,
+      actual_unit_price: 41000,
+      notes: 'Kuantitas dan harga dikoreksi'
+    }]
+  }, purchasingUser);
+  const editedManualPurchase = await Purchase.findById(manualPurchase._id);
+  const editedManualPurchaseItem = await PurchaseItem.findOne({ purchase_id: manualPurchase._id });
+  assert(
+    editedManualPurchase.total_actual === 164000 &&
+      editedManualPurchaseItem._id.toString() === manualPurchaseItem._id.toString() &&
+      editedManualPurchaseItem.actual_qty === 4 &&
+      editedManualPurchaseItem.actual_unit_price === 41000 &&
+      editedManualPurchaseItem.actual_subtotal === 164000 &&
+      editedManualPurchaseItem.notes === 'Kuantitas dan harga dikoreksi',
+    'Edit item transaksi memperbarui nilai dan total tanpa mengganti ID item yang sudah terhubung.'
+  );
+  await purchaseService.updatePurchase(manualPurchase._id, {
+    items: [{
+      _id: manualPurchaseItem._id,
+      actual_qty: 3,
+      actual_unit_price: 42000,
+      notes: ''
+    }]
+  }, purchasingUser);
 
   // 38. A manual item can be allocated to a matching Marketlist item
   await purchaseService.createPurchase({
@@ -923,6 +950,32 @@ async function runTests() {
       marketlistAfterLateMatch.items[0].purchased_qty === 7,
     'Alokasi belakangan otomatis menautkan produk yang cocok dan memperbarui qty belanja Marketlist.'
   );
+  await purchaseService.updatePurchase(lateMatchingPurchase._id, {
+    items: [{
+      _id: lateMatchingItem._id,
+      actual_qty: 5,
+      actual_unit_price: 16100
+    }]
+  }, purchasingUser);
+  const marketlistAfterItemEdit = await marketlistService.getMarketlistById(purchaseSyncMl._id);
+  const invoiceAfterItemEdit = await Invoice.findOne({
+    marketlist_id: purchaseSyncMl._id,
+    status: 'generated'
+  });
+  assert(
+    marketlistAfterItemEdit.items[0].purchased_qty === 8 &&
+      invoiceAfterItemEdit.items.find((item) =>
+        item.marketlist_item_id?.toString() === purchaseSyncItem._id.toString()
+      )?.quantity === 8,
+    'Edit kuantitas item transaksi menyinkronkan ulang Marketlist dan invoice.'
+  );
+  await purchaseService.updatePurchase(lateMatchingPurchase._id, {
+    items: [{
+      _id: lateMatchingItem._id,
+      actual_qty: 4,
+      actual_unit_price: 16000
+    }]
+  }, purchasingUser);
 
   // 43. Purchases from multiple suppliers create one invoice containing bought lines only
   const multiSupplierPurchaseMl = await marketlistService.createMarketlist({
@@ -1209,6 +1262,46 @@ async function runTests() {
       debtAndOverheadReconciliation.totals.overhead_debt_amount === 9000 &&
       dailyOverhead?.payments.some((payment) => payment.amount === 3000),
     'Rekonsiliasi mencocokkan PO/tagihan serta menampilkan overhead harian, pembayaran, dan hutangnya secara terpisah.'
+  );
+
+  // 51. Purchase daily summary separates cash paid from newly created debt
+  const purchaseSummaryDate = new Date('2024-07-12T10:00:00.000Z');
+  const cashSummaryPurchase = await purchaseService.createPurchase({
+    supplier_id: supplierA._id,
+    purchased_at: purchaseSummaryDate,
+    items: [{
+      product_id: productAyam._id,
+      actual_qty: 2,
+      actual_unit_price: 10000
+    }]
+  }, purchasingUser);
+  const tempoSummaryPurchase = await purchaseService.createPurchase({
+    supplier_id: supplierA._id,
+    payment_method: 'tempo',
+    amount_paid: 3000,
+    due_date: new Date('2024-07-30T00:00:00.000Z'),
+    purchased_at: purchaseSummaryDate,
+    items: [{
+      product_id: productAyam._id,
+      actual_qty: 3,
+      actual_unit_price: 5000
+    }]
+  }, purchasingUser);
+  await purchaseService.recordDebtPayment(tempoSummaryPurchase._id, {
+    amount: 2000,
+    paid_at: purchaseSummaryDate,
+    payment_method: 'cash'
+  }, purchasingUser);
+  const purchaseDailySummary = await purchaseService.getDailySummary({
+    start: '2024-07-12T00:00:00.000Z',
+    end: '2024-07-13T00:00:00.000Z'
+  });
+  assert(
+    cashSummaryPurchase.total_actual === 20000 &&
+      tempoSummaryPurchase.total_actual === 15000 &&
+      purchaseDailySummary.cash_out === 25000 &&
+      purchaseDailySummary.debt_created === 10000,
+    'Ringkasan transaksi harian menghitung uang tunai keluar dan sisa hutang tempo secara terpisah.'
   );
 
   console.log('===========================================================');

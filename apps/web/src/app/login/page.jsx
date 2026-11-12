@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { api, setStoredUser } from '../../lib/api';
-import { ArrowRight, Lock, Mail } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -53,32 +52,26 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nama@baraja.id"
-                  required
-                  className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nama@baraja.id"
+                required
+                className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+              />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Password</label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+              />
             </div>
 
             <button
@@ -87,7 +80,6 @@ export default function LoginPage() {
               className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm shadow-emerald-600/20"
             >
               {loading ? 'Memproses...' : 'Masuk Akun'}
-              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
         </div>
@@ -95,4 +87,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

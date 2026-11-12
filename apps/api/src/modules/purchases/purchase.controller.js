@@ -58,6 +58,18 @@ class PurchaseController {
     }
   }
 
+  async dailySummary(req, res, next) {
+    try {
+      const summary = await purchaseService.getDailySummary(req.query);
+      return res.status(200).json({
+        success: true,
+        data: summary
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // POST /purchases/:id/payments — Bayar hutang
   async recordPayment(req, res, next) {
     try {
