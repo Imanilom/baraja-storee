@@ -86,6 +86,16 @@ export const api = {
   // Master Data
   getProducts: () => fetchApi('/products'),
   getCategories: () => fetchApi('/products/categories'),
+  getLatestPrices: () => fetchApi('/prices/overview'),
+  getProductPriceHistory: (id) => fetchApi(`/prices/products/${id}`),
+  getWasteRecords: (params = '') => fetchApi(`/waste${params}`),
+  getDailyInventoryReconciliation: (params) =>
+    fetchApi(`/inventory/daily?${params}`),
+  createWasteRecord: (data) =>
+    fetchApi('/waste', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   getSuppliers: () => fetchApi('/suppliers'),
   createSupplier: (data) =>
     fetchApi('/suppliers', {
@@ -214,6 +224,11 @@ export const api = {
     }),
   recordCashOut: (data) =>
     fetchApi('/cash-flow/out', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  transferPettyCash: (action, data) =>
+    fetchApi(`/cash-flow/petty-cash/${action}`, {
       method: 'POST',
       body: JSON.stringify(data)
     }),

@@ -10,6 +10,24 @@ import {
 } from 'lucide-react';
 
 const fmt = (v) => `Rp ${(v || 0).toLocaleString('id-ID')}`;
+const toLocalDateInput = (date = new Date()) => {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+};
+const toLocalDateTimeInput = (date = new Date()) => {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+};
+const dateRangeQuery = (date) => {
+  const start = new Date(`${date}T00:00:00`);
+  const end = new Date(`${date}T23:59:59.999`);
+  return `startDate=${encodeURIComponent(start.toISOString())}&endDate=${encodeURIComponent(end.toISOString())}`;
+};
+const recentDays = Array.from({ length: 31 }, (_, index) => {
+  const date = new Date();
+  date.setDate(date.getDate() - index);
+  return toLocalDateInput(date);
+});
 const fmtDate = (d) => {
   if (!d) return '-';
   const date = new Date(d);
@@ -19,6 +37,7 @@ const fmtDate = (d) => {
 export default function CashFlowPage() {
   const [summary, setSummary] = useState({
     current_cash_balance: 0,
+    current_petty_cash_balance: 0,
     current_bank_balance: 0,
     total_liquidity: 0,
     total_inflow: 0,
@@ -27,6 +46,9 @@ export default function CashFlowPage() {
     total_withdrawal: 0,
     total_purchase_cash: 0,
     total_purchase_bank: 0,
+    total_purchase_petty_cash: 0,
+    total_petty_cash_funded: 0,
+    total_petty_cash_returned: 0,
     total_purchase: 0,
     total_debt_payment: 0,
     total_overhead: 0,
@@ -39,13 +61,16 @@ export default function CashFlowPage() {
 
   // Filters
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'cash' | 'bank' | 'in' | 'withdrawal' | 'purchase'
-  const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterDate, setFilterDate] = useState(toLocalDateInput());
 
   // Modals
   const [showInModal, setShowInModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showOutModal, setShowOutModal] = useState(false);
+  const [showPettyModal, setShowPettyModal] = useState(false);
+  const [pettyAction, setPettyAction] = useState('fund');
+  const [pettyAmount, setPettyAmount] = useState('');
+  const [pettyDate, setPettyDate] = useState(toLocalDateTimeInput());
   const [submitting, setSubmitting] = useState(false);
 
   // Form states
@@ -55,7 +80,7 @@ export default function CashFlowPage() {
     category: 'modal',
     description: '',
     reference_number: '',
-    date: new Date().toISOString().split('T')[0],
+    date: toLocalDateTimeInput(),
     notes: ''
   });
 
@@ -63,7 +88,7 @@ export default function CashFlowPage() {
     amount: '',
     description: 'Tarik tunai dari rekening bank untuk kas belanja & operasional',
     reference_number: '',
-    date: new Date().toISOString().split('T')[0],
+    date: toLocalDateTimeInput(),
     notes: ''
   });
 
@@ -73,7 +98,7 @@ export default function CashFlowPage() {
     category: 'operasional_manual',
     description: '',
     reference_number: '',
-    date: new Date().toISOString().split('T')[0],
+    date: toLocalDateTimeInput(),
     notes: ''
   });
 
@@ -81,9 +106,7 @@ export default function CashFlowPage() {
   const fetchSummary = useCallback(async () => {
     setLoadingSummary(true);
     try {
-      let params = '';
-      if (filterStartDate) params += `?startDate=${filterStartDate}`;
-      if (filterEndDate) params += `${params ? '&' : '?'}endDate=${filterEndDate}`;
+      const params = `?${dateRangeQuery(filterDate)}`;
       const res = await api.getCashFlowSummary(params);
       setSummary(res.data || {});
     } catch (e) {
@@ -91,20 +114,18 @@ export default function CashFlowPage() {
     } finally {
       setLoadingSummary(false);
     }
-  }, [filterStartDate, filterEndDate]);
+  }, [filterDate]);
 
   // Fetch mutations
   const fetchMutations = useCallback(async () => {
     setLoading(true);
     try {
-      let params = `?limit=100`;
-      if (activeTab === 'cash' || activeTab === 'bank') {
+      let params = `?limit=500&${dateRangeQuery(filterDate)}`;
+      if (['cash', 'bank', 'petty_cash'].includes(activeTab)) {
         params += `&account=${activeTab}`;
-      } else if (['in', 'withdrawal', 'purchase', 'overhead'].includes(activeTab)) {
+      } else if (['in', 'withdrawal', 'purchase', 'overhead', 'petty_cash'].includes(activeTab)) {
         params += `&type=${activeTab}`;
       }
-      if (filterStartDate) params += `&startDate=${filterStartDate}`;
-      if (filterEndDate) params += `&endDate=${filterEndDate}`;
 
       const res = await api.getCashFlowMutations(params);
       setMutations(res.data || []);
@@ -113,7 +134,7 @@ export default function CashFlowPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, filterStartDate, filterEndDate]);
+  }, [activeTab, filterDate]);
 
   useEffect(() => {
     fetchSummary();
@@ -143,7 +164,7 @@ export default function CashFlowPage() {
         category: inForm.category,
         description: inForm.description.trim(),
         reference_number: inForm.reference_number.trim(),
-        date: inForm.date,
+        date: new Date(inForm.date).toISOString(),
         notes: inForm.notes.trim()
       });
       alert('✅ Uang masuk berhasil dicatat!');
@@ -154,7 +175,7 @@ export default function CashFlowPage() {
         category: 'modal',
         description: '',
         reference_number: '',
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateTimeInput(),
         notes: ''
       });
       fetchSummary();
@@ -180,7 +201,7 @@ export default function CashFlowPage() {
         amount: Number(withdrawForm.amount),
         description: withdrawForm.description.trim(),
         reference_number: withdrawForm.reference_number.trim(),
-        date: withdrawForm.date,
+        date: new Date(withdrawForm.date).toISOString(),
         notes: withdrawForm.notes.trim()
       });
       alert('✅ Tarik tunai berhasil dicatat! Saldo rekening berkurang dan saldo kas tunai bertambah.');
@@ -189,7 +210,7 @@ export default function CashFlowPage() {
         amount: '',
         description: 'Tarik tunai dari rekening bank untuk kas belanja & operasional',
         reference_number: '',
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateTimeInput(),
         notes: ''
       });
       fetchSummary();
@@ -221,7 +242,7 @@ export default function CashFlowPage() {
         category: outForm.category,
         description: outForm.description.trim(),
         reference_number: outForm.reference_number.trim(),
-        date: outForm.date,
+        date: new Date(outForm.date).toISOString(),
         notes: outForm.notes.trim()
       });
       alert('✅ Pengeluaran kas manual berhasil dicatat!');
@@ -232,13 +253,47 @@ export default function CashFlowPage() {
         category: 'operasional_manual',
         description: '',
         reference_number: '',
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateTimeInput(),
         notes: ''
       });
       fetchSummary();
       fetchMutations();
     } catch (err) {
       alert(`Gagal mencatat pengeluaran: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openPettyModal = (action) => {
+    setPettyAction(action);
+    setPettyAmount('');
+    setPettyDate(`${filterDate}T${toLocalDateTimeInput().slice(11)}`);
+    setShowPettyModal(true);
+  };
+
+  const handleSubmitPettyCash = async (e) => {
+    e.preventDefault();
+    if (!pettyAmount || Number(pettyAmount) <= 0) {
+      alert('Nominal kas kecil harus lebih dari 0.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.transferPettyCash(pettyAction, {
+        amount: Number(pettyAmount),
+        date: new Date(pettyDate).toISOString(),
+        description: pettyAction === 'fund'
+          ? 'Pendanaan kas kecil dari kas besar'
+          : 'Pengembalian sisa kas kecil ke kas besar'
+      });
+      setShowPettyModal(false);
+      setPettyAmount('');
+      fetchSummary();
+      fetchMutations();
+    } catch (err) {
+      alert(`Gagal memproses kas kecil: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -277,7 +332,7 @@ export default function CashFlowPage() {
         </div>
 
         {/* ===== TOP METRICS CARDS ===== */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Card 1: Kas Tunai */}
           <div className="bg-white border border-emerald-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between mb-3">
@@ -304,6 +359,35 @@ export default function CashFlowPage() {
               <div className="flex justify-between">
                 <span>Tarik Tunai Masuk:</span>
                 <strong className="text-emerald-700 font-bold">+{fmt(summary.total_withdrawal)}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-violet-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Wallet className="w-4 h-4 text-violet-600" />
+                Saldo Kas Kecil
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-violet-100 text-violet-800 rounded-full">
+                Petty Cash
+              </span>
+            </div>
+            <p className={`text-2xl font-black ${summary.current_petty_cash_balance < 0 ? 'text-red-600' : 'text-violet-700'}`}>
+              {fmt(summary.current_petty_cash_balance)}
+            </p>
+            <div className="mt-3 pt-3 border-t border-violet-100 text-[11px] text-slate-500 space-y-1">
+              <div className="flex justify-between">
+                <span>Didanai hari ini:</span>
+                <strong className="text-emerald-700">{fmt(summary.total_petty_cash_funded)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Dikembalikan:</span>
+                <strong className="text-violet-700">{fmt(summary.total_petty_cash_returned)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Belanja kas kecil:</span>
+                <strong className="text-rose-700">{fmt(summary.total_purchase_petty_cash)}</strong>
               </div>
             </div>
           </div>
@@ -464,32 +548,40 @@ export default function CashFlowPage() {
               <ArrowUpRight className="w-4 h-4" />
               <span>- Pengeluaran Manual</span>
             </button>
+            <button
+              onClick={() => openPettyModal('fund')}
+              className="px-4 py-2.5 bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-sm"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              <span>Kas Besar → Kas Kecil</span>
+            </button>
+            <button
+              onClick={() => openPettyModal('return')}
+              className="px-4 py-2.5 bg-white hover:bg-violet-50 text-violet-800 border border-violet-300 font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-sm"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              <span>Kembalikan Sisa Kas Kecil</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={filterStartDate}
-              onChange={(e) => setFilterStartDate(e.target.value)}
+            <label htmlFor="cash-flow-day" className="text-xs font-bold text-slate-600">Pilih hari:</label>
+            <select
+              id="cash-flow-day"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
               className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-700"
-              title="Dari Tanggal"
-            />
-            <span className="text-xs text-slate-400">s/d</span>
-            <input
-              type="date"
-              value={filterEndDate}
-              onChange={(e) => setFilterEndDate(e.target.value)}
-              className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-700"
-              title="Sampai Tanggal"
-            />
-            {(filterStartDate || filterEndDate) && (
-              <button
-                onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
-                className="text-xs px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg"
-              >
-                Reset
-              </button>
-            )}
+            >
+              {recentDays.map((date) => (
+                <option key={date} value={date}>
+                  {date === toLocalDateInput()
+                    ? `Hari ini (${date})`
+                    : new Date(`${date}T12:00:00`).toLocaleDateString('id-ID', {
+                      weekday: 'long', day: '2-digit', month: 'short', year: 'numeric'
+                    })}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -498,6 +590,7 @@ export default function CashFlowPage() {
           {[
             { id: 'all', label: 'Semua Mutasi' },
             { id: 'cash', label: '💵 Kas Tunai' },
+            { id: 'petty_cash', label: '🪙 Kas Kecil' },
             { id: 'bank', label: '🏦 Rekening Bank' },
             { id: 'in', label: '📥 Uang Masuk' },
             { id: 'withdrawal', label: '🏧 Tarik Tunai' },
@@ -729,7 +822,8 @@ export default function CashFlowPage() {
                       Tanggal
                     </label>
                     <input
-                      type="date"
+                      type="datetime-local"
+                      required
                       value={inForm.date}
                       onChange={(e) => setInForm({ ...inForm, date: e.target.value })}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
@@ -860,7 +954,8 @@ export default function CashFlowPage() {
                       Tanggal Penarikan
                     </label>
                     <input
-                      type="date"
+                      type="datetime-local"
+                      required
                       value={withdrawForm.date}
                       onChange={(e) => setWithdrawForm({ ...withdrawForm, date: e.target.value })}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
@@ -967,6 +1062,7 @@ export default function CashFlowPage() {
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800"
                     >
                       <option value="cash">💵 Kas Tunai (Fisik)</option>
+                      <option value="petty_cash">🪙 Kas Kecil</option>
                       <option value="bank">🏦 Rekening Bank</option>
                     </select>
                   </div>
@@ -1008,7 +1104,8 @@ export default function CashFlowPage() {
                       Tanggal
                     </label>
                     <input
-                      type="date"
+                      type="datetime-local"
+                      required
                       value={outForm.date}
                       onChange={(e) => setOutForm({ ...outForm, date: e.target.value })}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
@@ -1060,8 +1157,74 @@ export default function CashFlowPage() {
             </div>
           </div>
         )}
+
+        {showPettyModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl border border-violet-200 w-full max-w-md">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-violet-100 bg-violet-50 rounded-t-2xl">
+                <div>
+                  <h3 className="font-bold text-sm text-violet-950">
+                    {pettyAction === 'fund' ? 'Pendanaan Kas Kecil' : 'Pengembalian Sisa Kas Kecil'}
+                  </h3>
+                  <p className="text-[11px] text-violet-700 mt-1">
+                    {pettyAction === 'fund'
+                      ? 'Dana berpindah dari kas besar ke kas kecil.'
+                      : 'Sisa kas kecil hari ini kembali ke kas besar.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPettyModal(false)}
+                  className="p-1 hover:bg-violet-100 rounded-lg text-slate-500"
+                  aria-label="Tutup"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <form onSubmit={handleSubmitPettyCash} className="p-6 space-y-4 text-xs">
+                <label className="block font-bold text-slate-700">
+                  Nominal (Rp) *
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={pettyAmount}
+                    onChange={(e) => setPettyAmount(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-violet-200 rounded-lg"
+                    placeholder="Masukkan nominal"
+                  />
+                </label>
+                <label className="block font-bold text-slate-700">
+                  Tanggal dan waktu *
+                  <input
+                    type="datetime-local"
+                    required
+                    value={pettyDate}
+                    onChange={(e) => setPettyDate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-violet-200 rounded-lg"
+                  />
+                </label>
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowPettyModal(false)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-4 py-2 bg-violet-700 hover:bg-violet-800 text-white rounded-lg font-bold disabled:opacity-50"
+                  >
+                    {submitting ? 'Menyimpan...' : 'Simpan Transfer'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 }
-

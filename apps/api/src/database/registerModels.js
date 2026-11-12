@@ -23,4 +23,4 @@ require('../modules/purchases/purchase-item.model');
 require('../modules/purchases/debt-payment.model');
 require('../modules/overheads/overhead.model');
 require('../modules/overheads/overhead-payment.model');
-
+require('../modules/waste/waste.model');

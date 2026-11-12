@@ -38,7 +38,7 @@ export default function ReceivingMonitorPage() {
         const res = await api.getMarketlists('?limit=20');
         if (res?.data?.items) {
           const filtered = res.data.items.filter((m) =>
-            ['approved', 'in_progress', 'partially_received', 'received', 'completed'].includes(m.status)
+            ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received', 'completed'].includes(m.status)
           );
           setActiveMarketlists(filtered);
           const marketlistId = new URLSearchParams(window.location.search).get('marketlistId');

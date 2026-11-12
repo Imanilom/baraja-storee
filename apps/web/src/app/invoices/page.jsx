@@ -23,7 +23,7 @@ export default function InvoicesPage() {
     try {
       const [invRes, mlRes] = await Promise.all([
         api.getInvoices().catch(() => ({ data: { items: [] } })),
-        api.getMarketlists('?status=approved,received,partially_received,in_progress,completed&all=true').catch(() => ({ data: { items: [] } }))
+        api.getMarketlists('?status=approved,partial_rejection,received,partially_received,in_progress,completed&all=true').catch(() => ({ data: { items: [] } }))
       ]);
 
       if (invRes?.data?.items) setInvoices(invRes.data.items);

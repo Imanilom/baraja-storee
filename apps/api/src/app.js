@@ -23,6 +23,8 @@ const financeRoutes = require('./modules/finance/profit-loss.routes');
 const cashFlowRoutes = require('./modules/cash-flow/cash-flow.routes');
 const locationRoutes = require('./modules/locations/location.routes');
 const externalPosRoutes = require('./modules/external-pos/external-pos.routes');
+const wasteRoutes = require('./modules/waste/waste.routes');
+const inventoryRoutes = require('./modules/inventory/inventory.routes');
 
 const app = express();
 
@@ -69,6 +71,8 @@ apiRouter.use('/invoices', invoiceRouter);
 apiRouter.use('/purchases', purchaseRoutes);
 apiRouter.use('/overheads', overheadRoutes);
 apiRouter.use('/prices', priceRoutes);
+apiRouter.use('/waste', wasteRoutes);
+apiRouter.use('/inventory', inventoryRoutes);
 apiRouter.use('/locations', locationRoutes);
 apiRouter.use('/kpi', kpiRoutes);
 apiRouter.use('/finance', financeRoutes);
@@ -86,4 +90,3 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 module.exports = app;
-

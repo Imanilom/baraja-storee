@@ -26,9 +26,12 @@ const paymentBadge = (method) => {
 };
 
 const paymentLabel = (method, source) => {
-  if (method === 'cash') return '💵 Kas Tunai';
+  if (method === 'cash') return source === 'petty_cash' ? '🪙 Kas Kecil' : '💵 Kas Tunai';
   if (method === 'transfer') return '🏦 Rekening Bank';
-  if (method === 'tempo') return '⏳ Tempo / Hutang';
+  if (method === 'tempo') {
+    const sourceLabel = source === 'petty_cash' ? 'Kas Kecil' : source === 'bank' ? 'Rekening Bank' : 'Kas Tunai';
+    return `⏳ Tempo / Hutang (${sourceLabel})`;
+  }
   return method;
 };
 
@@ -61,6 +64,12 @@ const getMlStatusMeta = (status) => {
       label: 'Disetujui',
       tag: '✅ Disetujui',
       badge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      isDelivered: false
+    },
+    partial_rejection: {
+      label: 'Pembelian Tidak Lengkap',
+      tag: '⚠️ Partial Rejection',
+      badge: 'bg-rose-100 text-rose-800 border-rose-300',
       isDelivered: false
     },
     in_progress: {
@@ -128,7 +137,7 @@ export default function TransactionsPage() {
   const [mlSearch, setMlSearch] = useState('');
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [paymentSource, setPaymentSource] = useState('cash'); // 'cash' | 'bank'
+  const [paymentSource, setPaymentSource] = useState('cash'); // cash, bank, petty_cash
   const [dueDate, setDueDate] = useState('');
   const [downPayment, setDownPayment] = useState('');
   const [invoiceRef, setInvoiceRef] = useState('');
@@ -176,6 +185,11 @@ export default function TransactionsPage() {
 
   const handlePaymentMethodChange = (method) => {
     setPaymentMethod(method);
+    if (method === 'transfer') {
+      setPaymentSource('bank');
+    } else if (method === 'cash' && paymentSource === 'bank') {
+      setPaymentSource('cash');
+    }
     if (method === 'tempo') {
       setDueDate(getDefaultDueDate(purchaseDate));
     }
@@ -221,7 +235,7 @@ export default function TransactionsPage() {
     try {
       let mlList = [];
       const [mlMultiRes, supRes, productRes] = await Promise.all([
-        api.getMarketlists('?status=approved,in_progress,partially_received,received,completed&limit=100&all=true').catch(() => ({ data: [] })),
+        api.getMarketlists('?status=approved,partial_rejection,in_progress,partially_received,received,completed&limit=100&all=true').catch(() => ({ data: [] })),
         api.getSuppliers().catch(() => ({ data: [] })),
         api.getProducts().catch(() => ({ data: [] }))
       ]);
@@ -229,7 +243,7 @@ export default function TransactionsPage() {
 
       // Fallback: jika respons kosong, fetch status individual untuk menjamin kompatibilitas
       if (mlList.length === 0) {
-        const statuses = ['approved', 'in_progress', 'partially_received', 'received', 'completed'];
+        const statuses = ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received', 'completed'];
         const responses = await Promise.all(
           statuses.map((st) => api.getMarketlists(`?status=${st}&limit=50&all=true`).catch(() => ({ data: [] })))
         );
@@ -499,7 +513,7 @@ export default function TransactionsPage() {
         supplier_id: selectedSupplierId,
         invoice_ref: invoiceRef.trim(),
         payment_method: paymentMethod,
-        payment_source: paymentMethod === 'transfer' ? 'bank' : (paymentMethod === 'tempo' ? paymentSource : 'cash'),
+        payment_source: paymentMethod === 'transfer' ? 'bank' : paymentSource,
         purchased_at: purchaseDate,
         notes: notes.trim(),
         ...(paymentMethod === 'tempo' && {
@@ -749,10 +763,10 @@ export default function TransactionsPage() {
   const mlSuppliers = suppliers.filter((s) => mlSupplierIds.includes(s._id));
 
   // Form helpers & filters for Marketlist
-  const activeMLCount = approvedMLs.filter((m) => ['approved', 'in_progress'].includes(m.status)).length;
+  const activeMLCount = approvedMLs.filter((m) => ['approved', 'partial_rejection', 'in_progress'].includes(m.status)).length;
   const deliveredMLCount = approvedMLs.filter((m) => ['partially_received', 'received', 'completed'].includes(m.status)).length;
   const filteredMLs = approvedMLs.filter((m) => {
-    if (mlFilterTab === 'active' && !['approved', 'in_progress'].includes(m.status)) return false;
+    if (mlFilterTab === 'active' && !['approved', 'partial_rejection', 'in_progress'].includes(m.status)) return false;
     if (mlFilterTab === 'delivered' && !['partially_received', 'received', 'completed'].includes(m.status)) return false;
     const search = mlSearch.trim().toLowerCase();
     return !search || [m.marketlist_number, m.status, m.location_id?.name]
@@ -1192,10 +1206,10 @@ export default function TransactionsPage() {
                               Sisa hutang = Total - DP = {fmt(formTotal - (Number(downPayment) || 0))}
                             </p>
                           </div>
-                          {Number(downPayment) > 0 && (
+                          {(paymentMethod === 'cash' || Number(downPayment) > 0) && (
                             <div className="sm:col-span-2 pt-2 border-t border-amber-200">
                               <label className="block text-xs font-bold text-amber-900 mb-1">
-                                Sumber Dana Uang Muka (DP) *
+                                {paymentMethod === 'tempo' ? 'Sumber Dana Uang Muka (DP)' : 'Sumber Dana Pembelian'} *
                               </label>
                               <div className="flex gap-4">
                                 <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
@@ -1208,7 +1222,7 @@ export default function TransactionsPage() {
                                   />
                                   <span>💵 Kas Tunai (Uang Cash)</span>
                                 </label>
-                                <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                                {paymentMethod === 'tempo' && <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
                                   <input
                                     type="radio"
                                     name="paymentSource"
@@ -1217,6 +1231,16 @@ export default function TransactionsPage() {
                                     onChange={(e) => setPaymentSource(e.target.value)}
                                   />
                                   <span>🏦 Transfer Bank (Rekening)</span>
+                                </label>}
+                                <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                                  <input
+                                    type="radio"
+                                    name="paymentSource"
+                                    value="petty_cash"
+                                    checked={paymentSource === 'petty_cash'}
+                                    onChange={(e) => setPaymentSource(e.target.value)}
+                                  />
+                                  <span>🪙 Kas Kecil</span>
                                 </label>
                               </div>
                             </div>
@@ -1926,7 +1950,7 @@ export default function TransactionsPage() {
                     <option value="">Tanpa Marketlist</option>
                     {approvedMLs
                       .filter((ml) =>
-                        ['approved', 'in_progress', 'partially_received', 'received'].includes(ml.status) ||
+                        ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received'].includes(ml.status) ||
                         ml._id === editForm.marketlist_id
                       )
                       .map((ml) => (
@@ -2065,6 +2089,16 @@ export default function TransactionsPage() {
                               />
                               <span>🏦 Transfer Bank (Rekening)</span>
                             </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                              <input
+                                type="radio"
+                                name="editPaymentSource"
+                                value="petty_cash"
+                                checked={editForm.payment_source === 'petty_cash'}
+                                onChange={(e) => setEditForm({ ...editForm, payment_source: e.target.value })}
+                              />
+                              <span>🪙 Kas Kecil</span>
+                            </label>
                           </div>
                         </div>
                       )}
@@ -2168,7 +2202,7 @@ export default function TransactionsPage() {
                           </span>
                           {p.payment_method === 'tempo' && p.amount_paid > 0 && (
                             <p className="text-[9px] text-slate-500 mt-0.5">
-                              DP via {p.payment_source === 'bank' ? '🏦 Rekening Bank' : '💵 Kas Tunai'}
+                              DP via {p.payment_source === 'bank' ? '🏦 Rekening Bank' : p.payment_source === 'petty_cash' ? '🪙 Kas Kecil' : '💵 Kas Tunai'}
                             </p>
                           )}
                         </td>

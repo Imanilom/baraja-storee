@@ -7,8 +7,7 @@ const { ROLES } = require('@purchasing/constants');
 
 router.use(authenticate);
 
-router.get('/overview', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT), priceController.getLatestOverview);
-router.get('/products/:id', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT), priceController.getProductPrices);
+router.get('/overview', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER, ROLES.STAFF, ROLES.RECEIVER), priceController.getLatestOverview);
+router.get('/products/:id', authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER, ROLES.STAFF, ROLES.RECEIVER), priceController.getProductPrices);
 
 module.exports = router;
-

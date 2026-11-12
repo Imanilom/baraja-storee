@@ -28,10 +28,10 @@ const PurchaseSchema = new mongoose.Schema(
       enum: ['cash', 'transfer', 'tempo'],
       default: 'cash'
     },
-    // Sumber dana / akun kas pengeluaran: cash (Kas Tunai) | bank (Rekening Bank)
+    // Sumber dana pengeluaran: cash, bank, or petty_cash.
     payment_source: {
       type: String,
-      enum: ['cash', 'bank'],
+      enum: ['cash', 'bank', 'petty_cash'],
       default: 'cash'
     },
     // Status pembayaran: paid = lunas, unpaid = hutang belum bayar, partial = bayar sebagian, overdue = jatuh tempo

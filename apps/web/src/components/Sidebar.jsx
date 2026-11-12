@@ -15,9 +15,12 @@ import {
   ShieldCheck,
   LogOut,
   Boxes,
+  TrendingUp,
+  Trash2,
   X,
   ChevronLeft,
-  Landmark
+  Landmark,
+  ClipboardCheck
 } from 'lucide-react';
 import { clearStoredAuth, getStoredUser } from '../lib/api';
 import { useEffect, useState } from 'react';
@@ -48,6 +51,24 @@ const navigation = [
     href: '/products',
     icon: Boxes,
     roles: ['admin', 'management', 'purchasing', 'leader', 'staff']
+  },
+  {
+    name: 'Harga Terbaru & Tren',
+    href: '/prices',
+    icon: TrendingUp,
+    roles: ['admin', 'management', 'purchasing', 'accounting', 'leader', 'staff', 'receiver']
+  },
+  {
+    name: 'Waste',
+    href: '/waste',
+    icon: Trash2,
+    roles: ['admin', 'management', 'purchasing', 'receiver', 'leader', 'staff', 'accounting']
+  },
+  {
+    name: 'Rekonsiliasi Inventori',
+    href: '/inventory',
+    icon: ClipboardCheck,
+    roles: ['admin', 'management', 'purchasing', 'accounting', 'leader', 'receiver', 'staff']
   },
   {
     name: 'Surat Jalan / Receiving',

@@ -42,6 +42,18 @@ router.post(
   cashFlowController.recordOut
 );
 
+router.post(
+  '/petty-cash/fund',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.recordPettyCashFund
+);
+
+router.post(
+  '/petty-cash/return',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.recordPettyCashReturn
+);
+
 // Hapus transaksi manual
 router.delete(
   '/:id',
@@ -50,4 +62,3 @@ router.delete(
 );
 
 module.exports = router;
-

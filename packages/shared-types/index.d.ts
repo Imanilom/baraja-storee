@@ -1,10 +1,11 @@
-export type UserRole = 'admin' | 'purchasing' | 'receiver' | 'accounting' | 'management';
+export type UserRole = 'admin' | 'purchasing' | 'receiver' | 'accounting' | 'management' | 'leader' | 'staff';
 
 export type MarketlistStatus =
   | 'draft'
   | 'submitted'
   | 'revision'
   | 'approved'
+  | 'partial_rejection'
   | 'in_progress'
   | 'partially_received'
   | 'received'
@@ -14,6 +15,7 @@ export type MarketlistStatus =
 export type ReceivingItemStatus = 'pending' | 'complete' | 'partial' | 'over_received' | 'rejected';
 export type ItemCondition = 'good' | 'damaged' | 'incomplete' | 'expired' | 'other';
 export type InvoiceStatus = 'draft' | 'generated' | 'verified' | 'partially_paid' | 'paid' | 'cancelled';
+export type PriceSource = 'supplier_offer' | 'marketlist' | 'purchase_transaction' | 'purchase' | 'product_master';
 
 export interface User {
   _id: string;
@@ -124,3 +126,23 @@ export interface Invoice {
   generated_at?: string;
 }
 
+export interface ProductPrice {
+  product_id: string;
+  supplier_id?: string;
+  price: number;
+  source: PriceSource;
+  recorded_at?: string | null;
+}
+
+export interface WasteRecord {
+  _id: string;
+  product_id: string;
+  product_name: string;
+  unit_name: string;
+  quantity: number;
+  unit_purchase_price: number;
+  total_cost: number;
+  reason: string;
+  wasted_at: string;
+  recorded_by: string;
+}

@@ -68,6 +68,32 @@ class CashFlowController {
     }
   }
 
+  async recordPettyCashFund(req, res, next) {
+    try {
+      const trx = await cashFlowService.recordPettyCashTransfer(req.body, req.user, 'fund');
+      return res.status(201).json({
+        success: true,
+        message: 'Dana kas kecil berhasil dicatat dari kas besar.',
+        data: trx
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async recordPettyCashReturn(req, res, next) {
+    try {
+      const trx = await cashFlowService.recordPettyCashTransfer(req.body, req.user, 'return');
+      return res.status(201).json({
+        success: true,
+        message: 'Sisa kas kecil berhasil dikembalikan ke kas besar.',
+        data: trx
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async delete(req, res, next) {
     try {
       const result = await cashFlowService.deleteTransaction(req.params.id, req.user);
@@ -82,4 +108,3 @@ class CashFlowController {
 }
 
 module.exports = new CashFlowController();
-

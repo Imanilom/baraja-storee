@@ -29,7 +29,7 @@ class ProfitLossService {
     // If no invoices exist yet in fresh system, take approved marketlist estimated amounts
     if (totalPurchasingHPP === 0) {
       const approvedMarketlists = await Marketlist.find({
-        status: { $in: ['approved', 'in_progress', 'partially_received', 'received', 'completed'] }
+        status: { $in: ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received', 'completed'] }
       });
       approvedMarketlists.forEach((ml) => {
         totalPurchasingHPP += ml.totals?.estimated_amount || 0;
@@ -112,5 +112,4 @@ class ProfitLossService {
 }
 
 module.exports = new ProfitLossService();
-
 

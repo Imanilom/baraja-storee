@@ -7,23 +7,23 @@ const CashTransactionSchema = new mongoose.Schema(
       unique: true,
       required: true
     },
-    // 'in' (Uang Masuk), 'withdrawal' (Tarik Tunai dari Bank ke Kas), 'out' (Pengeluaran Kas Manual)
+    // Internal petty cash transfers are balance movements, not revenue or expense.
     type: {
       type: String,
-      enum: ['in', 'withdrawal', 'out'],
+      enum: ['in', 'withdrawal', 'out', 'petty_transfer'],
       required: true,
       index: true
     },
     // Sumber akun: cash (Kas Tunai) | bank (Rekening Bank)
     source_account: {
       type: String,
-      enum: ['cash', 'bank'],
+      enum: ['cash', 'bank', 'petty_cash'],
       default: 'cash'
     },
     // Akun tujuan (untuk 'in' atau 'withdrawal'): cash | bank
     to_account: {
       type: String,
-      enum: ['cash', 'bank', null],
+      enum: ['cash', 'bank', 'petty_cash', null],
       default: null
     },
     amount: {
@@ -67,4 +67,3 @@ const CashTransactionSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('CashTransaction', CashTransactionSchema);
-

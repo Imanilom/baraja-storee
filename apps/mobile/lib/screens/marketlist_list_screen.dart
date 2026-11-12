@@ -74,6 +74,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
       return _allMarketlists.where((m) {
         final st = (m['status'] ?? '').toString().toLowerCase();
         return st == 'approved' ||
+            st == 'partial_rejection' ||
             st == 'in_receiving' ||
             st == 'in_progress' ||
             st == 'partially_received' ||
@@ -100,6 +101,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
         return const Color(0xFF64748B);
       case 'revision':
       case 'rejected':
+      case 'partial_rejection':
         return const Color(0xFFDC2626);
       default:
         return const Color(0xFFD97706);
@@ -118,6 +120,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
         return const Color(0xFFF1F5F9);
       case 'revision':
       case 'rejected':
+      case 'partial_rejection':
         return const Color(0xFFFEE2E2);
       default:
         return const Color(0xFFFEF3C7);
@@ -287,6 +290,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                         final total = currencyFormat.format(totalVal);
                         final code = ml['marketlist_number'] ?? ml['code'] ?? 'ML-UNTITLED';
                         final isApproved = status == 'approved' ||
+                            status == 'partial_rejection' ||
                             status == 'in_receiving' ||
                             status == 'in_progress' ||
                             status == 'partially_received';
@@ -341,7 +345,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Text(
-                                          status.toUpperCase(),
+                                          status.replaceAll('_', ' ').toUpperCase(),
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,

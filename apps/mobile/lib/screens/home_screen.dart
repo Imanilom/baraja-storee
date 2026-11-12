@@ -5,6 +5,8 @@ import '../services/api_service.dart';
 import 'create_marketlist_screen.dart';
 import 'digital_surat_jalan_screen.dart';
 import 'marketlist_aggregate_screen.dart';
+import 'price_history_screen.dart';
+import 'waste_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserModel user;
@@ -51,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     try {
       final res = await ApiService.get(
-        '/marketlists?status=approved,in_progress,partially_received&limit=20',
+        '/marketlists?status=approved,partial_rejection,in_progress,partially_received&limit=20',
       );
       final allRes = await ApiService.get('/marketlists?limit=1&all=true');
       if (mounted) {
@@ -213,6 +215,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildHomeMenuCard(
+                      context,
+                      title: 'Harga Terbaru',
+                      subtitle: 'Tren harga produk',
+                      icon: Icons.trending_up,
+                      color: const Color(0xFF2563EB),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PriceHistoryScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildHomeMenuCard(
+                      context,
+                      title: 'Waste',
+                      subtitle: 'Catat waste & nilainya',
+                      icon: Icons.delete_outline,
+                      color: const Color(0xFFDC2626),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const WasteScreen()),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
 
@@ -581,6 +617,44 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHomeMenuCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

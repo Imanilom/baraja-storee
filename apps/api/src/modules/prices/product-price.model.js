@@ -34,4 +34,3 @@ const ProductPriceSchema = new mongoose.Schema(
 ProductPriceSchema.index({ product_id: 1, supplier_id: 1, recorded_at: -1 });
 
 module.exports = mongoose.model('ProductPrice', ProductPriceSchema);
-

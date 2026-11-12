@@ -144,6 +144,7 @@ class InvoiceService {
     // Must be approved before invoice can be generated
     const allowedStatuses = [
       MARKETLIST_STATUS.APPROVED,
+      MARKETLIST_STATUS.PARTIAL_REJECTION,
       MARKETLIST_STATUS.IN_PROGRESS,
       MARKETLIST_STATUS.PARTIALLY_RECEIVED,
       MARKETLIST_STATUS.RECEIVED,
@@ -471,6 +472,7 @@ class InvoiceService {
   async regenerateAllInvoices(user) {
     const eligibleStatuses = [
       MARKETLIST_STATUS.APPROVED,
+      MARKETLIST_STATUS.PARTIAL_REJECTION,
       MARKETLIST_STATUS.IN_PROGRESS,
       MARKETLIST_STATUS.PARTIALLY_RECEIVED,
       MARKETLIST_STATUS.RECEIVED,

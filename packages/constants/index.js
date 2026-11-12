@@ -13,6 +13,7 @@ const MARKETLIST_STATUS = {
   SUBMITTED: 'submitted',
   REVISION: 'revision',
   APPROVED: 'approved',
+  PARTIAL_REJECTION: 'partial_rejection',
   IN_PROGRESS: 'in_progress',
   PARTIALLY_RECEIVED: 'partially_received',
   RECEIVED: 'received',
@@ -102,7 +103,8 @@ const OVERHEAD_CATEGORY_LABELS = {
 const PRICE_SOURCES = {
   SUPPLIER_OFFER: 'supplier_offer',
   MARKETLIST: 'marketlist',
-  PURCHASE_TRANSACTION: 'purchase_transaction'
+  PURCHASE_TRANSACTION: 'purchase_transaction',
+  PURCHASE: 'purchase'
 };
 
 module.exports = {

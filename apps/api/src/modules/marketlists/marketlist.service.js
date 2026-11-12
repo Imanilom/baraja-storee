@@ -46,6 +46,7 @@ class MarketlistService {
           $in: [
             MARKETLIST_STATUS.SUBMITTED,
             MARKETLIST_STATUS.APPROVED,
+            MARKETLIST_STATUS.PARTIAL_REJECTION,
             MARKETLIST_STATUS.IN_PROGRESS,
             MARKETLIST_STATUS.PARTIALLY_RECEIVED,
             MARKETLIST_STATUS.RECEIVED,
@@ -56,6 +57,7 @@ class MarketlistService {
         filter.status = {
           $in: [
             MARKETLIST_STATUS.APPROVED,
+            MARKETLIST_STATUS.PARTIAL_REJECTION,
             MARKETLIST_STATUS.IN_PROGRESS,
             MARKETLIST_STATUS.PARTIALLY_RECEIVED,
             MARKETLIST_STATUS.RECEIVED,
@@ -612,7 +614,11 @@ class MarketlistService {
     const marketlist = await Marketlist.findById(id);
     if (!marketlist) throw new Error('Marketlist not found');
 
-    if (marketlist.status !== MARKETLIST_STATUS.SUBMITTED) {
+    const canRejectSubmitted = marketlist.status === MARKETLIST_STATUS.SUBMITTED;
+    const canAdminRejectApproved =
+      marketlist.status === MARKETLIST_STATUS.APPROVED &&
+      adminUser?.role === ROLES.ADMIN;
+    if (!canRejectSubmitted && !canAdminRejectApproved) {
       throw new Error(`Cannot reject marketlist with status '${marketlist.status}'`);
     }
 

@@ -14,12 +14,18 @@ const Invoice = require('../src/modules/invoices/invoice.model');
 const Purchase = require('../src/modules/purchases/purchase.model');
 const PurchaseItem = require('../src/modules/purchases/purchase-item.model');
 const ActivityLog = require('../src/modules/audit/activity-log.model');
+const ProductPrice = require('../src/modules/prices/product-price.model');
+const Waste = require('../src/modules/waste/waste.model');
+const cashFlowService = require('../src/modules/cash-flow/cash-flow.service');
+const inventoryService = require('../src/modules/inventory/inventory.service');
 
 const marketlistService = require('../src/modules/marketlists/marketlist.service');
 const marketlistNoteService = require('../src/modules/notes/marketlist-note.service');
 const receivingService = require('../src/modules/receiving/receiving.service');
 const invoiceService = require('../src/modules/invoices/invoice.service');
 const purchaseService = require('../src/modules/purchases/purchase.service');
+const priceService = require('../src/modules/prices/prices.service');
+const wasteService = require('../src/modules/waste/waste.service');
 
 const { ROLES, MARKETLIST_STATUS, RECEIVING_STATUS, ITEM_CONDITION } = require('@purchasing/constants');
 const { createGoodsReceiptSchema, updateGoodsReceiptSchema } = require('@purchasing/validation');
@@ -97,7 +103,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 44 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 49 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -109,7 +115,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/44] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/49] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -226,7 +232,7 @@ async function runTests() {
 
   // 9. Mobile hanya menampilkan Marketlist yang sudah disetujui dan ditugaskan
   const receiverList = await marketlistService.getAllMarketlists({ only_assigned: 'true' }, receiverUser);
-  const hasOnlyApproved = receiverList.items.every(m => ['approved', 'in_progress', 'partially_received'].includes(m.status));
+  const hasOnlyApproved = receiverList.items.every(m => ['approved', 'partial_rejection', 'in_progress', 'partially_received'].includes(m.status));
   assert(hasOnlyApproved && receiverList.items.length >= 1, 'Mobile hanya menampilkan Marketlist yang sudah disetujui dan ditugaskan.');
 
   // 10. Receiver dapat memeriksa barang dan menginput kuantitas aktual
@@ -851,6 +857,11 @@ async function runTests() {
       actual_unit_price: 15000
     }]
   }, purchasingUser);
+  const receiptQtyMlWhileBuying = await marketlistService.getMarketlistById(receiptQtyMl._id);
+  assert(
+    receiptQtyMlWhileBuying.status === MARKETLIST_STATUS.PARTIAL_REJECTION,
+    'Marketlist dengan barang yang belum dipenuhi Purchasing masuk Partial Rejection.'
+  );
   const receiptForPurchasedQty = await receivingService.createReceipt(receiptQtyMl._id, {
     supplier_id: supplierA._id,
     items: [{
@@ -865,7 +876,7 @@ async function runTests() {
   assert(
     receiptForPurchasedQty.items[0].ordered_qty === 5 &&
       receiptForPurchasedQty.items[0].status === RECEIVING_STATUS.COMPLETE &&
-      receiptQtyMlAfter.status === MARKETLIST_STATUS.RECEIVED,
+    receiptQtyMlAfter.status === MARKETLIST_STATUS.PARTIAL_REJECTION,
     'Target penerimaan dan status Marketlist mengikuti qty yang dibeli, bukan qty rencana awal.'
   );
 
@@ -953,8 +964,137 @@ async function runTests() {
     'Pembelian dari beberapa supplier menghasilkan satu invoice dengan hanya dua baris yang benar-benar dibeli.'
   );
 
+  // 46. Actual purchase prices feed price trends and waste valuation
+  await purchaseService.createPurchase({
+    supplier_id: supplierA._id,
+    items: [{
+      product_id: productAyam._id,
+      actual_qty: 4,
+      actual_unit_price: 52000
+    }]
+  }, purchasingUser);
+  const actualPriceHistory = await priceService.getPriceHistoryByProduct(productAyam._id);
+  const latestPriceOverview = await priceService.getLatestPrices();
+  const ayamLatestPrice = latestPriceOverview.find(
+    (entry) => entry._id.toString() === productAyam._id.toString()
+  );
+  const wasteRecord = await wasteService.createWaste({
+    product_id: productAyam._id,
+    quantity: 1.5,
+    reason: 'Produk rusak'
+  }, receiverUser);
+  assert(
+    actualPriceHistory[0].source === 'purchase' &&
+      actualPriceHistory[0].price === 52000 &&
+      ayamLatestPrice.latest_price === 52000 &&
+      wasteRecord.unit_purchase_price === 52000 &&
+      wasteRecord.total_cost === 78000 &&
+      (await Waste.countDocuments({ product_id: productAyam._id })) === 1 &&
+      (await ProductPrice.countDocuments({ product_id: productAyam._id, source: 'purchase' })) > 0,
+    'Harga transaksi pembelian masuk ke tren harga dan menjadi dasar nilai waste.'
+  );
+
+  // 47. Petty cash is funded, spent, and returned within the same day
+  const pettyDayStart = new Date();
+  pettyDayStart.setHours(0, 0, 0, 0);
+  const pettyCashDate = new Date();
+  await cashFlowService.recordCashIn({
+    amount: 1000000000,
+    to_account: 'cash',
+    description: 'Saldo awal pengujian kas kecil',
+    date: pettyCashDate
+  }, adminUser);
+  await cashFlowService.recordPettyCashTransfer({
+    amount: 600000,
+    date: pettyCashDate
+  }, adminUser, 'fund');
+  await cashFlowService.recordCashOut({
+    amount: 100000,
+    source_account: 'petty_cash',
+    description: 'Belanja operasional kas kecil',
+    date: pettyCashDate
+  }, adminUser);
+  await purchaseService.createPurchase({
+    supplier_id: supplierA._id,
+    payment_method: 'cash',
+    payment_source: 'petty_cash',
+    purchased_at: pettyCashDate,
+    items: [{
+      product_id: productAyam._id,
+      actual_qty: 1,
+      actual_unit_price: 50000
+    }]
+  }, purchasingUser);
+  await cashFlowService.recordPettyCashTransfer({
+    amount: 450000,
+    date: pettyCashDate
+  }, adminUser, 'return');
+  let excessivePettyCashReturnRejected = false;
+  try {
+    await cashFlowService.recordPettyCashTransfer({
+      amount: 1,
+      date: pettyCashDate
+    }, adminUser, 'return');
+  } catch (error) {
+    excessivePettyCashReturnRejected = error.message.includes('kas kecil');
+  }
+  const pettyCashReport = await cashFlowService.getSummary({
+    startDate: pettyDayStart.toISOString(),
+    endDate: new Date(pettyDayStart.getTime() + 86400000 - 1).toISOString()
+  });
+  assert(
+    excessivePettyCashReturnRejected &&
+      pettyCashReport.total_petty_cash_funded === 600000 &&
+      pettyCashReport.total_petty_cash_returned === 450000 &&
+      pettyCashReport.total_purchase_petty_cash === 50000 &&
+      pettyCashReport.current_petty_cash_balance === 0,
+    'Kas kecil dibatasi dana yang benar-benar diterima hari itu, dan sisa kembali ke kas besar.'
+  );
+
+  // 48. Daily inventory reconciliation keeps timestamps and waste trace
+  const inventoryDayEnd = new Date(pettyDayStart);
+  inventoryDayEnd.setHours(23, 59, 59, 999);
+  const dailyInventory = await inventoryService.getDailyReconciliation({
+    startDate: pettyDayStart.toISOString(),
+    endDate: inventoryDayEnd.toISOString()
+  });
+  const dailyInventoryAyam = dailyInventory.items.find(
+    (item) => item.product_id?.toString() === productAyam._id.toString()
+  );
+  assert(
+    dailyInventoryAyam?.event_history.some((event) => event.type === 'po' && event.happened_at) &&
+      dailyInventoryAyam?.waste_records.some((record) => record.total_cost === 78000 && record.wasted_at),
+    'Rekonsiliasi harian menampilkan timestamp pembelian dan jejak waste dengan harga snapshot.'
+  );
+
+  // 49. Admin can reject a marketlist after approval
+  const adminRejectMl = await marketlistService.createMarketlist({
+    date: new Date(),
+    required_date: new Date(Date.now() + 86400000),
+    location_id: loc._id,
+    items: [{ product_id: productBeras._id, requested_qty: 2, unit_price: 15000, supplier_id: supplierA._id }]
+  }, purchasingUser);
+  await marketlistService.submitMarketlist(adminRejectMl._id, purchasingUser);
+  await marketlistService.approveMarketlist(adminRejectMl._id, adminUser, 'Persetujuan awal');
+  let nonAdminApprovedRejectionBlocked = false;
+  try {
+    await marketlistService.rejectMarketlist(adminRejectMl._id, purchasingUser, 'Coba tolak');
+  } catch (error) {
+    nonAdminApprovedRejectionBlocked = error.message.includes('approved');
+  }
+  const rejectedApprovedMarketlist = await marketlistService.rejectMarketlist(
+    adminRejectMl._id,
+    adminUser,
+    'Kebutuhan berubah setelah approval'
+  );
+  assert(
+    nonAdminApprovedRejectionBlocked &&
+      rejectedApprovedMarketlist.status === MARKETLIST_STATUS.CANCELLED,
+    'Admin dapat menolak Marketlist yang telah disetujui; role non-admin tidak dapat melakukannya.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 44/44 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 49/49 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();

@@ -8,10 +8,12 @@ const Product = require('../products/product.model');
 const ActivityLog = require('../audit/activity-log.model');
 const invoiceService = require('../invoices/invoice.service');
 const receivingService = require('../receiving/receiving.service');
+const cashFlowService = require('../cash-flow/cash-flow.service');
 const {
   PURCHASE_STATUS,
   PAYMENT_STATUS,
-  MARKETLIST_STATUS
+  MARKETLIST_STATUS,
+  PRICE_SOURCES
 } = require('@purchasing/constants');
 
 class PurchaseService {
@@ -132,6 +134,19 @@ class PurchaseService {
     }
 
     const resolvedPaymentSource = payment_source || (payment_method === 'transfer' ? 'bank' : 'cash');
+    if (!['cash', 'bank', 'petty_cash'].includes(resolvedPaymentSource)) {
+      throw new Error('Sumber pembayaran tidak valid.');
+    }
+    if (payment_method === 'transfer' && resolvedPaymentSource !== 'bank') {
+      throw new Error('Pembayaran transfer harus menggunakan rekening bank.');
+    }
+    if (payment_method === 'cash' && !['cash', 'petty_cash'].includes(resolvedPaymentSource)) {
+      throw new Error('Pembayaran tunai harus menggunakan kas besar atau kas kecil.');
+    }
+    if (resolvedPaymentSource === 'petty_cash') {
+      const paidFromPettyCash = payment_method === 'tempo' ? amountPaid : totalActual;
+      await cashFlowService.ensurePettyCashAvailable(paidFromPettyCash, purchased_at);
+    }
 
     const purchase = await Purchase.create({
       purchase_number: purchaseNumber,
@@ -189,19 +204,15 @@ class PurchaseService {
           product_id: item.product_id,
           supplier_id,
           price: item.actual_unit_price,
-          source: 'purchase',
+          source: PRICE_SOURCES.PURCHASE,
           reference_id: purchase._id,
           recorded_at: new Date(purchased_at)
         }).catch(() => null);
       }
     }
 
-    // Update marketlist status to in_progress if currently approved
     if (marketlist_id) {
-      await Marketlist.findOneAndUpdate(
-        { _id: marketlist_id, status: 'approved' },
-        { $set: { status: 'in_progress' } }
-      ).catch(() => null);
+      await receivingService.recalculateMarketlistProgress(marketlist_id);
     }
 
     // Audit log
@@ -428,6 +439,12 @@ class PurchaseService {
   async updatePurchase(id, data, user) {
     const purchase = await Purchase.findById(id);
     if (!purchase) throw new Error('Transaksi pembelian tidak ditemukan.');
+    const previousPaymentSource = purchase.payment_source;
+    const previousPaymentMethod = purchase.payment_method;
+    const previousPurchasedAt = new Date(purchase.purchased_at);
+    const previousPettyCashAmount = previousPaymentMethod === 'tempo'
+      ? Number(purchase.amount_paid) || 0
+      : Number(purchase.total_actual) || 0;
 
     const {
       marketlist_id,
@@ -452,6 +469,7 @@ class PurchaseService {
     if (allocationChanged) {
       const allocationStatuses = [
         MARKETLIST_STATUS.APPROVED,
+        MARKETLIST_STATUS.PARTIAL_REJECTION,
         MARKETLIST_STATUS.IN_PROGRESS,
         MARKETLIST_STATUS.PARTIALLY_RECEIVED,
         MARKETLIST_STATUS.RECEIVED
@@ -531,6 +549,28 @@ class PurchaseService {
       purchase.due_date = null;
       purchase.amount_paid = purchase.total_actual;
       purchase.amount_remaining = 0;
+    }
+
+    if (!['cash', 'bank', 'petty_cash'].includes(purchase.payment_source)) {
+      throw new Error('Sumber pembayaran tidak valid.');
+    }
+    if (targetPaymentMethod === 'transfer' && purchase.payment_source !== 'bank') {
+      throw new Error('Pembayaran transfer harus menggunakan rekening bank.');
+    }
+    if (targetPaymentMethod === 'cash' && !['cash', 'petty_cash'].includes(purchase.payment_source)) {
+      throw new Error('Pembayaran tunai harus menggunakan kas besar atau kas kecil.');
+    }
+    if (purchase.payment_source === 'petty_cash') {
+      let available = await cashFlowService.getPettyCashBalance(purchase.purchased_at);
+      if (previousPaymentSource === 'petty_cash' && previousPurchasedAt <= purchase.purchased_at) {
+        available += previousPettyCashAmount;
+      }
+      const requiredAmount = targetPaymentMethod === 'tempo'
+        ? Number(purchase.amount_paid) || 0
+        : Number(purchase.total_actual) || 0;
+      if (requiredAmount > available + 1e-9) {
+        throw new Error(`Saldo kas kecil tidak cukup. Saldo tersedia ${Math.max(0, available)}.`);
+      }
     }
 
     await purchase.save();
@@ -630,6 +670,7 @@ class PurchaseService {
       await Marketlist.findByIdAndUpdate(purchase.marketlist_id, {
         $set: { purchase_tracking_started: true }
       });
+      await receivingService.recalculateMarketlistProgress(purchase.marketlist_id);
       await invoiceService.syncMarketlistPurchaseQuantities(purchase.marketlist_id, user);
     }
 

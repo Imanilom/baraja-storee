@@ -109,6 +109,7 @@ class ReceivingService {
 
     const validStatuses = [
       MARKETLIST_STATUS.APPROVED,
+      MARKETLIST_STATUS.PARTIAL_REJECTION,
       MARKETLIST_STATUS.IN_PROGRESS,
       MARKETLIST_STATUS.PARTIALLY_RECEIVED
     ];
@@ -355,6 +356,11 @@ class ReceivingService {
     let allCompleted = true;
     let anyReceived = false;
     let expectedItemsCount = 0;
+    const hasUnfulfilledItems = marketlist.purchase_tracking_started && mlItems.some((item) => {
+      if (item.item_status === 'rejected') return false;
+      const purchasedQty = expectedQuantityMap.get(item._id.toString()) || 0;
+      return purchasedQty + 1e-9 < item.requested_qty;
+    });
 
     for (const item of mlItems) {
       const expectedQty = expectedQuantityMap.get(item._id.toString()) || 0;
@@ -369,7 +375,9 @@ class ReceivingService {
       }
     }
 
-    if (allCompleted && expectedItemsCount > 0) {
+    if (hasUnfulfilledItems) {
+      marketlist.status = MARKETLIST_STATUS.PARTIAL_REJECTION;
+    } else if (allCompleted && expectedItemsCount > 0) {
       marketlist.status = MARKETLIST_STATUS.RECEIVED;
     } else if (anyReceived) {
       marketlist.status = MARKETLIST_STATUS.PARTIALLY_RECEIVED;
