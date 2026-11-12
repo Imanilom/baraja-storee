@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
-import { CalendarDays, PackageCheck, ReceiptText, ShoppingCart, Trash2, RefreshCw } from 'lucide-react';
+import { CalendarDays, PackageCheck, ReceiptText, ShoppingCart, Trash2, RefreshCw, Wallet } from 'lucide-react';
 
 const localDate = (date = new Date()) => {
   const offset = date.getTimezoneOffset() * 60000;
@@ -34,7 +34,7 @@ const eventLabels = {
 
 export default function InventoryPage() {
   const [date, setDate] = useState(localDate());
-  const [report, setReport] = useState({ totals: {}, items: [] });
+  const [report, setReport] = useState({ totals: {}, items: [], overheads: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -43,7 +43,7 @@ export default function InventoryPage() {
     setError('');
     try {
       const response = await api.getDailyInventoryReconciliation(dailyParams(date));
-      setReport(response.data || { totals: {}, items: [] });
+      setReport(response.data || { totals: {}, items: [], overheads: [] });
     } catch (requestError) {
       setError(requestError.message || 'Gagal memuat rekonsiliasi inventori.');
     } finally {
@@ -59,7 +59,8 @@ export default function InventoryPage() {
     { title: 'Hutang', value: money(report.totals.debt_amount), detail: 'Sisa belum dibayar; sudah termasuk nilai pembelian', icon: ReceiptText, color: 'text-orange-700', style: 'border-orange-200' },
     { title: 'Selisih Pembelian - Tagihan', value: money(report.totals.difference_amount), detail: 'Rp 0 berarti nilai pembelian dan tagihan cocok', icon: ReceiptText, color: Math.abs(Number(report.totals.difference_amount) || 0) < 0.01 ? 'text-emerald-700' : 'text-rose-700', style: Math.abs(Number(report.totals.difference_amount) || 0) < 0.01 ? 'border-emerald-200' : 'border-rose-200' },
     { title: 'Produk Diterima', value: `${report.items.filter((item) => item.received_quantity > 0).length}`, detail: 'Kuantitas diterima ada di tabel per produk', icon: PackageCheck, color: 'text-emerald-700', style: 'border-emerald-200' },
-    { title: 'Nilai Waste', value: money(report.totals.waste_cost), detail: 'Jejak jumlah, harga, dan alasan tercatat', icon: Trash2, color: 'text-rose-700', style: 'border-rose-200' }
+    { title: 'Nilai Waste', value: money(report.totals.waste_cost), detail: 'Jejak jumlah, harga, dan alasan tercatat', icon: Trash2, color: 'text-rose-700', style: 'border-rose-200' },
+    { title: 'Overhead Hari Ini', value: money(report.totals.overhead_amount), detail: `${money(report.totals.overhead_paid_amount)} dibayar · ${money(report.totals.overhead_debt_amount)} masih hutang`, icon: Wallet, color: 'text-violet-700', style: 'border-violet-200' }
   ];
 
   return (
@@ -69,7 +70,7 @@ export default function InventoryPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold text-slate-900">Alur Pembelian, Penerimaan, Tagihan & Waste</h1>
-            <p className="mt-1 text-xs text-slate-500">Pembelian mengikuti tanggal dibeli; tagihan dicocokkan berdasarkan item pembelian meski invoice dibuat pada tanggal lain. Hutang sudah termasuk dalam nilai pembelian.</p>
+            <p className="mt-1 text-xs text-slate-500">Pembelian mengikuti tanggal dibeli; tagihan dicocokkan berdasarkan item pembelian meski invoice dibuat pada tanggal lain. Overhead dicatat terpisah dari pembelian produk.</p>
           </div>
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-slate-500" />
@@ -91,7 +92,7 @@ export default function InventoryPage() {
 
         {error && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {summaryCards.map(({ title, value, detail, icon: Icon, color, style }) => (
             <section key={title} className={`rounded-xl border ${style} bg-white p-4`}>
               <div className={`flex items-center gap-2 text-xs font-bold ${color}`}><Icon className="h-4 w-4" />{title}</div>
@@ -164,6 +165,52 @@ export default function InventoryPage() {
             </div>
           ) : (
             <p className="p-6 text-sm text-slate-500">Belum ada peristiwa pembelian, penerimaan, tagihan, atau waste pada tanggal ini.</p>
+          )}
+        </section>
+
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Rincian Overhead</h2>
+              <p className="mt-0.5 text-[10px] text-slate-500">Biaya overhead yang dicatat pada tanggal terpilih, beserta pembayaran dan sisa hutangnya.</p>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">{report.overheads?.length || 0} biaya</span>
+          </div>
+          {loading ? <p className="p-6 text-sm text-slate-500">Memuat overhead...</p> : report.overheads?.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-xs">
+                <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Waktu</th>
+                    <th className="px-4 py-3">Keperluan / Kategori</th>
+                    <th className="px-4 py-3">Nilai Biaya</th>
+                    <th className="px-4 py-3">Dibayar</th>
+                    <th className="px-4 py-3">Sisa Hutang</th>
+                    <th className="px-4 py-3">Pembayaran Hari Ini</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {report.overheads.map((overhead) => (
+                    <tr key={overhead._id}>
+                      <td className="px-4 py-3 text-slate-600">{timestamp(overhead.expense_date)}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-800">{overhead.title}<div className="text-[10px] font-normal text-slate-500">{overhead.category}</div></td>
+                      <td className="px-4 py-3">{money(overhead.amount)}</td>
+                      <td className="px-4 py-3 text-emerald-700">{money(overhead.paid_amount)}</td>
+                      <td className="px-4 py-3 text-orange-700">{money(overhead.debt_amount)}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {overhead.payments?.length
+                          ? overhead.payments.map((payment) => (
+                            <div key={payment._id}>{timestamp(payment.paid_at)} · {money(payment.amount)}</div>
+                          ))
+                          : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="p-6 text-sm text-slate-500">Tidak ada overhead yang dicatat pada tanggal ini.</p>
           )}
         </section>
       </main>

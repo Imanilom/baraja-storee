@@ -16,6 +16,7 @@ const PurchaseItem = require('../src/modules/purchases/purchase-item.model');
 const ActivityLog = require('../src/modules/audit/activity-log.model');
 const ProductPrice = require('../src/modules/prices/product-price.model');
 const Waste = require('../src/modules/waste/waste.model');
+const overheadService = require('../src/modules/overheads/overhead.service');
 const cashFlowService = require('../src/modules/cash-flow/cash-flow.service');
 const inventoryService = require('../src/modules/inventory/inventory.service');
 
@@ -1181,13 +1182,33 @@ async function runTests() {
     startDate: '2024-06-15T00:00:00.000Z',
     endDate: '2024-06-15T23:59:59.999Z'
   });
+  await overheadService.createOverhead({
+    title: 'Tagihan listrik test rekonsiliasi',
+    category: 'listrik_air_gas',
+    amount: 12000,
+    payment_method: 'tempo',
+    amount_paid: 3000,
+    due_date: '2024-06-30T00:00:00.000Z',
+    expense_date: debtReconciliationDate
+  }, adminUser);
+  const debtAndOverheadReconciliation = await inventoryService.getDailyReconciliation({
+    startDate: '2024-06-15T00:00:00.000Z',
+    endDate: '2024-06-15T23:59:59.999Z'
+  });
+  const dailyOverhead = debtAndOverheadReconciliation.overheads.find(
+    (overhead) => overhead.title === 'Tagihan listrik test rekonsiliasi'
+  );
   assert(
     debtReconciliation.totals.po_amount === 20000 &&
       debtReconciliation.totals.paid_amount === 5000 &&
       debtReconciliation.totals.debt_amount === 15000 &&
       debtReconciliation.totals.billed_amount === 20000 &&
-      debtReconciliation.totals.difference_amount === 0,
-    'Rekonsiliasi memasukkan hutang dalam nilai pembelian dan mencocokkan invoice berdasarkan pembelian asal.'
+      debtReconciliation.totals.difference_amount === 0 &&
+      debtAndOverheadReconciliation.totals.overhead_amount === 12000 &&
+      debtAndOverheadReconciliation.totals.overhead_paid_amount === 3000 &&
+      debtAndOverheadReconciliation.totals.overhead_debt_amount === 9000 &&
+      dailyOverhead?.payments.some((payment) => payment.amount === 3000),
+    'Rekonsiliasi mencocokkan PO/tagihan serta menampilkan overhead harian, pembayaran, dan hutangnya secara terpisah.'
   );
 
   console.log('===========================================================');

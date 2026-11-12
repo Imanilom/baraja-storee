@@ -1,6 +1,8 @@
 const Purchase = require('../purchases/purchase.model');
 const PurchaseItem = require('../purchases/purchase-item.model');
 const DebtPayment = require('../purchases/debt-payment.model');
+const Overhead = require('../overheads/overhead.model');
+const OverheadPayment = require('../overheads/overhead-payment.model');
 const GoodsReceipt = require('../receiving/goods-receipt.model');
 const GoodsReceiptItem = require('../receiving/goods-receipt-item.model');
 const Invoice = require('../invoices/invoice.model');
@@ -27,7 +29,7 @@ const getDayRange = ({ date: dateValue, startDate, endDate } = {}) => {
 class InventoryService {
   async getDailyReconciliation(query) {
     const { start, end } = getDayRange(query);
-    const [purchases, receipts, wasteRecords] = await Promise.all([
+    const [purchases, receipts, wasteRecords, overheads] = await Promise.all([
       Purchase.find({
         purchased_at: { $gte: start, $lte: end },
         status: 'verified'
@@ -36,10 +38,13 @@ class InventoryService {
         received_at: { $gte: start, $lte: end },
         status: { $ne: 'cancelled' }
       }).select('_id receipt_number received_at'),
-      Waste.find({ wasted_at: { $gte: start, $lte: end } }).lean()
+      Waste.find({ wasted_at: { $gte: start, $lte: end } }).lean(),
+      Overhead.find({ expense_date: { $gte: start, $lte: end } })
+        .select('_id title category amount expense_date payment_method payment_status amount_paid amount_remaining updated_at')
+        .lean()
     ]);
 
-    const [purchaseItems, receiptItems, debtPayments] = await Promise.all([
+    const [purchaseItems, receiptItems, debtPayments, overheadPayments] = await Promise.all([
       PurchaseItem.find({ purchase_id: { $in: purchases.map(({ _id }) => _id) } }).lean(),
       GoodsReceiptItem.find({ receipt_id: { $in: receipts.map(({ _id }) => _id) } })
         .populate({
@@ -55,7 +60,11 @@ class InventoryService {
       DebtPayment.find({
         purchase_id: { $in: purchases.map(({ _id }) => _id) },
         paid_at: { $lte: end }
-      }).select('purchase_id amount paid_at')
+      }).select('purchase_id amount paid_at'),
+      OverheadPayment.find({
+        overhead_id: { $in: overheads.map(({ _id }) => _id) },
+        paid_at: { $lte: end }
+      }).select('overhead_id amount paid_at')
     ]);
 
     const purchaseById = new Map(
@@ -106,6 +115,45 @@ class InventoryService {
         paid,
         debt: Math.max(0, total - paid)
       });
+    });
+    const overheadPaymentsById = new Map();
+    overheadPayments.forEach((payment) => {
+      const id = payment.overhead_id.toString();
+      const records = overheadPaymentsById.get(id) || [];
+      records.push(payment);
+      overheadPaymentsById.set(id, records);
+    });
+    const overheadDetails = overheads.map((overhead) => {
+      const payments = overheadPaymentsById.get(overhead._id.toString()) || [];
+      const total = Number(overhead.amount) || 0;
+      let paid;
+      if (overhead.payment_method !== 'tempo') {
+        paid = total;
+      } else if (payments.length > 0) {
+        paid = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+      } else if (overhead.updated_at <= end) {
+        paid = Number(overhead.amount_paid) || 0;
+      } else {
+        paid = 0;
+      }
+      paid = Math.min(total, Math.max(0, paid));
+      return {
+        _id: overhead._id,
+        title: overhead.title,
+        category: overhead.category,
+        expense_date: overhead.expense_date,
+        amount: total,
+        paid_amount: paid,
+        debt_amount: Math.max(0, total - paid),
+        payment_status: overhead.payment_status,
+        payments: payments
+          .filter((payment) => payment.paid_at >= start)
+          .map((payment) => ({
+            _id: payment._id,
+            amount: payment.amount,
+            paid_at: payment.paid_at
+          }))
+      };
     });
 
     const purchaseItemIds = purchaseItems.map((item) => item._id);
@@ -269,6 +317,8 @@ class InventoryService {
       0
     );
     const billedAmount = sum('billed_amount');
+    const sumOverhead = (field) =>
+      overheadDetails.reduce((total, overhead) => total + overhead[field], 0);
     return {
       date: query?.date || start.toISOString().slice(0, 10),
       totals: {
@@ -281,8 +331,12 @@ class InventoryService {
         billed_amount: billedAmount,
         difference_amount: Math.round((poAmount - billedAmount) * 100) / 100,
         waste_quantity: sum('waste_quantity'),
-        waste_cost: sum('waste_cost')
+        waste_cost: sum('waste_cost'),
+        overhead_amount: sumOverhead('amount'),
+        overhead_paid_amount: sumOverhead('paid_amount'),
+        overhead_debt_amount: sumOverhead('debt_amount')
       },
+      overheads: overheadDetails,
       items
     };
   }
