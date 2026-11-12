@@ -185,9 +185,14 @@ export default function ProductsPage() {
       // Category filter
       if (selectedCategory !== 'all' && p.category_id?._id !== selectedCategory) return false;
 
+      const normalizedSearch = search.trim().toLocaleLowerCase('id-ID');
+      if (normalizedSearch && ![p.name, p.sku].some((value) =>
+        String(value || '').toLocaleLowerCase('id-ID').includes(normalizedSearch)
+      )) return false;
+
       return true;
     });
-  }, [products, statusFilter, typeFilter, selectedCategory]);
+  }, [products, statusFilter, typeFilter, selectedCategory, search]);
 
   const activeCount = products.filter((p) => p.is_active !== false).length;
   const inactiveCount = products.filter((p) => p.is_active === false).length;

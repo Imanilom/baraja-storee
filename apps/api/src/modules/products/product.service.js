@@ -14,9 +14,10 @@ class ProductService {
     if (query.category_id) filter.category_id = query.category_id;
     if (query.item_type) filter.item_type = query.item_type;
     if (query.search) {
+      const search = String(query.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: query.search, $options: 'i' } },
-        { sku: { $regex: query.search, $options: 'i' } }
+        { name: { $regex: search, $options: 'i' } },
+        { sku: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -110,4 +111,3 @@ class ProductService {
 }
 
 module.exports = new ProductService();
-

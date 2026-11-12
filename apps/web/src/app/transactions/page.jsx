@@ -132,6 +132,7 @@ export default function TransactionsPage() {
   const [entryMode, setEntryMode] = useState('marketlist');
   const [selectedMlId, setSelectedMlId] = useState('');
   const [manualProductId, setManualProductId] = useState('');
+  const [manualProductSearch, setManualProductSearch] = useState('');
   const [selectedMlDetail, setSelectedMlDetail] = useState(null);
   const [mlFilterTab, setMlFilterTab] = useState('all'); // 'all' | 'active' | 'delivered'
   const [mlSearch, setMlSearch] = useState('');
@@ -390,6 +391,7 @@ export default function TransactionsPage() {
     setSelectedMlDetail(null);
     setFormItems([]);
     setManualProductId('');
+    setManualProductSearch('');
     setSelectedSupplierId('');
   };
 
@@ -616,6 +618,7 @@ export default function TransactionsPage() {
     setNotes('');
     setFormItems([]);
     setManualProductId('');
+    setManualProductSearch('');
   };
 
   // ---------- view detail ----------
@@ -769,9 +772,17 @@ export default function TransactionsPage() {
     if (mlFilterTab === 'active' && !['approved', 'partial_rejection', 'in_progress'].includes(m.status)) return false;
     if (mlFilterTab === 'delivered' && !['partially_received', 'received', 'completed'].includes(m.status)) return false;
     const search = mlSearch.trim().toLowerCase();
-    return !search || [m.marketlist_number, m.status, m.location_id?.name]
+    return !search || [m.marketlist_number, m.status, m.location_id?.name,
+      ...(m.items || [])
+        .filter((item) => item.item_status !== 'rejected')
+        .map((item) => item.product_id?.name || item.product_snapshot?.name)]
       .some((value) => String(value || '').toLowerCase().includes(search));
   });
+  const visibleManualProducts = products.filter((product) =>
+    !manualProductSearch.trim() ||
+    product.name.toLowerCase().includes(manualProductSearch.trim().toLowerCase()) ||
+    product.sku?.toLowerCase().includes(manualProductSearch.trim().toLowerCase())
+  );
   const hasAnyReceived = formItems.some((it) => (it.received_qty || 0) > 0);
   const isDeliveredSelectedMl = selectedMlDetail && ['partially_received', 'received', 'completed'].includes(selectedMlDetail.status);
 
@@ -985,7 +996,7 @@ export default function TransactionsPage() {
                     type="search"
                     value={mlSearch}
                     onChange={(e) => setMlSearch(e.target.value)}
-                    placeholder="Cari nomor Marketlist, gudang, atau status..."
+                    placeholder="Cari nomor Marketlist, nama produk, gudang, atau status..."
                     className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                   <select
@@ -999,13 +1010,20 @@ export default function TransactionsPage() {
                       const meta = getMlStatusMeta(ml.status);
                       const reqDateStr = new Date(ml.required_date || ml.date).toLocaleDateString('id-ID');
                       const estStr = fmt(ml.estimated_total || ml.totals?.estimated_amount);
+                      const productMatches = (ml.items || [])
+                        .filter((item) => item.item_status !== 'rejected')
+                        .map((item) => item.product_id?.name || item.product_snapshot?.name)
+                        .filter((name) => name && (
+                          !mlSearch.trim() || name.toLowerCase().includes(mlSearch.trim().toLowerCase())
+                        ));
                       const remainingItems = (ml.items || []).filter(
                         (item) => item.item_status !== 'rejected' &&
                           (Number(item.requested_qty) || 0) > (Number(item.purchased_qty) || 0)
                       ).length;
                       return (
                         <option key={ml._id} value={ml._id}>
-                          {meta.tag} | {ml.code || ml.marketlist_number} • Sisa {remainingItems} barang • Tgl: {reqDateStr} • Est: {estStr}
+                          {meta.tag} | {ml.code || ml.marketlist_number} •
+                          {mlSearch.trim() && productMatches.length ? ` Produk: ${productMatches.join(', ')} •` : ''} Sisa {remainingItems} barang • Tgl: {reqDateStr} • Est: {estStr}
                         </option>
                       );
                     })}
@@ -1090,13 +1108,23 @@ export default function TransactionsPage() {
                             Tambah barang dari master item
                           </label>
                           <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              type="search"
+                              value={manualProductSearch}
+                              onChange={(event) => {
+                                setManualProductSearch(event.target.value);
+                                setManualProductId('');
+                              }}
+                              placeholder="Ketik nama produk atau SKU..."
+                              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-2.5 text-xs"
+                            />
                             <select
                               value={manualProductId}
                               onChange={(event) => setManualProductId(event.target.value)}
                               className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-2.5 text-xs"
                             >
                               <option value="">-- Pilih barang --</option>
-                              {products.map((product) => {
+                              {visibleManualProducts.map((product) => {
                                 const match = (selectedMlDetail?.items || []).find((item) =>
                                   item.product_id?._id?.toString() === product._id.toString() &&
                                   item.item_status !== 'rejected'
@@ -1122,6 +1150,17 @@ export default function TransactionsPage() {
                               <Plus className="h-4 w-4" /> Tambah Barang
                             </button>
                           </div>
+                          {mlSearch.trim() && filteredMLs.length > 0 && (
+                            <p className="mt-2 text-[10px] text-blue-800">
+                              Ditemukan di {filteredMLs.filter((ml) =>
+                                (ml.items || []).some((item) =>
+                                item.item_status !== 'rejected' &&
+                                (item.product_id?.name || item.product_snapshot?.name || '')
+                                    .toLowerCase().includes(mlSearch.trim().toLowerCase())
+                                )
+                              ).length} Marketlist. Pilih Marketlist untuk memuat rincian barang.
+                            </p>
+                          )}
                           {selectedMlDetail && (
                             <p className="mt-2 text-[10px] text-emerald-800">
                               Barang yang ada di {selectedMlDetail.marketlist_number} akan ditandai dan otomatis dialokasikan ke item Marketlist yang cocok.

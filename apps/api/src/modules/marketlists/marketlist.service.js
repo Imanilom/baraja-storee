@@ -8,6 +8,8 @@ const ProductPrice = require('../prices/product-price.model');
 const Invoice = require('../invoices/invoice.model');
 const Purchase = require('../purchases/purchase.model');
 const PurchaseItem = require('../purchases/purchase-item.model');
+const receivingService = require('../receiving/receiving.service');
+const invoiceService = require('../invoices/invoice.service');
 const auditService = require('../audit/audit.service');
 const { generateMarketlistNumber } = require('../../utils/number-generator');
 const { MARKETLIST_STATUS, ROLES, PRICE_SOURCES, PURCHASE_STATUS } = require('@purchasing/constants');
@@ -569,12 +571,47 @@ class MarketlistService {
   async approveItems(marketlistId, itemDecisions = [], user) {
     const marketlist = await Marketlist.findById(marketlistId);
     if (!marketlist) throw new Error('Marketlist not found');
-    if (![MARKETLIST_STATUS.SUBMITTED, MARKETLIST_STATUS.REVISION, MARKETLIST_STATUS.APPROVED].includes(marketlist.status)) {
+    const editableStatuses = [
+      MARKETLIST_STATUS.SUBMITTED,
+      MARKETLIST_STATUS.REVISION,
+      MARKETLIST_STATUS.APPROVED,
+      MARKETLIST_STATUS.IN_PROGRESS,
+      MARKETLIST_STATUS.PARTIAL_REJECTION
+    ];
+    if (!editableStatuses.includes(marketlist.status)) {
       throw new Error(`Marketlist berstatus '${marketlist.status}' tidak dalam status yang dapat di-review per item`);
     }
 
     if (!Array.isArray(itemDecisions) || itemDecisions.length === 0) {
       return { success: true, updated: 0 };
+    }
+
+    const uniqueItemIds = new Set(itemDecisions.map(({ id }) => id?.toString()));
+    if (uniqueItemIds.size !== itemDecisions.length || uniqueItemIds.has('undefined')) {
+      throw new Error('Daftar item review tidak valid atau mengandung duplikat.');
+    }
+
+    const [marketlistItems, purchasedQuantityMap] = await Promise.all([
+      MarketlistItem.find({
+        _id: { $in: itemDecisions.map(({ id }) => id) },
+        marketlist_id: marketlistId
+      }).select('_id item_status'),
+      this.getPurchasedQuantityMap([marketlist._id])
+    ]);
+    if (marketlistItems.length !== itemDecisions.length) {
+      throw new Error('Satu atau beberapa item tidak ditemukan pada Marketlist ini.');
+    }
+
+    const itemsById = new Map(marketlistItems.map((item) => [item._id.toString(), item]));
+    for (const decision of itemDecisions) {
+      const item = itemsById.get(decision.id.toString());
+      const purchasedQuantity = purchasedQuantityMap.get(item._id.toString()) || 0;
+      if (decision.approved === false && purchasedQuantity > 0) {
+        throw new Error('Item yang sudah dibeli tidak dapat ditolak.');
+      }
+      if (decision.approved === false && !decision.reason?.trim()) {
+        throw new Error('Alasan penolakan wajib diisi untuk setiap item yang ditolak.');
+      }
     }
 
     const bulkOps = itemDecisions.map(({ id, approved, reason }) => ({
@@ -583,7 +620,7 @@ class MarketlistService {
         update: {
           $set: {
             item_status: approved ? 'approved' : 'rejected',
-            rejection_reason: approved ? '' : (reason || 'Ditolak oleh leader'),
+            rejection_reason: approved ? '' : reason.trim(),
             reviewed_by: user._id,
             reviewed_at: new Date()
           }
@@ -593,6 +630,14 @@ class MarketlistService {
 
     if (bulkOps.length > 0) {
       await MarketlistItem.bulkWrite(bulkOps);
+    }
+
+    if ([
+      MARKETLIST_STATUS.IN_PROGRESS,
+      MARKETLIST_STATUS.PARTIAL_REJECTION
+    ].includes(marketlist.status)) {
+      await receivingService.recalculateMarketlistProgress(marketlistId);
+      await invoiceService.syncMarketlistPurchaseQuantities(marketlistId, user);
     }
 
     try {
@@ -614,11 +659,7 @@ class MarketlistService {
     const marketlist = await Marketlist.findById(id);
     if (!marketlist) throw new Error('Marketlist not found');
 
-    const canRejectSubmitted = marketlist.status === MARKETLIST_STATUS.SUBMITTED;
-    const canAdminRejectApproved =
-      marketlist.status === MARKETLIST_STATUS.APPROVED &&
-      adminUser?.role === ROLES.ADMIN;
-    if (!canRejectSubmitted && !canAdminRejectApproved) {
+    if (marketlist.status !== MARKETLIST_STATUS.SUBMITTED) {
       throw new Error(`Cannot reject marketlist with status '${marketlist.status}'`);
     }
 

@@ -84,7 +84,7 @@ export const api = {
   getDashboardMetrics: () => fetchApi('/dashboard'),
 
   // Master Data
-  getProducts: () => fetchApi('/products'),
+  getProducts: (params = '') => fetchApi(`/products${params}`),
   getCategories: () => fetchApi('/products/categories'),
   getLatestPrices: () => fetchApi('/prices/overview'),
   getProductPriceHistory: (id) => fetchApi(`/prices/products/${id}`),

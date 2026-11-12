@@ -7,6 +7,16 @@ const WasteSchema = new mongoose.Schema(
       ref: 'Product',
       required: true
     },
+    marketlist_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Marketlist',
+      default: null
+    },
+    marketlist_item_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'MarketlistItem',
+      default: null
+    },
     product_name: { type: String, required: true },
     unit_name: { type: String, default: '' },
     quantity: { type: Number, required: true, min: 0.000001 },
@@ -25,5 +35,6 @@ const WasteSchema = new mongoose.Schema(
 
 WasteSchema.index({ wasted_at: -1 });
 WasteSchema.index({ product_id: 1, wasted_at: -1 });
+WasteSchema.index({ marketlist_id: 1, wasted_at: -1 });
 
 module.exports = mongoose.model('Waste', WasteSchema);

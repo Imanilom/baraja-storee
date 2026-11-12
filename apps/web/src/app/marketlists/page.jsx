@@ -29,7 +29,6 @@ const STATUS_TABS = [
   { id: 'partial_rejection', label: 'Partial Rejection' },
   { id: 'in_progress', label: 'In Progress' },
   { id: 'partially_received', label: 'Partial Received' },
-  { id: 'received', label: '✅ Received' },
   { id: 'completed', label: 'Selesai' },
 ];
 
@@ -50,6 +49,8 @@ export default function MarketlistPage() {
   const [rejectingMarketlist, setRejectingMarketlist] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [submittingRejection, setSubmittingRejection] = useState(false);
+  const [itemReviewDecisions, setItemReviewDecisions] = useState({});
+  const [savingItemReview, setSavingItemReview] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -122,8 +123,10 @@ export default function MarketlistPage() {
   ].includes(user?.role);
   const canReviewMarketlists = ['admin', 'management', 'leader'].includes(user?.role);
   const canRejectMarketlist = (marketlist) =>
-    marketlist.status === 'submitted' && canReviewMarketlists ||
-    marketlist.status === 'approved' && user?.role === 'admin';
+    marketlist.status === 'submitted' && canReviewMarketlists;
+  const canReviewActiveItems = (marketlist) =>
+    canReviewMarketlists &&
+    ['approved', 'in_progress', 'partial_rejection'].includes(marketlist.status);
 
   const handleRejectMarketlist = async (event) => {
     event.preventDefault();
@@ -152,9 +155,61 @@ export default function MarketlistPage() {
   const handleOpenDetail = async (id) => {
     try {
       const res = await api.getMarketlistById(id);
-      setSelectedMl(res.data);
+      const marketlist = res.data;
+      setSelectedMl(marketlist);
+      setItemReviewDecisions(Object.fromEntries(
+        (marketlist.items || []).map((item) => [item._id, {
+          approved: item.item_status !== 'rejected',
+          reason: item.rejection_reason || ''
+        }])
+      ));
     } catch (err) {
       showToast('Gagal memuat detail marketlist', 'error');
+    }
+  };
+
+  const handleSaveItemReview = async () => {
+    if (!selectedMl) return;
+    const items = (selectedMl.items || []).flatMap((item) => {
+      const decision = itemReviewDecisions[item._id] || { approved: true, reason: '' };
+      const currentApproved = item.item_status !== 'rejected';
+      const currentReason = item.rejection_reason || '';
+      if (decision.approved === currentApproved &&
+          (decision.approved || decision.reason.trim() === currentReason)) {
+        return [];
+      }
+      return [{
+        id: item._id,
+        approved: decision.approved,
+        reason: decision.reason.trim()
+      }];
+    });
+    if (items.length === 0) {
+      showToast('Tidak ada perubahan status item untuk disimpan.', 'error');
+      return;
+    }
+    if (items.some((item) => !item.approved && !item.reason)) {
+      showToast('Isi alasan untuk setiap item yang ditolak.', 'error');
+      return;
+    }
+
+    setSavingItemReview(true);
+    try {
+      await api.approveItems(selectedMl._id, { items });
+      const detail = await api.getMarketlistById(selectedMl._id);
+      setSelectedMl(detail.data);
+      setItemReviewDecisions(Object.fromEntries(
+        (detail.data.items || []).map((item) => [item._id, {
+          approved: item.item_status !== 'rejected',
+          reason: item.rejection_reason || ''
+        }])
+      ));
+      await fetchMarketlists();
+      showToast('Status item Marketlist berhasil diperbarui.');
+    } catch (err) {
+      showToast(err.message || 'Gagal memperbarui status item.', 'error');
+    } finally {
+      setSavingItemReview(false);
     }
   };
 
@@ -253,7 +308,6 @@ export default function MarketlistPage() {
               <option value="in_progress">In Progress</option>
               <option value="draft">Draft</option>
               <option value="partially_received">Partially Received</option>
-              <option value="received">Received</option>
               <option value="completed">Completed</option>
             </select>
           </div>
@@ -365,7 +419,7 @@ export default function MarketlistPage() {
                             className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors inline-flex items-center gap-1"
                           >
                             <Eye className="w-3 h-3" />
-                            Detail
+                            {canReviewActiveItems(ml) ? 'Review Item' : 'Detail'}
                           </button>
                         </div>
                       </td>
@@ -457,7 +511,7 @@ export default function MarketlistPage() {
                         onClick={() => handleOpenDetail(ml._id)}
                         className="px-2.5 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded"
                       >
-                        Detail
+                        {canReviewActiveItems(ml) ? 'Review Item' : 'Detail'}
                       </button>
                     </div>
                   </div>
@@ -472,11 +526,7 @@ export default function MarketlistPage() {
             <form onSubmit={handleRejectMarketlist} className="w-full max-w-md rounded-2xl border border-rose-200 bg-white shadow-2xl">
               <div className="flex items-start justify-between border-b border-rose-100 bg-rose-50 px-5 py-4 rounded-t-2xl">
                 <div>
-                  <h3 className="text-sm font-bold text-rose-900">
-                    {rejectingMarketlist.status === 'approved'
-                      ? 'Admin: Tolak Marketlist yang Disetujui'
-                      : 'Tolak Marketlist'}
-                  </h3>
+                  <h3 className="text-sm font-bold text-rose-900">Tolak Marketlist</h3>
                   <p className="mt-1 text-xs text-rose-700">{rejectingMarketlist.marketlist_number}</p>
                 </div>
                 <button
@@ -580,7 +630,7 @@ export default function MarketlistPage() {
                           <th className="p-2.5">Qty</th>
                           <th className="p-2.5">Harga Satuan</th>
                           <th className="p-2.5">Subtotal</th>
-                          <th className="p-2.5">Status Review</th>
+                          <th className="p-2.5">Persetujuan Item</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -595,9 +645,51 @@ export default function MarketlistPage() {
                               Rp {(it.subtotal || 0).toLocaleString('id-ID')}
                             </td>
                             <td className="p-2.5">
-                              {it.item_status === 'rejected' ? (
+                              {canReviewActiveItems(selectedMl) ? (
+                                <div className="min-w-52 space-y-1.5">
+                                  <label className="flex items-center gap-2 font-semibold text-slate-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={itemReviewDecisions[it._id]?.approved ?? it.item_status !== 'rejected'}
+                                      disabled={Number(it.purchased_qty) > 0 && it.item_status !== 'rejected'}
+                                      onChange={(event) => setItemReviewDecisions((current) => ({
+                                        ...current,
+                                        [it._id]: {
+                                          approved: event.target.checked,
+                                          reason: event.target.checked
+                                            ? ''
+                                            : (current[it._id]?.reason || it.rejection_reason || '')
+                                        }
+                                      }))}
+                                    />
+                                    {itemReviewDecisions[it._id]?.approved ?? it.item_status !== 'rejected'
+                                      ? 'Disetujui'
+                                      : 'Ditolak'}
+                                  </label>
+                                  {!(itemReviewDecisions[it._id]?.approved ?? it.item_status !== 'rejected') && (
+                                    <input
+                                      type="text"
+                                      maxLength={500}
+                                      required
+                                      value={itemReviewDecisions[it._id]?.reason || ''}
+                                      onChange={(event) => setItemReviewDecisions((current) => ({
+                                        ...current,
+                                        [it._id]: {
+                                          approved: false,
+                                          reason: event.target.value
+                                        }
+                                      }))}
+                                      placeholder="Alasan penolakan item"
+                                      className="w-full rounded border border-rose-200 px-2 py-1 text-[10px]"
+                                    />
+                                  )}
+                                  {Number(it.purchased_qty) > 0 && (
+                                    <p className="text-[10px] text-slate-500">Sudah dibeli; item tidak dapat ditolak.</p>
+                                  )}
+                                </div>
+                              ) : it.item_status === 'rejected' ? (
                                 <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-[10px]">
-                                  Ditolak ({it.rejection_reason || 'Leader'})
+                                  Ditolak ({it.rejection_reason || 'Alasan tidak tersedia'})
                                 </span>
                               ) : (
                                 <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded text-[10px]">
@@ -616,6 +708,17 @@ export default function MarketlistPage() {
               {/* Modal Footer */}
               <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {canReviewActiveItems(selectedMl) && (
+                    <button
+                      type="button"
+                      onClick={handleSaveItemReview}
+                      disabled={savingItemReview}
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {savingItemReview ? 'Menyimpan...' : 'Simpan Status Item'}
+                    </button>
+                  )}
                   <Link
                     href={`/marketlists/${selectedMl._id}/print`}
                     target="_blank"

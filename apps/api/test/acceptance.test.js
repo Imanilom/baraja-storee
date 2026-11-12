@@ -26,6 +26,7 @@ const invoiceService = require('../src/modules/invoices/invoice.service');
 const purchaseService = require('../src/modules/purchases/purchase.service');
 const priceService = require('../src/modules/prices/prices.service');
 const wasteService = require('../src/modules/waste/waste.service');
+const productService = require('../src/modules/products/product.service');
 
 const { ROLES, MARKETLIST_STATUS, RECEIVING_STATUS, ITEM_CONDITION } = require('@purchasing/constants');
 const { createGoodsReceiptSchema, updateGoodsReceiptSchema } = require('@purchasing/validation');
@@ -983,13 +984,35 @@ async function runTests() {
     quantity: 1.5,
     reason: 'Produk rusak'
   }, receiverUser);
+  const wasteMarketlist = await marketlistService.createMarketlist({
+    date: new Date(),
+    required_date: new Date(Date.now() + 86400000),
+    location_id: loc._id,
+    items: [{
+      product_id: productAyam._id,
+      requested_qty: 5,
+      unit_price: 52000,
+      supplier_id: supplierA._id
+    }]
+  }, purchasingUser);
+  const linkedWasteRecord = await wasteService.createWaste({
+    product_id: productAyam._id,
+    marketlist_id: wasteMarketlist._id,
+    quantity: 0.5,
+    reason: 'Waste dari Marketlist terpilih'
+  }, receiverUser);
+  const searchedProducts = await productService.getAllProducts({ search: 'Ayam' });
   assert(
     actualPriceHistory[0].source === 'purchase' &&
       actualPriceHistory[0].price === 52000 &&
       ayamLatestPrice.latest_price === 52000 &&
       wasteRecord.unit_purchase_price === 52000 &&
       wasteRecord.total_cost === 78000 &&
-      (await Waste.countDocuments({ product_id: productAyam._id })) === 1 &&
+      linkedWasteRecord.marketlist_id.toString() === wasteMarketlist._id.toString() &&
+      linkedWasteRecord.marketlist_item_id.toString() === wasteMarketlist.items[0]._id.toString() &&
+      searchedProducts.length === 1 &&
+      searchedProducts[0]._id.toString() === productAyam._id.toString() &&
+      (await Waste.countDocuments({ product_id: productAyam._id })) === 2 &&
       (await ProductPrice.countDocuments({ product_id: productAyam._id, source: 'purchase' })) > 0,
     'Harga transaksi pembelian masuk ke tren harga dan menjadi dasar nilai waste.'
   );
@@ -1076,21 +1099,49 @@ async function runTests() {
   }, purchasingUser);
   await marketlistService.submitMarketlist(adminRejectMl._id, purchasingUser);
   await marketlistService.approveMarketlist(adminRejectMl._id, adminUser, 'Persetujuan awal');
-  let nonAdminApprovedRejectionBlocked = false;
+  let wholeMarketlistRejectionBlocked = false;
   try {
-    await marketlistService.rejectMarketlist(adminRejectMl._id, purchasingUser, 'Coba tolak');
+    await marketlistService.rejectMarketlist(
+      adminRejectMl._id,
+      adminUser,
+      'Penolakan seluruh marketlist tidak diperbolehkan setelah approval'
+    );
   } catch (error) {
-    nonAdminApprovedRejectionBlocked = error.message.includes('approved');
+    wholeMarketlistRejectionBlocked = error.message.includes('approved');
   }
-  const rejectedApprovedMarketlist = await marketlistService.rejectMarketlist(
+  const approvedItem = adminRejectMl.items[0];
+  const approvedItemRejected = await marketlistService.approveItems(
     adminRejectMl._id,
-    adminUser,
-    'Kebutuhan berubah setelah approval'
+    [{ id: approvedItem._id, approved: false, reason: 'Item tidak lagi diperlukan' }],
+    adminUser
   );
+  const rejectionCanBeChanged = await marketlistService.approveItems(
+    adminRejectMl._id,
+    [{ id: approvedItem._id, approved: true }],
+    adminUser
+  );
+  await Marketlist.findByIdAndUpdate(adminRejectMl._id, {
+    status: MARKETLIST_STATUS.IN_PROGRESS
+  });
+  const inProgressItemRejected = await marketlistService.approveItems(
+    adminRejectMl._id,
+    [{ id: approvedItem._id, approved: false, reason: 'Perubahan kebutuhan saat berjalan' }],
+    adminUser
+  );
+  const inProgressItemReapproved = await marketlistService.approveItems(
+    adminRejectMl._id,
+    [{ id: approvedItem._id, approved: true }],
+    adminUser
+  );
+  const finalReviewItem = await MarketlistItem.findById(approvedItem._id);
   assert(
-    nonAdminApprovedRejectionBlocked &&
-      rejectedApprovedMarketlist.status === MARKETLIST_STATUS.CANCELLED,
-    'Admin dapat menolak Marketlist yang telah disetujui; role non-admin tidak dapat melakukannya.'
+    wholeMarketlistRejectionBlocked &&
+      approvedItemRejected.updated === 1 &&
+      rejectionCanBeChanged.updated === 1 &&
+      inProgressItemRejected.updated === 1 &&
+      inProgressItemReapproved.updated === 1 &&
+      finalReviewItem.item_status === 'approved',
+    'Marketlist approved dan in progress dapat menolak atau memulihkan item tanpa menolak seluruh Marketlist.'
   );
 
   console.log('===========================================================');
