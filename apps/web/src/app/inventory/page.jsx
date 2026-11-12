@@ -28,6 +28,7 @@ const eventLabels = {
   po: 'PO / dibeli',
   received: 'Diterima',
   invoice: 'Ditagihkan',
+  debt_payment: 'Bayar hutang',
   waste: 'Waste'
 };
 
@@ -53,8 +54,10 @@ export default function InventoryPage() {
   useEffect(() => { load(); }, [load]);
 
   const summaryCards = [
-    { title: 'Nilai PO / Pembelian', value: money(report.totals.po_amount), detail: 'Jumlah PO ditampilkan per produk', icon: ShoppingCart, color: 'text-blue-700', style: 'border-blue-200' },
-    { title: 'Nilai Tagihan', value: money(report.totals.billed_amount), detail: 'Invoice aktif pada tanggal terpilih', icon: ReceiptText, color: 'text-amber-700', style: 'border-amber-200' },
+    { title: 'Nilai PO / Pembelian', value: money(report.totals.po_amount), detail: 'Termasuk bagian dibayar dan hutang', icon: ShoppingCart, color: 'text-blue-700', style: 'border-blue-200' },
+    { title: 'Nilai Tagihan', value: money(report.totals.billed_amount), detail: 'Invoice aktif yang cocok dengan pembelian tanggal terpilih', icon: ReceiptText, color: 'text-amber-700', style: 'border-amber-200' },
+    { title: 'Hutang', value: money(report.totals.debt_amount), detail: 'Sisa belum dibayar; sudah termasuk nilai pembelian', icon: ReceiptText, color: 'text-orange-700', style: 'border-orange-200' },
+    { title: 'Selisih Pembelian - Tagihan', value: money(report.totals.difference_amount), detail: 'Rp 0 berarti nilai pembelian dan tagihan cocok', icon: ReceiptText, color: Math.abs(Number(report.totals.difference_amount) || 0) < 0.01 ? 'text-emerald-700' : 'text-rose-700', style: Math.abs(Number(report.totals.difference_amount) || 0) < 0.01 ? 'border-emerald-200' : 'border-rose-200' },
     { title: 'Produk Diterima', value: `${report.items.filter((item) => item.received_quantity > 0).length}`, detail: 'Kuantitas diterima ada di tabel per produk', icon: PackageCheck, color: 'text-emerald-700', style: 'border-emerald-200' },
     { title: 'Nilai Waste', value: money(report.totals.waste_cost), detail: 'Jejak jumlah, harga, dan alasan tercatat', icon: Trash2, color: 'text-rose-700', style: 'border-rose-200' }
   ];
@@ -66,7 +69,7 @@ export default function InventoryPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold text-slate-900">Alur Pembelian, Penerimaan, Tagihan & Waste</h1>
-            <p className="mt-1 text-xs text-slate-500">Setiap angka mengikuti tanggal kejadian masing-masing; produksi dan penjualan belum ditampilkan.</p>
+            <p className="mt-1 text-xs text-slate-500">Pembelian mengikuti tanggal dibeli; tagihan dicocokkan berdasarkan item pembelian meski invoice dibuat pada tanggal lain. Hutang sudah termasuk dalam nilai pembelian.</p>
           </div>
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-slate-500" />
@@ -88,7 +91,7 @@ export default function InventoryPage() {
 
         {error && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           {summaryCards.map(({ title, value, detail, icon: Icon, color, style }) => (
             <section key={title} className={`rounded-xl border ${style} bg-white p-4`}>
               <div className={`flex items-center gap-2 text-xs font-bold ${color}`}><Icon className="h-4 w-4" />{title}</div>
@@ -108,11 +111,12 @@ export default function InventoryPage() {
           </div>
           {loading ? <p className="p-6 text-sm text-slate-500">Memuat rekonsiliasi...</p> : report.items?.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] text-left text-xs">
+              <table className="w-full min-w-[1100px] text-left text-xs">
                 <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Produk</th>
                     <th className="px-4 py-3">PO / dibeli</th>
+                    <th className="px-4 py-3">Hutang</th>
                     <th className="px-4 py-3">Diterima</th>
                     <th className="px-4 py-3">Ditagihkan</th>
                     <th className="px-4 py-3">Waste</th>
@@ -127,6 +131,7 @@ export default function InventoryPage() {
                         {quantity(item.po_quantity, item.unit_name)}
                         <div className="mt-1 text-[10px] text-slate-500">{money(item.po_amount)}</div>
                       </td>
+                      <td className="px-4 py-3 text-orange-700">{money(item.debt_amount)}</td>
                       <td className="px-4 py-3 text-emerald-700">{quantity(item.received_quantity, item.unit_name)}</td>
                       <td className="px-4 py-3 text-amber-700">
                         {quantity(item.billed_quantity, item.unit_name)}
@@ -147,7 +152,7 @@ export default function InventoryPage() {
                           {item.event_history?.map((event, index) => (
                             <li key={`${event.type}-${index}`} className="flex gap-2 text-[10px] text-slate-600">
                               <span className="min-w-[78px] font-bold text-slate-700">{eventLabels[event.type]}</span>
-                              <span>{timestamp(event.happened_at)} · {event.description} · {quantity(event.quantity, item.unit_name)}{event.amount ? ` · ${money(event.amount)}` : ''}</span>
+                              <span>{timestamp(event.happened_at)} · {event.description}{event.quantity > 0 ? ` · ${quantity(event.quantity, item.unit_name)}` : ''}{event.amount ? ` · ${money(event.amount)}` : ''}</span>
                             </li>
                           ))}
                         </ol>

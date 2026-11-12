@@ -104,7 +104,7 @@ async function teardown() {
 
 async function runTests() {
   console.log('===========================================================');
-  console.log('🧪 RUNNING 49 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
+  console.log('🧪 RUNNING 50 ACCEPTANCE CRITERIA AUTOMATED VERIFICATION');
   console.log('===========================================================');
   await setup();
 
@@ -116,7 +116,7 @@ async function runTests() {
       throw new Error(message);
     }
     passedCount++;
-    console.log(`✅ [${passedCount}/49] PASSED: ${message}`);
+    console.log(`✅ [${passedCount}/50] PASSED: ${message}`);
   }
 
   // 1. Purchasing dapat membuat Marketlist dengan beberapa item
@@ -1144,8 +1144,54 @@ async function runTests() {
     'Marketlist approved dan in progress dapat menolak atau memulihkan item tanpa menolak seluruh Marketlist.'
   );
 
+  // 50. Purchase reconciliation includes debt and matches linked invoice items by purchase date
+  const debtReconciliationDate = new Date('2024-06-15T12:00:00.000Z');
+  const debtPurchase = await purchaseService.createPurchase({
+    supplier_id: supplierA._id,
+    payment_method: 'tempo',
+    amount_paid: 5000,
+    due_date: new Date('2024-06-30T00:00:00.000Z'),
+    purchased_at: debtReconciliationDate,
+    items: [{
+      product_id: productBeras._id,
+      actual_qty: 2,
+      actual_unit_price: 10000
+    }]
+  }, purchasingUser);
+  await Invoice.create({
+    invoice_number: 'INV-DEBT-RECON-001',
+    marketlist_id: adminRejectMl._id,
+    marketlist_version: 1,
+    invoice_date: new Date('2024-06-20T12:00:00.000Z'),
+    items: [{
+      purchase_item_id: debtPurchase.items[0]._id,
+      product_id: productBeras._id,
+      product_name: productBeras.name,
+      quantity: 2,
+      purchased: true,
+      unit: 'Kilogram',
+      unit_price: 10000,
+      subtotal: 20000
+    }],
+    subtotal: 20000,
+    grand_total: 20000,
+    status: 'verified'
+  });
+  const debtReconciliation = await inventoryService.getDailyReconciliation({
+    startDate: '2024-06-15T00:00:00.000Z',
+    endDate: '2024-06-15T23:59:59.999Z'
+  });
+  assert(
+    debtReconciliation.totals.po_amount === 20000 &&
+      debtReconciliation.totals.paid_amount === 5000 &&
+      debtReconciliation.totals.debt_amount === 15000 &&
+      debtReconciliation.totals.billed_amount === 20000 &&
+      debtReconciliation.totals.difference_amount === 0,
+    'Rekonsiliasi memasukkan hutang dalam nilai pembelian dan mencocokkan invoice berdasarkan pembelian asal.'
+  );
+
   console.log('===========================================================');
-  console.log(`🎉 ALL 49/49 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
+  console.log(`🎉 ALL 50/50 ACCEPTANCE CRITERIA PASSED SUCCESSFULLY!`);
   console.log('===========================================================');
 
   await teardown();
