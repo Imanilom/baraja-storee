@@ -3,20 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
+import { getDateRange, formatDateInput } from '../../lib/date-range';
 import { CalendarDays, PackageCheck, ReceiptText, ShoppingCart, Trash2, RefreshCw, Wallet } from 'lucide-react';
 
-const localDate = (date = new Date()) => {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-};
-const recentDays = Array.from({ length: 31 }, (_, index) => {
-  const date = new Date();
-  date.setDate(date.getDate() - index);
-  return localDate(date);
-});
-const dailyParams = (date) => {
-  const start = new Date(`${date}T00:00:00`).toISOString();
-  const end = new Date(`${date}T23:59:59.999`).toISOString();
+const reconciliationParams = (date, period) => {
+  const { startDate, endDate } = getDateRange(date, period);
+  const start = new Date(`${startDate}T00:00:00`).toISOString();
+  const end = new Date(`${endDate}T23:59:59.999`).toISOString();
   return `startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}`;
 };
 const quantity = (amount, unit) => `${Number(amount || 0).toLocaleString('id-ID')} ${unit || ''}`.trim();
@@ -33,7 +26,8 @@ const eventLabels = {
 };
 
 export default function InventoryPage() {
-  const [date, setDate] = useState(localDate());
+  const [date, setDate] = useState(() => formatDateInput(new Date()));
+  const [period, setPeriod] = useState('daily');
   const [report, setReport] = useState({ totals: {}, items: [], overheads: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,14 +36,14 @@ export default function InventoryPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.getDailyInventoryReconciliation(dailyParams(date));
+      const response = await api.getDailyInventoryReconciliation(reconciliationParams(date, period));
       setReport(response.data || { totals: {}, items: [], overheads: [] });
     } catch (requestError) {
       setError(requestError.message || 'Gagal memuat rekonsiliasi inventori.');
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, period]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -60,12 +54,12 @@ export default function InventoryPage() {
     { title: 'Selisih Pembelian - Tagihan', value: money(report.totals.difference_amount), detail: 'Rp 0 berarti nilai pembelian dan tagihan cocok', icon: ReceiptText, color: Math.abs(Number(report.totals.difference_amount) || 0) < 0.01 ? 'text-emerald-700' : 'text-rose-700', style: Math.abs(Number(report.totals.difference_amount) || 0) < 0.01 ? 'border-emerald-200' : 'border-rose-200' },
     { title: 'Produk Diterima', value: `${report.items.filter((item) => item.received_quantity > 0).length}`, detail: 'Kuantitas diterima ada di tabel per produk', icon: PackageCheck, color: 'text-emerald-700', style: 'border-emerald-200' },
     { title: 'Nilai Waste', value: money(report.totals.waste_cost), detail: 'Jejak jumlah, harga, dan alasan tercatat', icon: Trash2, color: 'text-rose-700', style: 'border-rose-200' },
-    { title: 'Overhead Hari Ini', value: money(report.totals.overhead_amount), detail: `${money(report.totals.overhead_paid_amount)} dibayar · ${money(report.totals.overhead_debt_amount)} masih hutang`, icon: Wallet, color: 'text-violet-700', style: 'border-violet-200' }
+    { title: 'Nilai Overhead', value: money(report.totals.overhead_amount), detail: `${money(report.totals.overhead_paid_amount)} dibayar · ${money(report.totals.overhead_debt_amount)} masih hutang`, icon: Wallet, color: 'text-violet-700', style: 'border-violet-200' }
   ];
 
   return (
     <div className="flex-1 flex min-w-0 flex-col bg-slate-50">
-      <Navbar title="Rekonsiliasi Inventori Harian" />
+      <Navbar title="Rekonsiliasi Inventori" />
       <main className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -74,16 +68,32 @@ export default function InventoryPage() {
           </div>
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-slate-500" />
-            <label htmlFor="inventory-day" className="text-xs font-semibold text-slate-600">Pilih hari</label>
-            <select id="inventory-day" value={date} onChange={(event) => setDate(event.target.value)} className="rounded-lg border border-slate-200 bg-white p-2 text-xs">
-              {recentDays.map((day) => (
-                <option key={day} value={day}>
-                  {day === localDate()
-                    ? `Hari ini (${day})`
-                    : new Date(`${day}T12:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
-                </option>
-              ))}
+            <label htmlFor="inventory-period" className="text-xs font-semibold text-slate-600">Periode</label>
+            <select
+              id="inventory-period"
+              value={period}
+              onChange={(event) => setPeriod(event.target.value)}
+              className="rounded-lg border border-slate-200 bg-white p-2 text-xs"
+            >
+              <option value="daily">Harian</option>
+              <option value="weekly">Mingguan</option>
             </select>
+            <input
+              id="inventory-day"
+              type="date"
+              aria-label={period === 'daily' ? 'Pilih tanggal rekonsiliasi' : 'Pilih tanggal dalam minggu rekonsiliasi'}
+              value={date}
+              onChange={(event) => {
+                if (event.target.value) setDate(event.target.value);
+              }}
+              className="rounded-lg border border-slate-200 bg-white p-2 text-xs"
+            />
+            <span className="text-[11px] text-slate-500">
+              {(() => {
+                const range = getDateRange(date, period);
+                return `${range.startDate} – ${range.endDate}`;
+              })()}
+            </span>
             <button type="button" onClick={load} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
               <RefreshCw className="h-3.5 w-3.5" /> Muat ulang
             </button>
@@ -164,7 +174,7 @@ export default function InventoryPage() {
               </table>
             </div>
           ) : (
-            <p className="p-6 text-sm text-slate-500">Belum ada peristiwa pembelian, penerimaan, tagihan, atau waste pada tanggal ini.</p>
+            <p className="p-6 text-sm text-slate-500">Belum ada peristiwa pembelian, penerimaan, tagihan, atau waste pada periode ini.</p>
           )}
         </section>
 
@@ -172,7 +182,7 @@ export default function InventoryPage() {
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <div>
               <h2 className="text-sm font-bold text-slate-800">Rincian Overhead</h2>
-              <p className="mt-0.5 text-[10px] text-slate-500">Biaya overhead yang dicatat pada tanggal terpilih, beserta pembayaran dan sisa hutangnya.</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Biaya overhead yang dicatat pada periode terpilih, beserta pembayaran dan sisa hutangnya.</p>
             </div>
             <span className="text-xs font-semibold text-slate-500">{report.overheads?.length || 0} biaya</span>
           </div>
@@ -186,7 +196,7 @@ export default function InventoryPage() {
                     <th className="px-4 py-3">Nilai Biaya</th>
                     <th className="px-4 py-3">Dibayar</th>
                     <th className="px-4 py-3">Sisa Hutang</th>
-                    <th className="px-4 py-3">Pembayaran Hari Ini</th>
+                    <th className="px-4 py-3">Pembayaran pada Periode</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -210,7 +220,7 @@ export default function InventoryPage() {
               </table>
             </div>
           ) : (
-            <p className="p-6 text-sm text-slate-500">Tidak ada overhead yang dicatat pada tanggal ini.</p>
+            <p className="p-6 text-sm text-slate-500">Tidak ada overhead yang dicatat pada periode ini.</p>
           )}
         </section>
       </main>
