@@ -461,7 +461,20 @@ class InvoiceService {
       marketlist_id: marketlistId,
       status: INVOICE_STATUS.GENERATED
     });
-    if (invoiceCount === 0) return [];
+    if (invoiceCount === 0) {
+      const purchases = await Purchase.find({
+        marketlist_id: marketlistId,
+        status: PURCHASE_STATUS.VERIFIED
+      }).select('_id');
+      if (purchases.length === 0) return [];
+
+      const hasPurchasedItems = await PurchaseItem.exists({
+        purchase_id: { $in: purchases.map((purchase) => purchase._id) },
+        actual_qty: { $gt: 0 }
+      });
+      if (!hasPurchasedItems) return [];
+    }
+
     return this.generateInvoicesFromMarketlist(
       marketlistId,
       { syncPurchases: true },

@@ -724,7 +724,6 @@ async function runTests() {
       is_checked: true
     }]
   }, receiverUser);
-  await invoiceService.generateInvoicesFromMarketlist(purchaseSyncMl._id, {}, adminUser);
   const syncPurchase = await purchaseService.createPurchase({
     marketlist_id: purchaseSyncMl._id,
     supplier_id: supplierA._id,
@@ -742,8 +741,9 @@ async function runTests() {
   assert(
     syncedInvoice.items[0].quantity === 4 &&
       syncedInvoice.items[0].unit_price === 16000 &&
+      syncedInvoice.grand_total === 64000 &&
       syncedMarketlist.items[0].purchased_qty === 4,
-    'Transaksi pembelian langsung memperbarui qty dan harga invoice serta menampilkan qty dibeli di Marketlist.'
+    'Transaksi pembelian Marketlist otomatis membuat invoice dengan jumlah dan nilai yang siap ditagihkan.'
   );
 
   // 35. Partial purchases can continue and aggregate, then update when a transaction is deleted
