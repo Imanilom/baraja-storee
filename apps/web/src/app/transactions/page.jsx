@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
+import { getDateRange, formatDateInput } from '../../lib/date-range';
 import {
   ShoppingCart, Plus, Eye, X, Package, Calendar, CreditCard,
   FileText, Store, ClipboardList, AlertTriangle, CheckCircle2,
@@ -176,8 +177,11 @@ export default function TransactionsPage() {
 
   // Filters
   const [filterSupplier, setFilterSupplier] = useState('');
+  const [filterPeriod, setFilterPeriod] = useState('all');
+  const [filterDate, setFilterDate] = useState(() => formatDateInput(new Date()));
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [purchaseTotalAmount, setPurchaseTotalAmount] = useState(0);
 
   // Default tempo: 7 hari dari tanggal pembelian
   const getDefaultDueDate = (baseDateStr) => {
@@ -230,16 +234,22 @@ export default function TransactionsPage() {
     try {
       let params = '?limit=50';
       if (filterSupplier) params += `&supplier_id=${filterSupplier}`;
-      if (filterStartDate) params += `&startDate=${filterStartDate}`;
-      if (filterEndDate) params += `&endDate=${filterEndDate}`;
+      if (filterPeriod === 'daily' || filterPeriod === 'weekly') {
+        const range = getDateRange(filterDate, filterPeriod);
+        params += `&startDate=${range.startDate}&endDate=${range.endDate}`;
+      } else {
+        if (filterStartDate) params += `&startDate=${filterStartDate}`;
+        if (filterEndDate) params += `&endDate=${filterEndDate}`;
+      }
       const res = await api.getPurchases(params);
       setPurchases(res.data || []);
+      setPurchaseTotalAmount(Number(res.total_amount) || 0);
     } catch (e) {
       console.error('Gagal memuat transaksi:', e);
     } finally {
       setLoading(false);
     }
-  }, [filterSupplier, filterStartDate, filterEndDate, fetchDailySummary]);
+  }, [filterSupplier, filterPeriod, filterDate, filterStartDate, filterEndDate, fetchDailySummary]);
 
   const fetchDebts = useCallback(async () => {
     setDebtsLoading(true);
@@ -955,6 +965,17 @@ export default function TransactionsPage() {
           {activeTab === 'transactions' && (
             <div className="flex flex-wrap items-center gap-2">
               <select
+                aria-label="Filter periode transaksi pembelian"
+                value={filterPeriod}
+                onChange={(e) => setFilterPeriod(e.target.value)}
+                className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
+              >
+                <option value="all">Semua Periode</option>
+                <option value="daily">Harian</option>
+                <option value="weekly">Mingguan</option>
+                <option value="custom">Rentang Tanggal</option>
+              </select>
+              <select
                 value={filterSupplier}
                 onChange={(e) => setFilterSupplier(e.target.value)}
                 className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
@@ -962,24 +983,56 @@ export default function TransactionsPage() {
                 <option value="">Semua Supplier</option>
                 {suppliers.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
               </select>
-              <input
-                type="date"
-                value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
-                className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
-              />
-              <input
-                type="date"
-                value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
-                className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
-              />
+              {(filterPeriod === 'daily' || filterPeriod === 'weekly') && (
+                <>
+                  <input
+                    type="date"
+                    aria-label={filterPeriod === 'daily' ? 'Pilih tanggal transaksi' : 'Pilih tanggal dalam minggu transaksi'}
+                    value={filterDate}
+                    onChange={(e) => {
+                      if (e.target.value) setFilterDate(e.target.value);
+                    }}
+                    className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
+                  />
+                  <span className="text-[11px] text-slate-500">
+                    {(() => {
+                      const range = getDateRange(filterDate, filterPeriod);
+                      return `${range.startDate} – ${range.endDate}`;
+                    })()}
+                  </span>
+                </>
+              )}
+              {filterPeriod === 'custom' && (
+                <>
+                  <input
+                    type="date"
+                    aria-label="Tanggal mulai transaksi"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
+                  />
+                  <input
+                    type="date"
+                    aria-label="Tanggal akhir transaksi"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
+                  />
+                </>
+              )}
             </div>
           )}
         </div>
 
         {activeTab === 'transactions' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="min-w-0 rounded-xl border border-blue-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-500">Total Belanja pada Filter</p>
+              <p className="mt-1 break-words text-xl font-black text-blue-700">{fmt(purchaseTotalAmount)}</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Akumulasi seluruh transaksi sesuai periode dan supplier yang dipilih.
+              </p>
+            </div>
             <div className="min-w-0 rounded-xl border border-emerald-200 bg-white p-4">
               <p className="text-[11px] font-semibold uppercase text-slate-500">Uang Keluar Hari Ini</p>
               <p className="mt-1 break-words text-xl font-black text-emerald-700">{fmt(dailySummary.cash_out)}</p>
@@ -2353,7 +2406,7 @@ export default function TransactionsPage() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h3 className="font-bold text-sm text-slate-800">Riwayat Transaksi Pembelian</h3>
-              <span className="text-xs text-slate-400">{purchases.length} Transaksi</span>
+              <span className="text-xs text-slate-400">{purchases.length} Transaksi ditampilkan</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">

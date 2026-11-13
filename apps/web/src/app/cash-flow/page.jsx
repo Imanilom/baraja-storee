@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
+import { getDateRange } from '../../lib/date-range';
 import {
   Landmark, Wallet, ArrowDownRight, ArrowUpRight, ArrowLeftRight,
   Plus, Calendar, Filter, Trash2, CheckCircle2, AlertCircle,
@@ -18,16 +19,11 @@ const toLocalDateTimeInput = (date = new Date()) => {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 };
-const dateRangeQuery = (date) => {
-  const start = new Date(`${date}T00:00:00`);
-  const end = new Date(`${date}T23:59:59.999`);
+const dateRangeQuery = (startDate, endDate) => {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T23:59:59.999`);
   return `startDate=${encodeURIComponent(start.toISOString())}&endDate=${encodeURIComponent(end.toISOString())}`;
 };
-const recentDays = Array.from({ length: 31 }, (_, index) => {
-  const date = new Date();
-  date.setDate(date.getDate() - index);
-  return toLocalDateInput(date);
-});
 const fmtDate = (d) => {
   if (!d) return '-';
   const date = new Date(d);
@@ -58,10 +54,12 @@ export default function CashFlowPage() {
   const [mutations, setMutations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(true);
+  const [bankOpeningBalance, setBankOpeningBalance] = useState(0);
 
   // Filters
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'cash' | 'bank' | 'in' | 'withdrawal' | 'purchase'
   const [filterDate, setFilterDate] = useState(toLocalDateInput());
+  const [filterPeriod, setFilterPeriod] = useState('daily');
 
   // Modals
   const [showInModal, setShowInModal] = useState(false);
@@ -106,21 +104,30 @@ export default function CashFlowPage() {
   const fetchSummary = useCallback(async () => {
     setLoadingSummary(true);
     try {
-      const params = `?${dateRangeQuery(filterDate)}`;
-      const res = await api.getCashFlowSummary(params);
+      const { startDate, endDate } = getDateRange(filterDate, filterPeriod);
+      const params = `?${dateRangeQuery(startDate, endDate)}`;
+      const rangeStart = new Date(`${startDate}T00:00:00`);
+      const previousDayEnd = new Date(rangeStart.getTime() - 1);
+      const openingParams = `?endDate=${encodeURIComponent(previousDayEnd.toISOString())}`;
+      const [res, openingRes] = await Promise.all([
+        api.getCashFlowSummary(params),
+        api.getCashFlowSummary(openingParams)
+      ]);
       setSummary(res.data || {});
+      setBankOpeningBalance(openingRes.data?.current_bank_balance || 0);
     } catch (e) {
       console.error('Gagal memuat ringkasan kas:', e);
     } finally {
       setLoadingSummary(false);
     }
-  }, [filterDate]);
+  }, [filterDate, filterPeriod]);
 
   // Fetch mutations
   const fetchMutations = useCallback(async () => {
     setLoading(true);
     try {
-      let params = `?limit=500&${dateRangeQuery(filterDate)}`;
+      const { startDate, endDate } = getDateRange(filterDate, filterPeriod);
+      let params = `?limit=500&${dateRangeQuery(startDate, endDate)}`;
       if (['cash', 'bank', 'petty_cash'].includes(activeTab)) {
         params += `&account=${activeTab}`;
       } else if (['in', 'withdrawal', 'purchase', 'overhead', 'petty_cash'].includes(activeTab)) {
@@ -134,7 +141,7 @@ export default function CashFlowPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, filterDate]);
+  }, [activeTab, filterDate, filterPeriod]);
 
   useEffect(() => {
     fetchSummary();
@@ -143,6 +150,27 @@ export default function CashFlowPage() {
   useEffect(() => {
     fetchMutations();
   }, [fetchMutations]);
+
+  const bankLedger = activeTab === 'bank'
+    ? [...mutations]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .reduce((rows, mutation) => {
+        const amount = Number(mutation.amount) || 0;
+        const debit = mutation.direction === 'out' ? amount : 0;
+        const credit = mutation.direction === 'in' ? amount : 0;
+        const previousBalance = rows.length
+          ? rows[rows.length - 1].balance
+          : bankOpeningBalance;
+        rows.push({
+          mutation,
+          debit,
+          credit,
+          balance: previousBalance + credit - debit
+        });
+        return rows;
+      }, [])
+      .reverse()
+    : [];
 
   // Submit Uang Masuk
   const handleSubmitIn = async (e) => {
@@ -564,24 +592,33 @@ export default function CashFlowPage() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label htmlFor="cash-flow-day" className="text-xs font-bold text-slate-600">Pilih hari:</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="cash-flow-period" className="text-xs font-bold text-slate-600">Periode:</label>
             <select
-              id="cash-flow-day"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
+              id="cash-flow-period"
+              value={filterPeriod}
+              onChange={(e) => setFilterPeriod(e.target.value)}
               className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-700"
             >
-              {recentDays.map((date) => (
-                <option key={date} value={date}>
-                  {date === toLocalDateInput()
-                    ? `Hari ini (${date})`
-                    : new Date(`${date}T12:00:00`).toLocaleDateString('id-ID', {
-                      weekday: 'long', day: '2-digit', month: 'short', year: 'numeric'
-                    })}
-                </option>
-              ))}
+              <option value="daily">Harian</option>
+              <option value="weekly">Mingguan</option>
             </select>
+            <input
+              id="cash-flow-day"
+              type="date"
+              aria-label={filterPeriod === 'daily' ? 'Pilih tanggal arus kas' : 'Pilih tanggal dalam minggu arus kas'}
+              value={filterDate}
+              onChange={(e) => {
+                if (e.target.value) setFilterDate(e.target.value);
+              }}
+              className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-700"
+            />
+            <span className="text-xs text-slate-500">
+              {(() => {
+                const range = getDateRange(filterDate, filterPeriod);
+                return `${range.startDate} – ${range.endDate}`;
+              })()}
+            </span>
           </div>
         </div>
 
@@ -613,10 +650,27 @@ export default function CashFlowPage() {
 
         {/* ===== MUTATIONS TABLE ===== */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {activeTab === 'bank' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-6 py-4 bg-blue-50/70 border-b border-blue-100">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                  Saldo Awal Buku · Sebelum {getDateRange(filterDate, filterPeriod).startDate}
+                </p>
+                <p className="text-lg font-black text-slate-800">{fmt(bankOpeningBalance)}</p>
+              </div>
+              <div className="sm:text-right">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                  Saldo Akhir Buku · {getDateRange(filterDate, filterPeriod).endDate}
+                </p>
+                <p className="text-lg font-black text-blue-800">{fmt(summary.current_bank_balance)}</p>
+                <p className="text-[10px] text-slate-500">Cocokkan saldo ini dengan rekening koran bank.</p>
+              </div>
+            </div>
+          )}
           <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
               <Landmark className="w-4 h-4 text-indigo-600" />
-              Buku Mutasi Arus Kas & Bank
+              {activeTab === 'bank' ? 'Buku Rekening Bank (Debit / Kredit)' : 'Buku Mutasi Arus Kas & Bank'}
             </h3>
             <span className="text-xs text-slate-400 font-semibold">{mutations.length} Catatan Mutasi</span>
           </div>
@@ -624,15 +678,27 @@ export default function CashFlowPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-200">
-                <tr>
-                  <th className="px-5 py-3.5">Tanggal</th>
-                  <th className="px-5 py-3.5">Jenis Transaksi</th>
-                  <th className="px-5 py-3.5">Akun Dana</th>
-                  <th className="px-5 py-3.5">Keterangan & Referensi</th>
-                  <th className="px-5 py-3.5 text-right">Nominal</th>
-                  <th className="px-5 py-3.5">Petugas</th>
-                  <th className="px-5 py-3.5 text-center w-16">Aksi</th>
-                </tr>
+                {activeTab === 'bank' ? (
+                  <tr>
+                    <th className="px-5 py-3.5">Tanggal</th>
+                    <th className="px-5 py-3.5">Keterangan / Referensi</th>
+                    <th className="px-5 py-3.5 text-right">Debit</th>
+                    <th className="px-5 py-3.5 text-right">Kredit</th>
+                    <th className="px-5 py-3.5 text-right">Saldo Berjalan</th>
+                    <th className="px-5 py-3.5">Petugas</th>
+                    <th className="px-5 py-3.5 text-center w-16">Aksi</th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <th className="px-5 py-3.5">Tanggal</th>
+                    <th className="px-5 py-3.5">Jenis Transaksi</th>
+                    <th className="px-5 py-3.5">Akun Dana</th>
+                    <th className="px-5 py-3.5">Keterangan & Referensi</th>
+                    <th className="px-5 py-3.5 text-right">Nominal</th>
+                    <th className="px-5 py-3.5">Petugas</th>
+                    <th className="px-5 py-3.5 text-center w-16">Aksi</th>
+                  </tr>
+                )}
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
@@ -648,60 +714,79 @@ export default function CashFlowPage() {
                     </td>
                   </tr>
                 ) : (
-                  mutations.map((m, idx) => {
+                  (activeTab === 'bank' ? bankLedger : mutations.map((mutation) => ({ mutation })))
+                    .map(({ mutation: m, debit, credit, balance }, idx) => {
                     const isIn = m.direction === 'in';
                     const isTransfer = m.direction === 'transfer';
                     const isManual = m.source_type === 'cash_transaction';
 
                     return (
                       <tr key={m._id ? `${m._id}-${idx}` : idx} className="hover:bg-slate-50 transition">
-                        <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">
-                          {fmtDate(m.date)}
-                        </td>
-                        <td className="px-5 py-3.5 whitespace-nowrap">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            isIn
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : isTransfer
-                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                              : 'bg-red-50 text-red-800 border border-red-200'
-                          }`}>
-                            {m.category_label || m.trx_type}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 whitespace-nowrap">
-                          <span className={`font-semibold ${
-                            m.account === 'bank'
-                              ? 'text-blue-700'
-                              : m.account === 'cash'
-                              ? 'text-emerald-700'
-                              : 'text-amber-700'
-                          }`}>
-                            {m.account_label}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <div className="font-semibold text-slate-800">{m.title}</div>
-                          {m.reference_number && (
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              Ref: {m.reference_number}
-                            </span>
-                          )}
-                          {m.notes && (
-                            <p className="text-[10px] text-slate-500 italic mt-0.5">{m.notes}</p>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                          <span className={`text-xs font-black ${
-                            isIn
-                              ? 'text-emerald-700'
-                              : isTransfer
-                              ? 'text-amber-700'
-                              : 'text-red-700'
-                          }`}>
-                            {isIn ? `+${fmt(m.amount)}` : isTransfer ? `⇄ ${fmt(m.amount)}` : `-${fmt(m.amount)}`}
-                          </span>
-                        </td>
+                        {activeTab === 'bank' ? (
+                          <>
+                            <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{fmtDate(m.date)}</td>
+                            <td className="px-5 py-3.5 min-w-56">
+                              <div className="font-semibold text-slate-800">{m.title}</div>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                Ref: {m.reference_number || m._id}
+                              </span>
+                              {m.notes && <p className="text-[10px] text-slate-500 italic mt-0.5">{m.notes}</p>}
+                            </td>
+                            <td className="px-5 py-3.5 text-right whitespace-nowrap font-bold text-rose-700">
+                              {debit ? fmt(debit) : '-'}
+                            </td>
+                            <td className="px-5 py-3.5 text-right whitespace-nowrap font-bold text-emerald-700">
+                              {credit ? fmt(credit) : '-'}
+                            </td>
+                            <td className="px-5 py-3.5 text-right whitespace-nowrap font-black text-slate-800">
+                              {fmt(balance)}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{fmtDate(m.date)}</td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                isIn
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : isTransfer
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'bg-red-50 text-red-800 border border-red-200'
+                              }`}>
+                                {m.category_label || m.trx_type}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              <span className={`font-semibold ${
+                                m.account === 'bank'
+                                  ? 'text-blue-700'
+                                  : m.account === 'cash'
+                                  ? 'text-emerald-700'
+                                  : 'text-amber-700'
+                              }`}>
+                                {m.account_label}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <div className="font-semibold text-slate-800">{m.title}</div>
+                              {m.reference_number && (
+                                <span className="text-[10px] text-slate-400 font-mono">Ref: {m.reference_number}</span>
+                              )}
+                              {m.notes && <p className="text-[10px] text-slate-500 italic mt-0.5">{m.notes}</p>}
+                            </td>
+                            <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                              <span className={`text-xs font-black ${
+                                isIn
+                                  ? 'text-emerald-700'
+                                  : isTransfer
+                                  ? 'text-amber-700'
+                                  : 'text-red-700'
+                              }`}>
+                                {isIn ? `+${fmt(m.amount)}` : isTransfer ? `⇄ ${fmt(m.amount)}` : `-${fmt(m.amount)}`}
+                              </span>
+                            </td>
+                          </>
+                        )}
                         <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">
                           {m.creator}
                         </td>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
+import { getDateRange, formatDateInput } from '../../lib/date-range';
 import {
   DollarSign,
   TrendingUp,
@@ -22,13 +23,23 @@ export default function LabaRugiPage() {
   const [syncing, setSyncing] = useState(false);
   const [operatingExpense, setOperatingExpense] = useState(2500000);
   const [period, setPeriod] = useState('monthly');
+  const [selectedDate, setSelectedDate] = useState(() => formatDateInput(new Date()));
   const [error, setError] = useState(null);
 
   const fetchProfitLoss = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.getProfitLoss(`?period=${period}&operating_expense=${operatingExpense}`);
+      const query = new URLSearchParams({
+        period,
+        operating_expense: operatingExpense
+      });
+      if (period === 'daily' || period === 'weekly') {
+        const range = getDateRange(selectedDate, period);
+        query.set('startDate', range.startDate);
+        query.set('endDate', range.endDate);
+      }
+      const res = await api.getProfitLoss(`?${query.toString()}`);
       if (res?.data) {
         setReport(res.data);
       }
@@ -42,7 +53,7 @@ export default function LabaRugiPage() {
 
   useEffect(() => {
     fetchProfitLoss();
-  }, [period]);
+  }, [period, selectedDate]);
 
   const handleSyncOAuth2 = () => {
     setSyncing(true);
@@ -90,11 +101,31 @@ export default function LabaRugiPage() {
               onChange={(e) => setPeriod(e.target.value)}
               className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              <option value="daily">Hari Ini</option>
-              <option value="weekly">Minggu Ini</option>
-              <option value="monthly">Bulan Ini (November 2026)</option>
-              <option value="yearly">Tahun Ini</option>
+              <option value="daily">Harian</option>
+              <option value="weekly">Mingguan</option>
+              <option value="monthly">Bulanan</option>
+              <option value="yearly">Tahunan</option>
             </select>
+
+            {(period === 'daily' || period === 'weekly') && (
+              <>
+                <input
+                  type="date"
+                  aria-label={period === 'daily' ? 'Pilih tanggal laporan' : 'Pilih tanggal dalam minggu laporan'}
+                  value={selectedDate}
+                  onChange={(e) => {
+                    if (e.target.value) setSelectedDate(e.target.value);
+                  }}
+                  className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-[11px] text-slate-500">
+                  {(() => {
+                    const range = getDateRange(selectedDate, period);
+                    return `${range.startDate} – ${range.endDate}`;
+                  })()}
+                </span>
+              </>
+            )}
 
             <button
               onClick={handleSyncOAuth2}
@@ -334,4 +365,3 @@ export default function LabaRugiPage() {
     </div>
   );
 }
-

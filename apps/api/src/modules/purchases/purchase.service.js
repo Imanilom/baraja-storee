@@ -1,4 +1,5 @@
 const Purchase = require('./purchase.model');
+const mongoose = require('mongoose');
 const PurchaseItem = require('./purchase-item.model');
 const DebtPayment = require('./debt-payment.model');
 const Marketlist = require('../marketlists/marketlist.model');
@@ -445,7 +446,10 @@ class PurchaseService {
     }
 
     const skip = (Number(page) - 1) * Number(limit);
-    const [rawPurchases, total] = await Promise.all([
+    const aggregateFilter = { ...filter };
+    if (supplier_id) aggregateFilter.supplier_id = new mongoose.Types.ObjectId(supplier_id);
+
+    const [rawPurchases, total, amountSummary] = await Promise.all([
       Purchase.find(filter)
         .populate('supplier_id', 'name code contact_person phone')
         .populate('marketlist_id', 'marketlist_number date status required_date')
@@ -453,7 +457,11 @@ class PurchaseService {
         .sort({ purchased_at: -1, createdAt: -1 })
         .skip(skip)
         .limit(Number(limit)),
-      Purchase.countDocuments(filter)
+      Purchase.countDocuments(filter),
+      Purchase.aggregate([
+        { $match: aggregateFilter },
+        { $group: { _id: null, total_amount: { $sum: { $ifNull: ['$total_actual', 0] } } } }
+      ])
     ]);
 
     const purchases = await Promise.all(
@@ -468,6 +476,7 @@ class PurchaseService {
     return {
       data: purchases,
       total,
+      total_amount: amountSummary[0]?.total_amount || 0,
       page: Number(page),
       limit: Number(limit),
       totalPages: Math.ceil(total / Number(limit))

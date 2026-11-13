@@ -3,17 +3,62 @@ const Marketlist = require('../marketlists/marketlist.model');
 const Overhead = require('../overheads/overhead.model');
 const oauth2ClientService = require('./oauth2-client.service');
 
+const getPeriodRange = (period, startDate, endDate) => {
+  const start = startDate ? new Date(startDate) : new Date();
+  const end = endDate ? new Date(endDate) : new Date(start);
+
+  if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate)) start.setHours(0, 0, 0, 0);
+  if (endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) end.setHours(23, 59, 59, 999);
+
+  if (!startDate || !endDate) {
+    if (period === 'daily') {
+      start.setHours(0, 0, 0, 0);
+      end.setTime(start.getTime());
+      end.setHours(23, 59, 59, 999);
+    } else if (period === 'weekly') {
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+      end.setTime(start.getTime());
+      end.setDate(end.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+    } else if (period === 'monthly') {
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      end.setFullYear(start.getFullYear(), start.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+    } else if (period === 'yearly') {
+      start.setMonth(0, 1);
+      start.setHours(0, 0, 0, 0);
+      end.setMonth(11, 31);
+      end.setHours(23, 59, 59, 999);
+    }
+  }
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error('Rentang tanggal laba rugi tidak valid.');
+  }
+
+  return { start, end };
+};
+
 class ProfitLossService {
   async calculateProfitLoss(query = {}) {
     const { period = 'monthly', startDate, endDate, operating_expense } = query;
+    const range = getPeriodRange(period, startDate, endDate);
+    const dateFilter = { $gte: range.start, $lte: range.end };
 
     // 1. Fetch sales & revenue from external API via OAuth 2
-    const salesReport = await oauth2ClientService.fetchExternalSalesData(period, startDate, endDate);
+    const salesReport = await oauth2ClientService.fetchExternalSalesData(
+      period,
+      range.start.toISOString(),
+      range.end.toISOString()
+    );
     const totalRevenue = salesReport.total_sales || 0;
 
     // 2. Fetch HPP from purchasing invoices
     const invoiceFilter = {
-      status: { $in: ['generated', 'verified', 'partially_paid', 'paid'] }
+      status: { $in: ['generated', 'verified', 'partially_paid', 'paid'] },
+      invoice_date: dateFilter
     };
 
     const invoices = await Invoice.find(invoiceFilter).populate('supplier_id', 'name code');
@@ -29,27 +74,16 @@ class ProfitLossService {
     // If no invoices exist yet in fresh system, take approved marketlist estimated amounts
     if (totalPurchasingHPP === 0) {
       const approvedMarketlists = await Marketlist.find({
-        status: { $in: ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received', 'completed'] }
+        status: { $in: ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received', 'completed'] },
+        date: dateFilter
       });
       approvedMarketlists.forEach((ml) => {
         totalPurchasingHPP += ml.totals?.estimated_amount || 0;
       });
-      if (totalPurchasingHPP === 0) {
-        totalPurchasingHPP = 12500000; // Realistic default baseline for analysis
-      }
     }
 
     // 3. Fetch Real Overhead Expenses from database
-    const overheadFilter = {};
-    if (startDate || endDate) {
-      overheadFilter.expense_date = {};
-      if (startDate) overheadFilter.expense_date.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        overheadFilter.expense_date.$lte = end;
-      }
-    }
+    const overheadFilter = { expense_date: dateFilter };
 
     const recordedOverheads = await Overhead.find(overheadFilter);
     let totalRealOverhead = 0;
@@ -61,14 +95,12 @@ class ProfitLossService {
       overheadByCategory[cat] = (overheadByCategory[cat] || 0) + item.amount;
     });
 
-    // Determine operating expense: use simulated value if explicitly sent, else use real DB total (or fallback)
+    // Use the adjustable expense when sent; otherwise use recorded overhead.
     let opExpenses = totalRealOverhead;
     let isRealData = totalRealOverhead > 0;
     if (operating_expense !== undefined && operating_expense !== null && operating_expense !== '') {
       opExpenses = Number(operating_expense);
       isRealData = false;
-    } else if (totalRealOverhead === 0) {
-      opExpenses = 2500000; // default baseline
     }
 
     // 4. Profit Calculations
@@ -112,4 +144,3 @@ class ProfitLossService {
 }
 
 module.exports = new ProfitLossService();
-

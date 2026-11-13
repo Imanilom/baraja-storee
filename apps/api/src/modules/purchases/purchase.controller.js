@@ -21,6 +21,7 @@ class PurchaseController {
         success: true,
         data: result.data,
         total: result.total,
+        total_amount: result.total_amount,
         page: result.page,
         limit: result.limit,
         totalPages: result.totalPages
