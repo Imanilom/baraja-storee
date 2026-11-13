@@ -58,6 +58,11 @@ const debtStatusLabel = (status) => {
 
 const fmt = (v) => `Rp ${(v || 0).toLocaleString('id-ID')}`;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID') : '-';
+const getMarketlistLabel = (marketlist) => {
+  if (!marketlist) return 'Tanpa Marketlist';
+  if (typeof marketlist === 'string') return marketlist;
+  return marketlist.code || marketlist.marketlist_number || 'Tanpa Marketlist';
+};
 
 const getMlStatusMeta = (status) => {
   const map = {
@@ -138,6 +143,7 @@ export default function TransactionsPage() {
   const [selectedMlDetail, setSelectedMlDetail] = useState(null);
   const [mlFilterTab, setMlFilterTab] = useState('all'); // 'all' | 'active' | 'delivered'
   const [mlSearch, setMlSearch] = useState('');
+  const [showAllMarketlists, setShowAllMarketlists] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentSource, setPaymentSource] = useState('cash'); // cash, bank, petty_cash
@@ -162,6 +168,7 @@ export default function TransactionsPage() {
   // Edit Transaksi Modal State
   const [editPurchaseModal, setEditPurchaseModal] = useState(null);
   const [editMarketlistSearch, setEditMarketlistSearch] = useState('');
+  const [showAllEditMarketlists, setShowAllEditMarketlists] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState({
     marketlist_id: '',
@@ -422,6 +429,8 @@ export default function TransactionsPage() {
     setSelectedMlId('');
     setSelectedMlDetail(null);
     setFormItems([]);
+    setMlSearch('');
+    setShowAllMarketlists(false);
     setManualProductId('');
     setManualProductSearch('');
     setSelectedSupplierId('');
@@ -710,6 +719,7 @@ export default function TransactionsPage() {
 
     const isTempo = purchase.payment_method === 'tempo';
     setEditMarketlistSearch('');
+    setShowAllEditMarketlists(false);
     setEditPurchaseModal(purchase);
     setEditForm({
       marketlist_id: purchase.marketlist_id?._id || purchase.marketlist_id || '',
@@ -848,10 +858,18 @@ export default function TransactionsPage() {
   const activeMLCount = approvedMLs.filter((m) => ['approved', 'partial_rejection', 'in_progress'].includes(m.status)).length;
   const deliveredMLCount = approvedMLs.filter((m) => ['partially_received', 'received', 'completed'].includes(m.status)).length;
   const filteredMLs = approvedMLs.filter((m) => {
+    if (
+      !['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received'].includes(m.status) &&
+      m._id !== selectedMlId
+    ) return false;
     if (mlFilterTab === 'active' && !['approved', 'partial_rejection', 'in_progress'].includes(m.status)) return false;
     if (mlFilterTab === 'delivered' && !['partially_received', 'received', 'completed'].includes(m.status)) return false;
     const search = mlSearch.trim().toLowerCase();
-    if (!search) return true;
+    if (!search || m._id === selectedMlId) return true;
+    if (showAllMarketlists) {
+      return [m.marketlist_number, m.status, m.location_id?.name]
+        .some((value) => String(value || '').toLowerCase().includes(search));
+    }
     const hasProductMatch = (m.items || [])
       .filter((item) => item.item_status !== 'rejected')
       .some((item) =>
@@ -880,14 +898,18 @@ export default function TransactionsPage() {
   const editMarketlistsForItems = approvedMLs.filter((marketlist) => {
     const search = editMarketlistSearch.trim().toLowerCase();
     const itemMatches = getEditMarketlistItemMatches(marketlist);
-    if (
+    if (!showAllEditMarketlists &&
       itemMatches.length === 0 &&
       marketlist._id !== editForm.marketlist_id
     ) return false;
     if (!search) return true;
-    return [marketlist.marketlist_number, ...itemMatches.map((item) =>
+    const searchableValues = [
+      marketlist.marketlist_number,
+      ...(!showAllEditMarketlists ? itemMatches.map((item) =>
       item.product_id?.name || item.product_snapshot?.name
-    )].some((value) => String(value || '').toLowerCase().includes(search));
+      ) : [])
+    ];
+    return searchableValues.some((value) => String(value || '').toLowerCase().includes(search));
   });
   const visibleManualProducts = products.filter((product) =>
     !manualProductSearch.trim() ||
@@ -1102,7 +1124,7 @@ export default function TransactionsPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div>
                     <p className="text-xs font-bold text-slate-800">Cara input transaksi</p>
-                    <p className="text-[10px] text-slate-500">Pilih Marketlist atau catat nota manual dengan alokasi Marketlist opsional.</p>
+                    <p className="text-[10px] text-slate-500">Jika bahan tidak ada di Marketlist, pilih Input Manual untuk tetap mengalokasikan transaksi ke Marketlist lain.</p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -1175,6 +1197,29 @@ export default function TransactionsPage() {
                     placeholder="Ketik nama bahan untuk melihat Marketlist terkait, atau cari nomor Marketlist..."
                     className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
+                  {entryMode === 'manual' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAllMarketlists((current) => !current);
+                          setMlSearch('');
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-[11px] font-semibold ${
+                          showAllMarketlists
+                            ? 'border-amber-300 bg-amber-50 text-amber-800'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {showAllMarketlists ? 'Tampilkan Marketlist yang cocok dengan bahan' : 'Pilih Marketlist lain (alokasi manual)'}
+                      </button>
+                      {showAllMarketlists && (
+                        <p className="text-[10px] text-amber-800">
+                          Semua Marketlist ditampilkan. Bahan tanpa pasangan tetap dicatat sebagai item manual pada invoice, tanpa mengubah kuantitas rencana.
+                        </p>
+                      )}
+                    </>
+                  )}
                   {mlSearch.trim() && (
                     <p className="text-[10px] text-slate-500">
                       {filteredMLs.length
@@ -2223,23 +2268,42 @@ export default function TransactionsPage() {
                 </section>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Alokasikan ke Marketlist (opsional)</label>
-                              <input
-                                type="search"
-                                value={editMarketlistSearch}
-                                onChange={(event) => setEditMarketlistSearch(event.target.value)}
-                                placeholder="Cari Marketlist berdasarkan bahan di transaksi..."
-                                className="mb-2 w-full rounded-lg border border-slate-200 bg-white p-2.5"
-                              />
-                              <select
-                                value={editForm.marketlist_id}
-                                onChange={(e) => setEditForm({ ...editForm, marketlist_id: e.target.value })}
+                  <label className="mb-1 block font-bold text-slate-700">Alokasikan ke Marketlist (opsional)</label>
+                  <input
+                    type="search"
+                    value={editMarketlistSearch}
+                    onChange={(event) => setEditMarketlistSearch(event.target.value)}
+                    placeholder="Cari Marketlist berdasarkan bahan di transaksi..."
+                    className="mb-2 w-full rounded-lg border border-slate-200 bg-white p-2.5"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAllEditMarketlists((current) => !current);
+                      setEditMarketlistSearch('');
+                    }}
+                    className={`mb-2 rounded-lg border px-3 py-2 text-[11px] font-semibold ${
+                      showAllEditMarketlists
+                        ? 'border-amber-300 bg-amber-50 text-amber-800'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {showAllEditMarketlists ? 'Tampilkan yang cocok dengan bahan' : 'Pilih Marketlist lain (alokasi manual)'}
+                  </button>
+                  {showAllEditMarketlists && (
+                    <p className="mb-2 text-[10px] text-amber-800">
+                      Semua Marketlist ditampilkan. Bahan tanpa pasangan akan tetap masuk invoice sebagai item manual.
+                    </p>
+                  )}
+                  <select
+                    value={editForm.marketlist_id}
+                    onChange={(e) => setEditForm({ ...editForm, marketlist_id: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold text-slate-800"
                   >
                     <option value="">Tanpa Marketlist</option>
                     {editMarketlistsForItems
                       .filter((ml) =>
-                        ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received', 'completed'].includes(ml.status) ||
+                        ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received'].includes(ml.status) ||
                         ml._id === editForm.marketlist_id
                       )
                       .map((ml) => (
@@ -2247,12 +2311,12 @@ export default function TransactionsPage() {
                           {ml.marketlist_number} [{ml.status?.replace(/_/g, ' ')}] · Cocok: {getEditMarketlistItemMatches(ml)
                             .map((item) => item.product_id?.name || item.product_snapshot?.name)
                             .filter(Boolean)
-                            .join(', ')}
+                            .join(', ') || 'Item manual'}
                         </option>
                       ))}
                   </select>
                   <p className="mt-1 text-[10px] text-slate-500">
-                    Pilihan menampilkan Marketlist yang memiliki bahan dalam transaksi ini. Bahan yang cocok akan dialokasikan otomatis.
+                    Secara default hanya Marketlist dengan bahan yang cocok ditampilkan. Marketlist lain dapat dipilih untuk mengalokasikan bahan sebagai item manual.
                   </p>
                 </div>
 
@@ -2488,7 +2552,7 @@ export default function TransactionsPage() {
                     purchases.map((p) => (
                       <tr key={p._id} className="hover:bg-slate-50">
                         <td className="px-5 py-3.5 font-bold text-slate-900">{p.purchase_number}</td>
-                        <td className="px-5 py-3.5 text-amber-700 font-semibold">{p.marketlist_id?.code || p.marketlist_id?.marketlist_number || 'Manual'}</td>
+                        <td className="px-5 py-3.5 text-amber-700 font-semibold">{getMarketlistLabel(p.marketlist_id)}</td>
                         <td className="px-5 py-3.5 text-slate-700">{p.supplier_id?.name || '-'}</td>
                         <td className="px-5 py-3.5 text-slate-500">{fmtDate(p.purchased_at)}</td>
                         <td className="px-5 py-3.5 whitespace-nowrap">
@@ -2560,6 +2624,7 @@ export default function TransactionsPage() {
                 <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-200">
                   <tr>
                     <th className="px-5 py-3.5">No. Transaksi</th>
+                    <th className="px-5 py-3.5">Marketlist</th>
                     <th className="px-5 py-3.5">Supplier</th>
                     <th className="px-5 py-3.5">Tanggal Beli</th>
                     <th className="px-5 py-3.5">Jatuh Tempo</th>
@@ -2573,7 +2638,7 @@ export default function TransactionsPage() {
                 <tbody className="divide-y divide-slate-100">
                   {debts.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan="10" className="px-6 py-12 text-center text-slate-400">
                         {debtsLoading ? 'Memuat...' : '✅ Tidak ada hutang aktif. Semua tagihan sudah lunas!'}
                       </td>
                     </tr>
@@ -2581,6 +2646,7 @@ export default function TransactionsPage() {
                     debts.map((d) => (
                       <tr key={d._id} className={`hover:bg-slate-50 ${d.payment_status === 'overdue' ? 'bg-red-50/50' : ''}`}>
                         <td className="px-5 py-3.5 font-bold text-slate-900">{d.purchase_number}</td>
+                        <td className="px-5 py-3.5 font-semibold text-amber-700">{getMarketlistLabel(d.marketlist_id)}</td>
                         <td className="px-5 py-3.5 font-semibold text-slate-700">{d.supplier_id?.name || '-'}</td>
                         <td className="px-5 py-3.5 text-slate-500">{fmtDate(d.purchased_at)}</td>
                         <td className={`px-5 py-3.5 font-semibold ${d.payment_status === 'overdue' ? 'text-red-700' : 'text-amber-700'}`}>
