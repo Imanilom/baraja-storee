@@ -161,6 +161,7 @@ export default function TransactionsPage() {
 
   // Edit Transaksi Modal State
   const [editPurchaseModal, setEditPurchaseModal] = useState(null);
+  const [editMarketlistSearch, setEditMarketlistSearch] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState({
     marketlist_id: '',
@@ -708,12 +709,14 @@ export default function TransactionsPage() {
     }
 
     const isTempo = purchase.payment_method === 'tempo';
+    setEditMarketlistSearch('');
     setEditPurchaseModal(purchase);
     setEditForm({
       marketlist_id: purchase.marketlist_id?._id || purchase.marketlist_id || '',
       supplier_id: purchase.supplier_id?._id || purchase.supplier_id || '',
       items: (purchase.items || []).map((item) => ({
         _id: item._id,
+        product_id: item.product_id?._id || item.product_id || '',
         product_name: item.product_name || item.product_id?.name || 'Barang',
         unit_name: item.unit_name || '',
         actual_qty: String(item.actual_qty ?? 0),
@@ -848,11 +851,43 @@ export default function TransactionsPage() {
     if (mlFilterTab === 'active' && !['approved', 'partial_rejection', 'in_progress'].includes(m.status)) return false;
     if (mlFilterTab === 'delivered' && !['partially_received', 'received', 'completed'].includes(m.status)) return false;
     const search = mlSearch.trim().toLowerCase();
-    return !search || [m.marketlist_number, m.status, m.location_id?.name,
-      ...(m.items || [])
-        .filter((item) => item.item_status !== 'rejected')
-        .map((item) => item.product_id?.name || item.product_snapshot?.name)]
+    if (!search) return true;
+    const hasProductMatch = (m.items || [])
+      .filter((item) => item.item_status !== 'rejected')
+      .some((item) =>
+        String(item.product_id?.name || item.product_snapshot?.name || '')
+          .toLowerCase()
+          .includes(search)
+      );
+    const hasMarketlistMatch = [m.marketlist_number, m.status, m.location_id?.name]
       .some((value) => String(value || '').toLowerCase().includes(search));
+    return hasProductMatch || hasMarketlistMatch;
+  });
+  const getEditMarketlistItemMatches = (marketlist) =>
+    (marketlist.items || []).filter((marketlistItem) =>
+      marketlistItem.item_status !== 'rejected' &&
+      editForm.items.some((purchaseItem) => {
+        const mlProductId = marketlistItem.product_id?._id?.toString() ||
+          marketlistItem.product_id?.toString();
+        const purchaseProductId = purchaseItem.product_id?._id?.toString() ||
+          purchaseItem.product_id?.toString();
+        const mlProductName = marketlistItem.product_id?.name ||
+          marketlistItem.product_snapshot?.name || '';
+        return (purchaseProductId && mlProductId === purchaseProductId) ||
+          (mlProductName && mlProductName.toLowerCase() === String(purchaseItem.product_name || '').toLowerCase());
+      })
+    );
+  const editMarketlistsForItems = approvedMLs.filter((marketlist) => {
+    const search = editMarketlistSearch.trim().toLowerCase();
+    const itemMatches = getEditMarketlistItemMatches(marketlist);
+    if (
+      itemMatches.length === 0 &&
+      marketlist._id !== editForm.marketlist_id
+    ) return false;
+    if (!search) return true;
+    return [marketlist.marketlist_number, ...itemMatches.map((item) =>
+      item.product_id?.name || item.product_snapshot?.name
+    )].some((value) => String(value || '').toLowerCase().includes(search));
   });
   const visibleManualProducts = products.filter((product) =>
     !manualProductSearch.trim() ||
@@ -1137,9 +1172,16 @@ export default function TransactionsPage() {
                     type="search"
                     value={mlSearch}
                     onChange={(e) => setMlSearch(e.target.value)}
-                    placeholder="Cari nomor Marketlist, nama produk, gudang, atau status..."
+                    placeholder="Ketik nama bahan untuk melihat Marketlist terkait, atau cari nomor Marketlist..."
                     className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
+                  {mlSearch.trim() && (
+                    <p className="text-[10px] text-slate-500">
+                      {filteredMLs.length
+                        ? `${filteredMLs.length} Marketlist cocok dengan pencarian bahan atau nomor.`
+                        : 'Tidak ada Marketlist yang cocok. Coba nama bahan lain.'}
+                    </p>
+                  )}
                   <select
                     value={selectedMlId}
                     onChange={(e) => handleSelectMarketlist(e.target.value)}
@@ -2182,23 +2224,36 @@ export default function TransactionsPage() {
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Alokasikan ke Marketlist (opsional)</label>
-                  <select
-                    value={editForm.marketlist_id}
-                    onChange={(e) => setEditForm({ ...editForm, marketlist_id: e.target.value })}
+                              <input
+                                type="search"
+                                value={editMarketlistSearch}
+                                onChange={(event) => setEditMarketlistSearch(event.target.value)}
+                                placeholder="Cari Marketlist berdasarkan bahan di transaksi..."
+                                className="mb-2 w-full rounded-lg border border-slate-200 bg-white p-2.5"
+                              />
+                              <select
+                                value={editForm.marketlist_id}
+                                onChange={(e) => setEditForm({ ...editForm, marketlist_id: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold text-slate-800"
                   >
                     <option value="">Tanpa Marketlist</option>
-                    {approvedMLs
+                    {editMarketlistsForItems
                       .filter((ml) =>
-                        ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received'].includes(ml.status) ||
+                        ['approved', 'partial_rejection', 'in_progress', 'partially_received', 'received', 'completed'].includes(ml.status) ||
                         ml._id === editForm.marketlist_id
                       )
                       .map((ml) => (
                         <option key={ml._id} value={ml._id}>
-                          {ml.marketlist_number} [{ml.status?.replace(/_/g, ' ')}]
+                          {ml.marketlist_number} [{ml.status?.replace(/_/g, ' ')}] · Cocok: {getEditMarketlistItemMatches(ml)
+                            .map((item) => item.product_id?.name || item.product_snapshot?.name)
+                            .filter(Boolean)
+                            .join(', ')}
                         </option>
                       ))}
                   </select>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Pilihan menampilkan Marketlist yang memiliki bahan dalam transaksi ini. Bahan yang cocok akan dialokasikan otomatis.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
