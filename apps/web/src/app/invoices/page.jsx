@@ -327,7 +327,7 @@ export default function InvoicesPage() {
               className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
             >
               <FileDown className="w-4 h-4" />
-              Unduh Hutang Saja
+              Unduh Hutang + Invoice
             </button>
           </div>
         </div>

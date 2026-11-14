@@ -175,6 +175,18 @@ class InvoiceService {
       .sort({ invoice_date: 1, invoice_number: 1 });
   }
 
+  async getInvoicesForMarketlists(marketlistIds) {
+    if (marketlistIds.length === 0) return [];
+
+    return Invoice.find({
+      marketlist_id: { $in: marketlistIds },
+      status: { $ne: INVOICE_STATUS.CANCELLED }
+    })
+      .populate('supplier_id', 'name code phone')
+      .populate('marketlist_id', 'marketlist_number required_date status')
+      .sort({ invoice_date: 1, invoice_number: 1 });
+  }
+
   async getInvoiceById(id) {
     return Invoice.findById(id)
       .populate('supplier_id', 'name code contact_person phone email address bank_account')

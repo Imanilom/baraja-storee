@@ -1,6 +1,7 @@
 const purchaseService = require('./purchase.service');
 const debtPdfService = require('./debt-pdf.service');
 const overheadService = require('../overheads/overhead.service');
+const invoiceService = require('../invoices/invoice.service');
 
 class PurchaseController {
   async create(req, res, next) {
@@ -74,6 +75,14 @@ class PurchaseController {
           message: 'Tidak ada hutang pembelian atau overhead pada rentang tanggal tersebut.'
         });
       }
+      const marketlistIds = [
+        ...new Set(
+          purchaseDebts
+            .map((debt) => debt.marketlist_id?._id?.toString())
+            .filter(Boolean)
+        )
+      ];
+      const invoices = await invoiceService.getInvoicesForMarketlists(marketlistIds);
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
@@ -81,7 +90,7 @@ class PurchaseController {
         `inline; filename="laporan-hutang-${startDate}-${endDate}.pdf"`
       );
       debtPdfService.generateDebtReportPdf(
-        { purchaseDebts, overheadDebts },
+        { purchaseDebts, overheadDebts, invoices },
         { startDate, endDate },
         res
       );
