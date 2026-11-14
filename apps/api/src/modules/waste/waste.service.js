@@ -23,7 +23,7 @@ class WasteService {
 
     return Waste.find(filter)
       .populate('product_id', 'name sku')
-      .populate('marketlist_id', 'marketlist_number status')
+      .populate('marketlist_id', 'marketlist_number date required_date status')
       .populate('recorded_by', 'name')
       .sort({ wasted_at: -1, createdAt: -1 })
       .limit(Math.min(Number(query.limit) || 100, 500));

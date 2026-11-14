@@ -7,6 +7,11 @@ import { AlertTriangle, Plus, RefreshCw, Search, ClipboardList } from 'lucide-re
 
 const today = () => new Date().toLocaleDateString('en-CA');
 const money = (value) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+const formatDate = (value) => {
+  if (!value) return '-';
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? '-' : parsedDate.toLocaleDateString('id-ID');
+};
 
 export default function WastePage() {
   const [records, setRecords] = useState([]);
@@ -181,12 +186,60 @@ export default function WastePage() {
                     ));
                   return (
                     <option key={marketlist._id} value={marketlist._id}>
-                      {marketlist.marketlist_number} · {marketlist.status} · {matchingProducts.join(', ')}
+                      {marketlist.marketlist_number} · Tgl PO {formatDate(marketlist.date)} · {marketlist.status} · {matchingProducts.join(', ')}
                     </option>
                   );
                 })}
               </select>
             </label>
+            {selectedMarketlist && (
+              <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-indigo-950">
+                      PO / Marketlist {selectedMarketlist.marketlist_number}
+                    </h3>
+                    <p className="mt-1 text-[11px] text-indigo-800">
+                      Tanggal PO: <strong>{formatDate(selectedMarketlist.date)}</strong>
+                      {' · '}
+                      Tanggal dibutuhkan: <strong>{formatDate(selectedMarketlist.required_date)}</strong>
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase text-indigo-700">
+                    {selectedMarketlist.status}
+                  </span>
+                </div>
+                <div className="mt-3 border-t border-indigo-200 pt-2">
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800">
+                    Item dalam PO ({marketlistProducts.length})
+                  </p>
+                  {marketlistProducts.length === 0 ? (
+                    <p className="text-[11px] text-indigo-700">Tidak ada item aktif pada Marketlist ini.</p>
+                  ) : (
+                    <ul className="max-h-36 space-y-1 overflow-y-auto">
+                      {marketlistProducts.map((product) => {
+                        const item = selectedMarketlist.items.find(
+                          (marketlistItem) => marketlistItem._id === product.marketlistItemId
+                        );
+                        const unit = product.unit_id?.abbreviation || product.unit_id?.name || 'unit';
+                        return (
+                          <li
+                            key={product.marketlistItemId}
+                            className="flex items-start justify-between gap-3 text-[11px] text-indigo-950"
+                          >
+                            <span className="min-w-0 truncate">{product.name}</span>
+                            <span className="shrink-0 text-right text-indigo-700">
+                              Minta: {item?.requested_qty ?? 0} {unit}
+                              {item?.purchased_qty > 0 && ` · Dibeli: ${item.purchased_qty} ${unit}`}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </section>
+            )}
             {normalizedProductSearch && (
               <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 p-2 text-[10px] text-blue-800">
                 <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0" />
