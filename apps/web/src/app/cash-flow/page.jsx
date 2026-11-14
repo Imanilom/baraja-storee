@@ -59,7 +59,7 @@ export default function CashFlowPage() {
   // Filters
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'cash' | 'bank' | 'in' | 'withdrawal' | 'purchase'
   const [filterDate, setFilterDate] = useState(toLocalDateInput());
-  const [filterPeriod, setFilterPeriod] = useState('daily');
+  const [filterPeriod, setFilterPeriod] = useState('weekly');
 
   // Modals
   const [showInModal, setShowInModal] = useState(false);
@@ -359,194 +359,126 @@ export default function CashFlowPage() {
           </div>
         </div>
 
-        {/* ===== TOP METRICS CARDS ===== */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Card 1: Kas Tunai */}
-          <div className="bg-white border border-emerald-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+        {/* ===== RINGKASAN ARUS KAS PERIODE ===== */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="bg-white border border-emerald-200 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Wallet className="w-4 h-4 text-emerald-600" />
-                Saldo Kas Tunai Fisik
+                <ArrowDownRight className="w-4 h-4 text-emerald-600" />
+                Uang Masuk ke Rekening
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
-                Cash on Hand
+                {filterPeriod === 'weekly' ? 'Mingguan' : 'Harian'}
               </span>
             </div>
-            <p className={`text-2xl font-black ${summary.current_cash_balance < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
-              {fmt(summary.current_cash_balance)}
+            <p className="text-2xl font-black text-emerald-700">{fmt(summary.total_in_bank)}</p>
+            <p className="mt-3 pt-3 border-t border-emerald-100 text-[11px] text-slate-500">
+              Total setoran / penerimaan ke rekening pada periode ini
             </p>
-            <div className="mt-3 pt-3 border-t border-emerald-100 text-[11px] text-slate-500 space-y-1">
-              <div className="flex justify-between">
-                <span>Belanja Kas:</span>
-                <strong className="text-slate-800">{fmt(summary.total_purchase_cash)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Overhead Kas:</span>
-                <strong className="text-amber-700">{fmt(summary.total_overhead_cash)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Tarik Tunai Masuk:</span>
-                <strong className="text-emerald-700 font-bold">+{fmt(summary.total_withdrawal)}</strong>
-              </div>
-            </div>
           </div>
 
-          <div className="bg-white border border-violet-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Wallet className="w-4 h-4 text-violet-600" />
-                Saldo Kas Kecil
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-violet-100 text-violet-800 rounded-full">
-                Petty Cash
-              </span>
-            </div>
-            <p className={`text-2xl font-black ${summary.current_petty_cash_balance < 0 ? 'text-red-600' : 'text-violet-700'}`}>
-              {fmt(summary.current_petty_cash_balance)}
-            </p>
-            <div className="mt-3 pt-3 border-t border-violet-100 text-[11px] text-slate-500 space-y-1">
-              <div className="flex justify-between">
-                <span>Didanai hari ini:</span>
-                <strong className="text-emerald-700">{fmt(summary.total_petty_cash_funded)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Dikembalikan:</span>
-                <strong className="text-violet-700">{fmt(summary.total_petty_cash_returned)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Belanja kas kecil:</span>
-                <strong className="text-rose-700">{fmt(summary.total_purchase_petty_cash)}</strong>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Rekening Bank */}
-          <div className="bg-white border border-blue-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Landmark className="w-4 h-4 text-blue-600" />
-                Saldo Rekening Bank
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
-                Bank Balance
-              </span>
-            </div>
-            <p className={`text-2xl font-black ${summary.current_bank_balance < 0 ? 'text-red-600' : 'text-blue-700'}`}>
-              {fmt(summary.current_bank_balance)}
-            </p>
-            <div className="mt-3 pt-3 border-t border-blue-100 text-[11px] text-slate-500 space-y-1">
-              <div className="flex justify-between">
-                <span>Belanja Bank:</span>
-                <strong className="text-slate-800">{fmt(summary.total_purchase_bank)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Overhead Bank:</span>
-                <strong className="text-amber-700">{fmt(summary.total_overhead_bank)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Ditarik ke Kas:</span>
-                <strong className="text-rose-600 font-bold">-{fmt(summary.total_withdrawal)}</strong>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Total Uang Masuk */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                <ArrowDownRight className="w-4 h-4 text-emerald-600" />
-                Total Uang Masuk
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full">
-                Inflow
-              </span>
-            </div>
-            <p className="text-2xl font-black text-slate-900">
-              {fmt(summary.total_inflow)}
-            </p>
-            <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
-              <div className="flex justify-between">
-                <span>Ke Kas:</span>
-                <strong>{fmt(summary.total_in_cash)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Ke Bank:</span>
-                <strong>{fmt(summary.total_in_bank)}</strong>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Total Tarik Tunai */}
           <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
                 <ArrowLeftRight className="w-4 h-4 text-amber-600" />
-                Total Tarik Tunai
+                Ditarik Tunai
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
-                ATM / Bank ➔ Kas
-              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">Bank → Kas</span>
             </div>
-            <p className="text-2xl font-black text-amber-700">
-              {fmt(summary.total_withdrawal)}
+            <p className="text-2xl font-black text-amber-700">{fmt(summary.total_withdrawal)}</p>
+            <p className="mt-3 pt-3 border-t border-amber-100 text-[11px] text-slate-500">
+              Total penarikan tunai dari rekening pada periode ini
             </p>
-            <div className="mt-3 pt-3 border-t border-amber-100 text-[11px] text-slate-500 space-y-1">
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <ShoppingCart className="w-4 h-4 text-slate-600" />
+                Belanja Tunai
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full">Kas</span>
+            </div>
+            <p className="text-2xl font-black text-slate-800">{fmt(summary.total_purchase_cash)}</p>
+            <p className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+              Belanja supplier yang dibayar tunai pada periode ini
+            </p>
+          </div>
+
+          <div className="bg-white border border-blue-200 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-blue-600" />
+                Belanja Transfer
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">Rekening</span>
+            </div>
+            <p className="text-2xl font-black text-blue-700">{fmt(summary.total_purchase_bank)}</p>
+            <p className="mt-3 pt-3 border-t border-blue-100 text-[11px] text-slate-500">
+              Belanja supplier yang dibayar transfer pada periode ini
+            </p>
+          </div>
+
+          <div className="bg-white border border-orange-200 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-orange-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-orange-600" />
+                Biaya Overhead
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full">Total</span>
+            </div>
+            <p className="text-2xl font-black text-orange-700">{fmt(summary.total_overhead)}</p>
+            <div className="mt-3 pt-3 border-t border-orange-100 text-[11px] text-slate-500 space-y-1">
               <div className="flex justify-between">
-                <span>Likuiditas Gabungan:</span>
-                <strong className="text-indigo-700 font-bold">{fmt(summary.total_liquidity)}</strong>
+                <span>Tunai:</span>
+                <strong>{fmt(summary.total_overhead_cash)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Transfer:</span>
+                <strong>{fmt(summary.total_overhead_bank)}</strong>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ===== BREAKDOWN PENGELUARAN (BELANJA & OVERHEAD) ===== */}
+        {/* ===== SALDO AKUN & BALANCING ===== */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="bg-white border border-emerald-200 rounded-2xl p-4 shadow-sm flex items-center justify-between">
             <div>
-              <span className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                <ShoppingCart className="w-3.5 h-3.5 text-slate-600" />
-                Total Belanja Supplier
+              <span className="text-[11px] font-bold text-emerald-800 uppercase flex items-center gap-1.5">
+                <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+                Saldo Kas Tunai Fisik
               </span>
-              <div className="text-lg font-black text-slate-900 mt-1">{fmt(summary.total_purchase)}</div>
-              <div className="text-[10px] text-slate-500 mt-0.5">
-                Kas Tunai: <strong className="text-slate-700">{fmt(summary.total_purchase_cash)}</strong> • Bank: <strong className="text-slate-700">{fmt(summary.total_purchase_bank)}</strong>
+              <div className={`text-lg font-black mt-1 ${summary.current_cash_balance < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                {fmt(summary.current_cash_balance)}
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500">
-              <ShoppingCart className="w-5 h-5" />
-            </div>
+            <Banknote className="w-5 h-5 text-emerald-600" />
           </div>
 
-          <div className="bg-white border border-amber-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="bg-white border border-blue-200 rounded-2xl p-4 shadow-sm flex items-center justify-between">
             <div>
-              <span className="text-[11px] font-bold text-amber-800 uppercase flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-amber-600" />
-                Total Biaya Overhead
+              <span className="text-[11px] font-bold text-blue-800 uppercase flex items-center gap-1.5">
+                <Landmark className="w-3.5 h-3.5 text-blue-600" />
+                Saldo Rekening Bank
               </span>
-              <div className="text-lg font-black text-amber-900 mt-1">{fmt(summary.total_overhead)}</div>
-              <div className="text-[10px] text-amber-700 mt-0.5">
-                Kas Tunai: <strong>{fmt(summary.total_overhead_cash)}</strong> • Bank: <strong>{fmt(summary.total_overhead_bank)}</strong>
+              <div className={`text-lg font-black mt-1 ${summary.current_bank_balance < 0 ? 'text-red-600' : 'text-blue-700'}`}>
+                {fmt(summary.current_bank_balance)}
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-              <Zap className="w-5 h-5" />
-            </div>
+            <Landmark className="w-5 h-5 text-blue-600" />
           </div>
 
-          <div className="bg-white border border-rose-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="bg-white border border-rose-200 rounded-2xl p-4 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-[11px] font-bold text-rose-800 uppercase flex items-center gap-1.5">
                 <ArrowUpRight className="w-3.5 h-3.5 text-rose-600" />
-                Total Seluruh Pengeluaran
+                Total Pengeluaran
               </span>
               <div className="text-lg font-black text-rose-900 mt-1">{fmt(summary.total_outflow)}</div>
-              <div className="text-[10px] text-rose-700 mt-0.5">
-                Termasuk belanja, overhead, & bayar hutang
-              </div>
+              <div className="text-[10px] text-rose-700 mt-0.5">Belanja, overhead, dan pembayaran hutang</div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
-              <ArrowUpRight className="w-5 h-5" />
-            </div>
+            <ArrowUpRight className="w-5 h-5 text-rose-600" />
           </div>
         </div>
 
