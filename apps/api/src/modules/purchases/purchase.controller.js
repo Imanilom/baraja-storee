@@ -1,5 +1,6 @@
 const purchaseService = require('./purchase.service');
 const debtPdfService = require('./debt-pdf.service');
+const overheadService = require('../overheads/overhead.service');
 
 class PurchaseController {
   async create(req, res, next) {
@@ -63,11 +64,14 @@ class PurchaseController {
   async downloadDebtReportPdf(req, res, next) {
     try {
       const { startDate, endDate } = req.query;
-      const debts = await purchaseService.getDebtsForReport(startDate, endDate);
-      if (debts.length === 0) {
+      const [purchaseDebts, overheadDebts] = await Promise.all([
+        purchaseService.getDebtsForReport(startDate, endDate),
+        overheadService.getOverheadDebtsForReport(startDate, endDate)
+      ]);
+      if (purchaseDebts.length === 0 && overheadDebts.length === 0) {
         return res.status(404).json({
           success: false,
-          message: 'Tidak ada hutang aktif pada rentang tanggal tersebut.'
+          message: 'Tidak ada hutang pembelian atau overhead pada rentang tanggal tersebut.'
         });
       }
 
@@ -76,7 +80,11 @@ class PurchaseController {
         'Content-Disposition',
         `inline; filename="laporan-hutang-${startDate}-${endDate}.pdf"`
       );
-      debtPdfService.generateDebtReportPdf(debts, { startDate, endDate }, res);
+      debtPdfService.generateDebtReportPdf(
+        { purchaseDebts, overheadDebts },
+        { startDate, endDate },
+        res
+      );
     } catch (error) {
       if (error.statusCode) {
         return res.status(error.statusCode).json({

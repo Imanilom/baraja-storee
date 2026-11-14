@@ -329,6 +329,52 @@ class OverheadService {
     };
   }
 
+  async getOverheadDebtsForReport(startDate, endDate) {
+    const parseDate = (value) => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const error = new Error('Tanggal awal dan akhir harus berformat YYYY-MM-DD.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const [year, month, day] = value.split('-').map(Number);
+      const dateNumber = Date.UTC(year, month - 1, day);
+      const parsed = new Date(dateNumber);
+      if (
+        parsed.getUTCFullYear() !== year ||
+        parsed.getUTCMonth() !== month - 1 ||
+        parsed.getUTCDate() !== day
+      ) {
+        const error = new Error('Rentang tanggal hutang overhead tidak valid.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      return { year, month, day, dateNumber };
+    };
+
+    const startParts = parseDate(startDate);
+    const endParts = parseDate(endDate);
+    const daysBetween = (endParts.dateNumber - startParts.dateNumber) / 86400000;
+    if (daysBetween < 0 || daysBetween > 6) {
+      const error = new Error('Rentang tanggal hutang overhead maksimal 7 hari.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const start = new Date(startParts.year, startParts.month - 1, startParts.day);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endParts.year, endParts.month - 1, endParts.day);
+    end.setHours(23, 59, 59, 999);
+
+    return Overhead.find({
+      payment_method: PAYMENT_METHOD.TEMPO,
+      payment_status: { $ne: PAYMENT_STATUS.PAID },
+      amount_remaining: { $gt: 0 },
+      expense_date: { $gte: start, $lte: end }
+    }).sort({ due_date: 1, expense_date: 1 });
+  }
+
   async recordPayment(id, paymentData, user) {
     const overhead = await Overhead.findById(id);
     if (!overhead) {

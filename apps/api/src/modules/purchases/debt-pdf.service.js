@@ -1,7 +1,7 @@
 const PDFDocument = require('pdfkit');
 
 class DebtPdfService {
-  generateDebtReportPdf(debts, dateRange, res) {
+  generateDebtReportPdf({ purchaseDebts, overheadDebts }, dateRange, res) {
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
     doc.pipe(res);
 
@@ -10,36 +10,65 @@ class DebtPdfService {
       : '-';
     const formatAmount = (value) => `Rp ${(Number(value) || 0).toLocaleString('id-ID')}`;
     const formatRangeDate = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('id-ID');
-    const totalRemaining = debts.reduce(
+    const totalPurchaseDebt = purchaseDebts.reduce(
       (total, debt) => total + (Number(debt.amount_remaining) || 0),
       0
     );
+    const totalOverheadDebt = overheadDebts.reduce(
+      (total, debt) => total + (Number(debt.amount_remaining) || 0),
+      0
+    );
+    const totalRemaining = totalPurchaseDebt + totalOverheadDebt;
+    const debts = [
+      ...purchaseDebts.map((debt) => ({
+        type: 'Pembelian',
+        reference_number: debt.purchase_number,
+        party: debt.supplier_id?.name || 'Supplier',
+        invoice_ref: debt.invoice_ref,
+        date: debt.purchased_at,
+        due_date: debt.due_date,
+        payment_status: debt.payment_status,
+        amount_remaining: debt.amount_remaining
+      })),
+      ...overheadDebts.map((debt) => ({
+        type: 'Overhead',
+        reference_number: debt.title,
+        party: debt.vendor_recipient,
+        invoice_ref: debt.invoice_ref,
+        date: debt.expense_date,
+        due_date: debt.due_date,
+        payment_status: debt.payment_status,
+        amount_remaining: debt.amount_remaining
+      }))
+    ].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const drawHeader = (continued = false) => {
       doc
         .fontSize(continued ? 12 : 18)
         .font('Helvetica-Bold')
-        .text(continued ? 'DAFTAR HUTANG (LANJUTAN)' : 'DAFTAR HUTANG PEMBELIAN', 40, 40)
+        .text(continued ? 'DAFTAR HUTANG (LANJUTAN)' : 'DAFTAR HUTANG + OVERHEAD', 40, 40)
         .fontSize(10)
         .font('Helvetica')
         .text(`Periode transaksi: ${formatRangeDate(dateRange.startDate)} - ${formatRangeDate(dateRange.endDate)}`, 40, 68);
 
       if (!continued) {
         doc
-          .text(`Jumlah hutang aktif: ${debts.length}`, 40, 86)
+          .text(`Jumlah pembelian: ${purchaseDebts.length}  |  Total hutang pembelian: ${formatAmount(totalPurchaseDebt)}`, 40, 86)
+          .text(`Jumlah overhead: ${overheadDebts.length}  |  Total hutang overhead: ${formatAmount(totalOverheadDebt)}`, 40, 102)
           .font('Helvetica-Bold')
-          .text(`Total sisa hutang: ${formatAmount(totalRemaining)}`, 40, 102);
+          .text(`TOTAL SISA HUTANG + OVERHEAD: ${formatAmount(totalRemaining)}`, 40, 118);
       }
 
-      const headerY = continued ? 78 : 130;
+      const headerY = continued ? 78 : 145;
       const columns = [
-        { label: 'No. Transaksi', x: 40, width: 65 },
-        { label: 'Supplier', x: 107, width: 85 },
-        { label: 'Ref. Invoice', x: 194, width: 75 },
-        { label: 'Tgl. Beli', x: 271, width: 55 },
-        { label: 'Jatuh Tempo', x: 328, width: 65 },
-        { label: 'Status', x: 395, width: 60 },
-        { label: 'Sisa Hutang', x: 457, width: 98, align: 'right' }
+        { label: 'Jenis', x: 40, width: 48 },
+        { label: 'No./Keperluan', x: 90, width: 85 },
+        { label: 'Supplier/Vendor', x: 177, width: 75 },
+        { label: 'Referensi', x: 254, width: 55 },
+        { label: 'Tgl.', x: 311, width: 43 },
+        { label: 'Tempo', x: 356, width: 50 },
+        { label: 'Status', x: 408, width: 50 },
+        { label: 'Sisa Hutang', x: 460, width: 95, align: 'right' }
       ];
 
       doc.fontSize(8).font('Helvetica-Bold');
@@ -69,13 +98,14 @@ class DebtPdfService {
           ? 'Sebagian'
           : 'Belum bayar';
       const columns = [
-        { text: debt.purchase_number || '-', x: 40, width: 65 },
-        { text: debt.supplier_id?.name || 'Supplier', x: 107, width: 85 },
-        { text: debt.invoice_ref || '-', x: 194, width: 75 },
-        { text: formatDate(debt.purchased_at), x: 271, width: 55 },
-        { text: formatDate(debt.due_date), x: 328, width: 65 },
-        { text: status, x: 395, width: 60 },
-        { text: formatAmount(debt.amount_remaining), x: 457, width: 98, align: 'right' }
+        { text: debt.type, x: 40, width: 48 },
+        { text: debt.reference_number || '-', x: 90, width: 85 },
+        { text: debt.party || '-', x: 177, width: 75 },
+        { text: debt.invoice_ref || '-', x: 254, width: 55 },
+        { text: formatDate(debt.date), x: 311, width: 43 },
+        { text: formatDate(debt.due_date), x: 356, width: 50 },
+        { text: status, x: 408, width: 50 },
+        { text: formatAmount(debt.amount_remaining), x: 460, width: 95, align: 'right' }
       ];
       doc.fontSize(8);
       for (const column of columns) {
