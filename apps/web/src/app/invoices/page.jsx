@@ -12,19 +12,27 @@ const toLocalDateInput = (date) => {
 
 const getCurrentWeekRange = () => {
   const start = new Date();
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  start.setDate(start.getDate() - ((start.getDay() + 1) % 7));
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
   return { startDate: toLocalDateInput(start), endDate: toLocalDateInput(end) };
 };
 
+const shiftDateInput = (value, days) => {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return toLocalDateInput(date);
+};
+
 const isValidInvoiceDateRange = (startDate, endDate) => {
   if (!startDate || !endDate) return false;
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
   const daysBetween = (
-    Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)
+    end.getTime() - start.getTime()
   ) / 86400000;
-  return daysBetween >= 0 && daysBetween <= 6;
+  return daysBetween === 6 && start.getUTCDay() === 6 && end.getUTCDay() === 5;
 };
 
 export default function InvoicesPage() {
@@ -87,7 +95,7 @@ export default function InvoicesPage() {
       setWeeklySummary(null);
       setWeeklySummaryError(
         startDate && endDate
-          ? 'Pilih rentang tanggal maksimal 7 hari dan tanggal akhir tidak boleh sebelum tanggal awal.'
+          ? 'Rentang tanggal harus dimulai hari Sabtu dan berakhir hari Jumat.'
           : ''
       );
       setWeeklySummaryLoading(false);
@@ -262,7 +270,7 @@ export default function InvoicesPage() {
           <div className="space-y-1">
             <h3 className="font-bold text-sm text-slate-800">Unduh Invoice Per Rentang Tanggal</h3>
             <p className="text-xs text-slate-500">
-              Pilih tanggal awal dan akhir dalam rentang maksimal 7 hari. Semua invoice akan digabung menjadi satu PDF.
+              Pilih periode Sabtu sampai Jumat. Ringkasan tagihan menjadi halaman pertama, diikuti semua invoice dalam satu PDF.
             </p>
             {weeklySummaryLoading ? (
               <p className="text-xs text-slate-500">Menghitung total invoice...</p>
@@ -284,24 +292,24 @@ export default function InvoicesPage() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="space-y-1 text-xs font-semibold text-slate-600">
-              <span>Dari tanggal</span>
+              <span>Dari tanggal (Sabtu)</span>
               <input
                 type="date"
                 value={invoiceDateRange.startDate}
                 onChange={(event) => setInvoiceDateRange((range) => ({
-                  ...range,
-                  startDate: event.target.value
+                  startDate: event.target.value,
+                  endDate: event.target.value ? shiftDateInput(event.target.value, 6) : ''
                 }))}
                 className="block rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800"
               />
             </label>
             <label className="space-y-1 text-xs font-semibold text-slate-600">
-              <span>Sampai tanggal</span>
+              <span>Sampai tanggal (Jumat)</span>
               <input
                 type="date"
                 value={invoiceDateRange.endDate}
                 onChange={(event) => setInvoiceDateRange((range) => ({
-                  ...range,
+                  startDate: event.target.value ? shiftDateInput(event.target.value, -6) : '',
                   endDate: event.target.value
                 }))}
                 className="block rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800"

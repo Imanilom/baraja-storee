@@ -388,8 +388,10 @@ class PurchaseService {
     const startParts = parseDate(startDate);
     const endParts = parseDate(endDate);
     const daysBetween = (endParts.dateNumber - startParts.dateNumber) / 86400000;
-    if (daysBetween < 0 || daysBetween > 6) {
-      const error = new Error('Rentang tanggal hutang maksimal 7 hari.');
+    const startDay = new Date(startParts.dateNumber).getUTCDay();
+    const endDay = new Date(endParts.dateNumber).getUTCDay();
+    if (daysBetween !== 6 || startDay !== 6 || endDay !== 5) {
+      const error = new Error('Rentang hutang harus dimulai hari Sabtu dan berakhir hari Jumat.');
       error.statusCode = 400;
       throw error;
     }
