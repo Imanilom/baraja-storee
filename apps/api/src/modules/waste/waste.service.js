@@ -41,6 +41,15 @@ class WasteService {
     if (!reason) {
       throw new Error('Alasan waste wajib diisi.');
     }
+    const stage = data.stage || 'other';
+    const validStages = ['received', 'processing', 'finished_product', 'spoiled', 'other'];
+    if (!validStages.includes(stage)) {
+      throw new Error('Tahap waste tidak valid.');
+    }
+    const notes = typeof data.notes === 'string' ? data.notes.trim() : '';
+    if (notes.length > 1000) {
+      throw new Error('Catatan waste maksimal 1000 karakter.');
+    }
 
     const wastedAt = data.wasted_at ? new Date(data.wasted_at) : new Date();
     if (Number.isNaN(wastedAt.getTime())) {
@@ -106,7 +115,9 @@ class WasteService {
       quantity,
       unit_purchase_price: unitPurchasePrice,
       total_cost: quantity * unitPurchasePrice,
+      stage,
       reason,
+      notes,
       wasted_at: wastedAt,
       recorded_by: user._id
     });

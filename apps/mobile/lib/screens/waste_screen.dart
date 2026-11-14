@@ -13,6 +13,7 @@ class _WasteScreenState extends State<WasteScreen> {
   final _formKey = GlobalKey<FormState>();
   final _quantityController = TextEditingController();
   final _reasonController = TextEditingController();
+  final _notesController = TextEditingController();
   final _currency = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
@@ -23,15 +24,57 @@ class _WasteScreenState extends State<WasteScreen> {
   bool _saving = false;
   String? _error;
   List<dynamic> _products = [];
+  List<dynamic> _marketlists = [];
   List<dynamic> _latestPrices = [];
   List<dynamic> _records = [];
   String? _productId;
+  String? _marketlistId;
+  String _stage = 'received';
   DateTime _wastedAt = DateTime.now();
 
+  static const _stages = <String, String>{
+    'received': 'Saat diterima',
+    'processing': 'Saat diolah',
+    'finished_product': 'Produk jadi',
+    'spoiled': 'Busuk / rusak',
+    'other': 'Lainnya',
+  };
+
+  Map<String, dynamic>? get _selectedMarketlist {
+    for (final marketlist in _marketlists) {
+      if (marketlist is Map &&
+          marketlist['_id']?.toString() == _marketlistId) {
+        return Map<String, dynamic>.from(marketlist);
+      }
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> get _availableProducts {
+    final marketlist = _selectedMarketlist;
+    if (marketlist == null) {
+      return _products
+          .whereType<Map>()
+          .map((product) => Map<String, dynamic>.from(product))
+          .toList();
+    }
+
+    final items = marketlist['items'];
+    if (items is! List) return [];
+    return items
+        .whereType<Map>()
+        .where((item) => item['item_status'] != 'rejected')
+        .where((item) => item['product_id'] is Map)
+        .map(
+          (item) => Map<String, dynamic>.from(item['product_id'] as Map),
+        )
+        .toList();
+  }
+
   Map<String, dynamic>? get _selectedProduct {
-    for (final product in _products) {
+    for (final product in _availableProducts) {
       if (product is Map && product['_id']?.toString() == _productId) {
-        return Map<String, dynamic>.from(product);
+        return product;
       }
     }
     return null;
@@ -67,6 +110,7 @@ class _WasteScreenState extends State<WasteScreen> {
     _quantityController.removeListener(_refreshValue);
     _quantityController.dispose();
     _reasonController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -82,17 +126,33 @@ class _WasteScreenState extends State<WasteScreen> {
     try {
       final responses = await Future.wait([
         ApiService.get('/products?include_inactive=true'),
+        ApiService.get('/marketlists?limit=100'),
         ApiService.get('/waste'),
         ApiService.get('/prices/overview'),
       ]);
       final productsData = responses[0] is Map ? responses[0]['data'] : null;
-      final recordsData = responses[1] is Map ? responses[1]['data'] : null;
-      final pricesData = responses[2] is Map ? responses[2]['data'] : null;
+      final marketlistsData = responses[1] is Map
+          ? (responses[1]['data'] is Map
+                ? responses[1]['data']['items']
+                : responses[1]['items'])
+          : null;
+      final recordsData = responses[2] is Map ? responses[2]['data'] : null;
+      final pricesData = responses[3] is Map ? responses[3]['data'] : null;
       if (mounted) {
         setState(() {
           _products = productsData is List ? productsData : [];
+          _marketlists = marketlistsData is List ? marketlistsData : [];
           _records = recordsData is List ? recordsData : [];
           _latestPrices = pricesData is List ? pricesData : [];
+          if (_marketlistId != null &&
+              !_marketlists.any(
+                (marketlist) =>
+                    marketlist is Map &&
+                    marketlist['_id']?.toString() == _marketlistId,
+              )) {
+            _marketlistId = null;
+            _productId = null;
+          }
         });
       }
     } catch (error) {
@@ -121,12 +181,16 @@ class _WasteScreenState extends State<WasteScreen> {
     try {
       await ApiService.post('/waste', {
         'product_id': _productId,
+        if (_marketlistId != null) 'marketlist_id': _marketlistId,
         'quantity': double.parse(_quantityController.text),
+        'stage': _stage,
         'reason': _reasonController.text.trim(),
+        'notes': _notesController.text.trim(),
         'wasted_at': _wastedAt.toIso8601String(),
       });
       _quantityController.clear();
       _reasonController.clear();
+      _notesController.clear();
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -166,9 +230,12 @@ class _WasteScreenState extends State<WasteScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
                   if (_error != null)
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -199,23 +266,77 @@ class _WasteScreenState extends State<WasteScreen> {
                             ),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<String>(
+                              initialValue: _marketlistId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Marketlist / PO (opsional)',
+                                border: OutlineInputBorder(),
+                              ),
+                              hint: const Text('Semua produk'),
+                              items: _marketlists.whereType<Map>().map((
+                                marketlist,
+                              ) {
+                                final date = _formatDate(marketlist['date']);
+                                return DropdownMenuItem<String>(
+                                  value: marketlist['_id'].toString(),
+                                  child: Text(
+                                    '${marketlist['marketlist_number'] ?? 'Marketlist'} · $date',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) => setState(() {
+                                _marketlistId = value;
+                                _productId = null;
+                              }),
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              key: ValueKey(_marketlistId),
                               initialValue: _productId,
+                              isExpanded: true,
                               decoration: const InputDecoration(
                                 labelText: 'Produk',
                                 border: OutlineInputBorder(),
                               ),
-                              items: _products.whereType<Map>().map((product) {
+                              items: _availableProducts.map((product) {
                                 return DropdownMenuItem<String>(
                                   value: product['_id'].toString(),
                                   child: Text(
                                     product['name']?.toString() ?? '-',
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 );
                               }).toList(),
+                              hint: Text(
+                                _selectedMarketlist == null
+                                    ? 'Pilih produk'
+                                    : 'Tidak ada produk pada Marketlist',
+                              ),
                               onChanged: (value) =>
                                   setState(() => _productId = value),
                               validator: (value) =>
                                   value == null ? 'Pilih produk' : null,
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              initialValue: _stage,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Tahap pencatatan',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: _stages.entries
+                                  .map(
+                                    (stage) => DropdownMenuItem<String>(
+                                      value: stage.key,
+                                      child: Text(stage.value),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) => setState(
+                                () => _stage = value ?? 'received',
+                              ),
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
@@ -271,16 +392,27 @@ class _WasteScreenState extends State<WasteScreen> {
                             TextFormField(
                               controller: _reasonController,
                               maxLength: 500,
-                              maxLines: 2,
+                              maxLines: 1,
                               decoration: const InputDecoration(
-                                labelText: 'Alasan waste',
-                                hintText: 'Rusak, kedaluwarsa, tumpah, dll.',
+                                labelText: 'Jenis waste',
+                                hintText: 'Susut, tumpah, salah olah, dll.',
                                 border: OutlineInputBorder(),
                               ),
                               validator: (value) =>
                                   value == null || value.trim().isEmpty
-                                  ? 'Alasan wajib diisi'
+                                  ? 'Jenis waste wajib diisi'
                                   : null,
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _notesController,
+                              maxLength: 1000,
+                              maxLines: 2,
+                              decoration: const InputDecoration(
+                                labelText: 'Catatan (opsional)',
+                                hintText: 'Jelaskan kondisi atau tindak lanjut',
+                                border: OutlineInputBorder(),
+                              ),
                             ),
                             const SizedBox(height: 8),
                             FilledButton.icon(
@@ -316,13 +448,24 @@ class _WasteScreenState extends State<WasteScreen> {
                           num.tryParse('${record['unit_purchase_price']}') ?? 0;
                       final total =
                           num.tryParse('${record['total_cost']}') ?? 0;
+                      final marketlist = record['marketlist_id'];
+                      final marketlistText = marketlist is Map
+                          ? '${marketlist['marketlist_number'] ?? 'Marketlist'} · ${_formatDate(marketlist['date'])}'
+                          : null;
                       return Card(
                         child: ListTile(
                           title: Text(
                             record['product_name']?.toString() ?? 'Produk',
                           ),
                           subtitle: Text(
-                            '${_formatDate(record['wasted_at'])} · $qty $unit × ${_currency.format(price)}\n${record['reason'] ?? ''}',
+                            [
+                              '${_stages[record['stage']] ?? _stages['other']} · ${_formatDate(record['wasted_at'])}',
+                              if (marketlistText != null) marketlistText,
+                              '$qty $unit × ${_currency.format(price)}',
+                              record['reason']?.toString() ?? '',
+                              if ((record['notes']?.toString() ?? '').isNotEmpty)
+                                record['notes'].toString(),
+                            ].join('\n'),
                           ),
                           isThreeLine: true,
                           trailing: Text(
@@ -335,7 +478,9 @@ class _WasteScreenState extends State<WasteScreen> {
                         ),
                       );
                     }),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
     );

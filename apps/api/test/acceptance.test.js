@@ -1053,7 +1053,9 @@ async function runTests() {
     product_id: productAyam._id,
     marketlist_id: wasteMarketlist._id,
     quantity: 0.5,
-    reason: 'Waste dari Marketlist terpilih'
+    stage: 'processing',
+    reason: 'Waste dari Marketlist terpilih',
+    notes: 'Bahan rusak saat proses persiapan.'
   }, receiverUser);
   const searchedProducts = await productService.getAllProducts({ search: 'Ayam' });
   assert(
@@ -1064,6 +1066,8 @@ async function runTests() {
       wasteRecord.total_cost === 78000 &&
       linkedWasteRecord.marketlist_id.toString() === wasteMarketlist._id.toString() &&
       linkedWasteRecord.marketlist_item_id.toString() === wasteMarketlist.items[0]._id.toString() &&
+      linkedWasteRecord.stage === 'processing' &&
+      linkedWasteRecord.notes === 'Bahan rusak saat proses persiapan.' &&
       searchedProducts.length === 1 &&
       searchedProducts[0]._id.toString() === productAyam._id.toString() &&
       (await Waste.countDocuments({ product_id: productAyam._id })) === 2 &&

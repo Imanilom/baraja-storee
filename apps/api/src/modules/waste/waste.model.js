@@ -22,7 +22,13 @@ const WasteSchema = new mongoose.Schema(
     quantity: { type: Number, required: true, min: 0.000001 },
     unit_purchase_price: { type: Number, required: true, min: 0 },
     total_cost: { type: Number, required: true, min: 0 },
+    stage: {
+      type: String,
+      enum: ['received', 'processing', 'finished_product', 'spoiled', 'other'],
+      default: 'other'
+    },
     reason: { type: String, required: true, trim: true },
+    notes: { type: String, trim: true, maxlength: 1000, default: '' },
     wasted_at: { type: Date, required: true, default: Date.now },
     recorded_by: {
       type: mongoose.Schema.Types.ObjectId,
