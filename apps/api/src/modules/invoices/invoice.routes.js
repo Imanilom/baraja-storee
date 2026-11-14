@@ -10,6 +10,7 @@ const { ROLES } = require('@purchasing/constants');
 router.use(authenticate);
 
 // PDF download routes support direct viewing/downloading in browser (window.open or direct URL).
+router.get('/weekly-summary', invoiceController.weeklySummary);
 router.get('/weekly-pdf', invoiceController.downloadWeeklyPdf);
 router.get('/:id/pdf', invoiceController.downloadPdf);
 

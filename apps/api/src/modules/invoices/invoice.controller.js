@@ -108,6 +108,24 @@ class InvoiceController {
       );
     }
   }
+
+  async weeklySummary(req, res) {
+    try {
+      const { startDate, endDate } = req.query;
+      const invoices = await invoiceService.getInvoicesForWeek(startDate, endDate);
+      return sendSuccess(res, 'Weekly invoice summary retrieved', {
+        invoice_count: invoices.length,
+        total_amount: invoices.reduce((total, invoice) => total + (Number(invoice.grand_total) || 0), 0)
+      });
+    } catch (error) {
+      return sendError(
+        res,
+        'Failed to retrieve weekly invoice summary',
+        error.message,
+        error.statusCode || 500
+      );
+    }
+  }
 }
 
 module.exports = new InvoiceController();

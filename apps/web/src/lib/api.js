@@ -185,6 +185,10 @@ export const api = {
     if (token) params.set('token', token);
     return `${API_BASE}/invoices/weekly-pdf?${params.toString()}`;
   },
+  getWeeklyInvoiceSummary: (startDate, endDate) => {
+    const params = new URLSearchParams({ startDate, endDate });
+    return fetchApi(`/invoices/weekly-summary?${params.toString()}`);
+  },
 
   // Profit & Loss (Laba Rugi) with OAuth 2
   getProfitLoss: (params = '') => fetchApi(`/finance/profit-loss${params}`),

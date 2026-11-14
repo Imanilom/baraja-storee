@@ -10,12 +10,21 @@ const toLocalDateInput = (date) => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 };
 
-const getCalendarWeekRange = (dateValue) => {
-  const start = new Date(`${dateValue}T00:00:00`);
+const getCurrentWeekRange = () => {
+  const start = new Date();
   start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
   return { startDate: toLocalDateInput(start), endDate: toLocalDateInput(end) };
+};
+
+const isValidInvoiceDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) return false;
+  const daysBetween = (
+    Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)
+  ) / 86400000;
+  return daysBetween >= 0 && daysBetween <= 6;
 };
 
 export default function InvoicesPage() {
@@ -30,7 +39,10 @@ export default function InvoicesPage() {
   const [invoiceEditError, setInvoiceEditError] = useState('');
   const [refreshingInvoiceId, setRefreshingInvoiceId] = useState(null);
   const [regeneratingAll, setRegeneratingAll] = useState(false);
-  const [weekDate, setWeekDate] = useState(() => toLocalDateInput(new Date()));
+  const [invoiceDateRange, setInvoiceDateRange] = useState(getCurrentWeekRange);
+  const [weeklySummary, setWeeklySummary] = useState(null);
+  const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
+  const [weeklySummaryError, setWeeklySummaryError] = useState('');
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -69,6 +81,41 @@ export default function InvoicesPage() {
     fetchInvoices();
   }, []);
 
+  useEffect(() => {
+    const { startDate, endDate } = invoiceDateRange;
+    if (!isValidInvoiceDateRange(startDate, endDate)) {
+      setWeeklySummary(null);
+      setWeeklySummaryError(
+        startDate && endDate
+          ? 'Pilih rentang tanggal maksimal 7 hari dan tanggal akhir tidak boleh sebelum tanggal awal.'
+          : ''
+      );
+      setWeeklySummaryLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setWeeklySummaryLoading(true);
+    setWeeklySummaryError('');
+    api.getWeeklyInvoiceSummary(startDate, endDate)
+      .then((result) => {
+        if (active) setWeeklySummary(result.data);
+      })
+      .catch((error) => {
+        if (active) {
+          setWeeklySummary(null);
+          setWeeklySummaryError(error.message || 'Gagal mengambil total invoice.');
+        }
+      })
+      .finally(() => {
+        if (active) setWeeklySummaryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [invoiceDateRange]);
+
   const handleGenerate = async (e) => {
     e.preventDefault();
     if (!selectedMlId) return;
@@ -105,7 +152,7 @@ export default function InvoicesPage() {
   };
 
   const handleDownloadWeeklyPdf = () => {
-    const { startDate, endDate } = getCalendarWeekRange(weekDate);
+    const { startDate, endDate } = invoiceDateRange;
     window.open(api.getWeeklyInvoicePdfUrl(startDate, endDate), '_blank');
   };
 
@@ -208,35 +255,65 @@ export default function InvoicesPage() {
 
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <h3 className="font-bold text-sm text-slate-800">Unduh Invoice Mingguan</h3>
+            <h3 className="font-bold text-sm text-slate-800">Unduh Invoice Per Rentang Tanggal</h3>
             <p className="text-xs text-slate-500">
-              Semua invoice terbit pada minggu kalender yang dipilih akan digabung menjadi satu PDF.
+              Pilih tanggal awal dan akhir dalam rentang maksimal 7 hari. Semua invoice akan digabung menjadi satu PDF.
             </p>
-            <p className="text-xs font-semibold text-emerald-700">
-              Periode: {(() => {
-                const range = getCalendarWeekRange(weekDate);
-                return `${new Date(`${range.startDate}T00:00:00`).toLocaleDateString('id-ID')} – ${new Date(`${range.endDate}T00:00:00`).toLocaleDateString('id-ID')}`;
-              })()}
-            </p>
+            {weeklySummaryLoading ? (
+              <p className="text-xs text-slate-500">Menghitung total invoice...</p>
+            ) : weeklySummaryError ? (
+              <p role="alert" className="text-xs font-semibold text-rose-700">{weeklySummaryError}</p>
+            ) : weeklySummary ? (
+              <div className="pt-2 text-xs">
+                <p className="text-slate-600">
+                  Periode: {new Date(`${invoiceDateRange.startDate}T00:00:00`).toLocaleDateString('id-ID')} – {new Date(`${invoiceDateRange.endDate}T00:00:00`).toLocaleDateString('id-ID')}
+                </p>
+                <p className="font-semibold text-slate-700">
+                  {weeklySummary.invoice_count} invoice
+                </p>
+                <p className="text-lg font-black text-emerald-700">
+                  Total: Rp {(weeklySummary.total_amount || 0).toLocaleString('id-ID')}
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="space-y-1 text-xs font-semibold text-slate-600">
-              <span>Pilih tanggal dalam minggu</span>
+              <span>Dari tanggal</span>
               <input
                 type="date"
-                value={weekDate}
-                onChange={(event) => setWeekDate(event.target.value)}
+                value={invoiceDateRange.startDate}
+                onChange={(event) => setInvoiceDateRange((range) => ({
+                  ...range,
+                  startDate: event.target.value
+                }))}
+                className="block rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800"
+              />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-slate-600">
+              <span>Sampai tanggal</span>
+              <input
+                type="date"
+                value={invoiceDateRange.endDate}
+                onChange={(event) => setInvoiceDateRange((range) => ({
+                  ...range,
+                  endDate: event.target.value
+                }))}
                 className="block rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800"
               />
             </label>
             <button
               type="button"
               onClick={handleDownloadWeeklyPdf}
-              disabled={!weekDate}
+              disabled={
+                !isValidInvoiceDateRange(invoiceDateRange.startDate, invoiceDateRange.endDate) ||
+                weeklySummaryLoading ||
+                !weeklySummary?.invoice_count
+              }
               className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
             >
               <CalendarDays className="w-4 h-4" />
-              Unduh 1 PDF Mingguan
+              Unduh 1 PDF
             </button>
           </div>
         </div>
