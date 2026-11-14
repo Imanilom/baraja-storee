@@ -3,7 +3,20 @@
 import { Fragment, useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
-import { Receipt, FileDown, Plus, CheckCircle, ShieldCheck, ExternalLink, Pencil, Save, X, RotateCcw } from 'lucide-react';
+import { Receipt, FileDown, Plus, CheckCircle, ShieldCheck, ExternalLink, Pencil, Save, X, RotateCcw, CalendarDays } from 'lucide-react';
+
+const toLocalDateInput = (date) => {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+};
+
+const getCalendarWeekRange = (dateValue) => {
+  const start = new Date(`${dateValue}T00:00:00`);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return { startDate: toLocalDateInput(start), endDate: toLocalDateInput(end) };
+};
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState([]);
@@ -17,6 +30,7 @@ export default function InvoicesPage() {
   const [invoiceEditError, setInvoiceEditError] = useState('');
   const [refreshingInvoiceId, setRefreshingInvoiceId] = useState(null);
   const [regeneratingAll, setRegeneratingAll] = useState(false);
+  const [weekDate, setWeekDate] = useState(() => toLocalDateInput(new Date()));
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -88,6 +102,11 @@ export default function InvoicesPage() {
   const handleDownloadPdf = (id) => {
     const url = api.getInvoicePdfUrl(id);
     window.open(url, '_blank');
+  };
+
+  const handleDownloadWeeklyPdf = () => {
+    const { startDate, endDate } = getCalendarWeekRange(weekDate);
+    window.open(api.getWeeklyInvoicePdfUrl(startDate, endDate), '_blank');
   };
 
   const handleStartInvoiceEdit = (invoice) => {
@@ -185,6 +204,41 @@ export default function InvoicesPage() {
               <span>{generating ? 'Menggenerate...' : 'Generate Invoice Tagihan'}</span>
             </button>
           </form>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1">
+            <h3 className="font-bold text-sm text-slate-800">Unduh Invoice Mingguan</h3>
+            <p className="text-xs text-slate-500">
+              Semua invoice terbit pada minggu kalender yang dipilih akan digabung menjadi satu PDF.
+            </p>
+            <p className="text-xs font-semibold text-emerald-700">
+              Periode: {(() => {
+                const range = getCalendarWeekRange(weekDate);
+                return `${new Date(`${range.startDate}T00:00:00`).toLocaleDateString('id-ID')} – ${new Date(`${range.endDate}T00:00:00`).toLocaleDateString('id-ID')}`;
+              })()}
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="space-y-1 text-xs font-semibold text-slate-600">
+              <span>Pilih tanggal dalam minggu</span>
+              <input
+                type="date"
+                value={weekDate}
+                onChange={(event) => setWeekDate(event.target.value)}
+                className="block rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleDownloadWeeklyPdf}
+              disabled={!weekDate}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+            >
+              <CalendarDays className="w-4 h-4" />
+              Unduh 1 PDF Mingguan
+            </button>
+          </div>
         </div>
 
         {/* Invoice List Table */}

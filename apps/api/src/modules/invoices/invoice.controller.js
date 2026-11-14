@@ -84,6 +84,30 @@ class InvoiceController {
       return sendError(res, 'Failed to generate PDF', error.message, 500);
     }
   }
+
+  async downloadWeeklyPdf(req, res) {
+    try {
+      const { startDate, endDate } = req.query;
+      const invoices = await invoiceService.getInvoicesForWeek(startDate, endDate);
+      if (invoices.length === 0) {
+        return sendError(res, 'No invoices found for the selected week', null, 404);
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="invoice-mingguan-${startDate}-${endDate}.pdf"`
+      );
+      invoicePdfService.generateInvoicesPdf(invoices, res);
+    } catch (error) {
+      return sendError(
+        res,
+        'Failed to generate weekly PDF',
+        error.message,
+        error.statusCode || 500
+      );
+    }
+  }
 }
 
 module.exports = new InvoiceController();

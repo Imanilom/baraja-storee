@@ -7,10 +7,11 @@ const validate = require('../../middleware/validate');
 const { generateInvoiceSchema, updateInvoiceItemsSchema } = require('@purchasing/validation');
 const { ROLES } = require('@purchasing/constants');
 
-// PDF download route allows direct viewing/downloading in browser (window.open or direct URL)
-router.get('/:id/pdf', invoiceController.downloadPdf);
-
 router.use(authenticate);
+
+// PDF download routes support direct viewing/downloading in browser (window.open or direct URL).
+router.get('/weekly-pdf', invoiceController.downloadWeeklyPdf);
+router.get('/:id/pdf', invoiceController.downloadPdf);
 
 // List & view invoices
 router.get('/', invoiceController.list);

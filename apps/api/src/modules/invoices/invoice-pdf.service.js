@@ -1,12 +1,7 @@
 const PDFDocument = require('pdfkit');
 
 class InvoicePdfService {
-  generateInvoicePdf(invoice, res) {
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
-
-    doc.pipe(res);
-
-    // Header
+  renderInvoice(doc, invoice) {
     doc
       .fontSize(20)
       .font('Helvetica-Bold')
@@ -32,32 +27,34 @@ class InvoicePdfService {
       .font('Helvetica')
       .text(supplierNames.join(', ') || 'N/A', 350, 90, { width: 200, height: 55 });
 
-    // Divider
     doc.moveTo(50, 160).lineTo(550, 160).stroke('#cccccc');
 
-    // Table Header
-    let y = 175;
-    doc
-      .fontSize(10)
-      .font('Helvetica-Bold')
-      .text('Item Description', 50, y, { width: 145 })
-      .text('Supplier', 200, y, { width: 90 })
-      .text('Qty', 295, y, { width: 40, align: 'right' })
-      .text('Unit', 340, y, { width: 35, align: 'center' })
-      .text('Unit Price', 380, y, { width: 70, align: 'right' })
-      .text('Subtotal', 460, y, { width: 90, align: 'right' });
+    const drawItemsHeader = (y) => {
+      doc
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .text('Item Description', 50, y, { width: 145 })
+        .text('Supplier', 200, y, { width: 90 })
+        .text('Qty', 295, y, { width: 40, align: 'right' })
+        .text('Unit', 340, y, { width: 35, align: 'center' })
+        .text('Unit Price', 380, y, { width: 70, align: 'right' })
+        .text('Subtotal', 460, y, { width: 90, align: 'right' });
+      doc.moveTo(50, y + 15).lineTo(550, y + 15).stroke('#000000');
+      return y + 25;
+    };
 
-    y += 15;
-    doc.moveTo(50, y).lineTo(550, y).stroke('#000000');
-    y += 10;
-
-    // Items
+    let y = drawItemsHeader(175);
     doc.font('Helvetica');
     const purchasedItems = invoice.items.filter((item) => item.purchased !== false);
     for (const item of purchasedItems) {
       if (y > 700) {
         doc.addPage();
-        y = 50;
+        doc
+          .fontSize(10)
+          .font('Helvetica-Bold')
+          .text(`Invoice ${invoice.invoice_number} (lanjutan)`, 50, 50);
+        y = drawItemsHeader(75);
+        doc.font('Helvetica');
       }
 
       doc
@@ -67,7 +64,6 @@ class InvoicePdfService {
         .text(item.unit || '', 340, y, { width: 35, align: 'center', ellipsis: true })
         .text(`Rp ${item.unit_price.toLocaleString('id-ID')}`, 380, y, { width: 70, align: 'right' })
         .text(`Rp ${item.subtotal.toLocaleString('id-ID')}`, 460, y, { width: 90, align: 'right' });
-
       y += 20;
     }
     if (purchasedItems.length === 0) {
@@ -75,10 +71,18 @@ class InvoicePdfService {
       y += 20;
     }
 
+    const totalRows = 2 + (invoice.discount > 0 ? 1 : 0) + (invoice.tax > 0 ? 1 : 0);
+    if (y + totalRows * 15 + 55 > 770) {
+      doc.addPage();
+      doc
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .text(`Invoice ${invoice.invoice_number} (lanjutan)`, 50, 50);
+      y = 80;
+    }
+
     doc.moveTo(50, y).lineTo(550, y).stroke('#cccccc');
     y += 15;
-
-    // Totals
     doc
       .font('Helvetica')
       .text('Subtotal:', 350, y, { width: 100, align: 'right' })
@@ -110,7 +114,22 @@ class InvoicePdfService {
       .fontSize(9)
       .font('Helvetica-Oblique')
       .text('Catatan: Invoice ini merangkum transaksi aktual yang dialokasikan ke Marketlist dan item manual terkait.', 50, y);
+  }
 
+  generateInvoicePdf(invoice, res) {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    doc.pipe(res);
+    this.renderInvoice(doc, invoice);
+    doc.end();
+  }
+
+  generateInvoicesPdf(invoices, res) {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    doc.pipe(res);
+    invoices.forEach((invoice, index) => {
+      if (index > 0) doc.addPage();
+      this.renderInvoice(doc, invoice);
+    });
     doc.end();
   }
 }

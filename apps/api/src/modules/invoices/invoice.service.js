@@ -128,6 +128,53 @@ class InvoiceService {
     return { items, total, page, limit };
   }
 
+  async getInvoicesForWeek(startDate, endDate) {
+    const parseDate = (value) => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const error = new Error('Tanggal awal dan akhir minggu harus berformat YYYY-MM-DD.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const [year, month, day] = value.split('-').map(Number);
+      const dateNumber = Date.UTC(year, month - 1, day);
+      const parsed = new Date(dateNumber);
+      if (
+        parsed.getUTCFullYear() !== year ||
+        parsed.getUTCMonth() !== month - 1 ||
+        parsed.getUTCDate() !== day
+      ) {
+        const error = new Error('Rentang tanggal minggu tidak valid.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      return { year, month, day, dateNumber };
+    };
+
+    const startParts = parseDate(startDate);
+    const endParts = parseDate(endDate);
+    const daysBetween = (endParts.dateNumber - startParts.dateNumber) / 86400000;
+    if (daysBetween < 0 || daysBetween > 6) {
+      const error = new Error('Rentang invoice harus berada dalam satu minggu (maksimal 7 hari).');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const start = new Date(startParts.year, startParts.month - 1, startParts.day);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endParts.year, endParts.month - 1, endParts.day);
+    end.setHours(23, 59, 59, 999);
+
+    return Invoice.find({
+      invoice_date: { $gte: start, $lte: end },
+      status: { $ne: INVOICE_STATUS.CANCELLED }
+    })
+      .populate('supplier_id', 'name code phone')
+      .populate('marketlist_id', 'marketlist_number required_date status')
+      .sort({ invoice_date: 1, invoice_number: 1 });
+  }
+
   async getInvoiceById(id) {
     return Invoice.findById(id)
       .populate('supplier_id', 'name code contact_person phone email address bank_account')

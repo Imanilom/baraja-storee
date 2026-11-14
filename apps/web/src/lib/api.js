@@ -179,6 +179,12 @@ export const api = {
     const token = getStoredToken();
     return `${API_BASE}/invoices/${id}/pdf${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   },
+  getWeeklyInvoicePdfUrl: (startDate, endDate) => {
+    const token = getStoredToken();
+    const params = new URLSearchParams({ startDate, endDate });
+    if (token) params.set('token', token);
+    return `${API_BASE}/invoices/weekly-pdf?${params.toString()}`;
+  },
 
   // Profit & Loss (Laba Rugi) with OAuth 2
   getProfitLoss: (params = '') => fetchApi(`/finance/profit-loss${params}`),
