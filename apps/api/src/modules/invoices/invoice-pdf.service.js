@@ -123,7 +123,7 @@ class InvoicePdfService {
     doc.end();
   }
 
-  generateInvoicesPdf(invoices, res, dateRange, overheadDebts = []) {
+  generateInvoicesPdf(invoices, res, dateRange, overheadTotal = 0) {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     doc.pipe(res);
 
@@ -131,7 +131,9 @@ class InvoicePdfService {
       const date = value instanceof Date ? value : new Date(`${value}T00:00:00`);
       return Number.isFinite(date.getTime()) ? date.toLocaleDateString('id-ID') : '-';
     };
-    const formatAmount = (value) => `Rp ${(Number(value) || 0).toLocaleString('id-ID')}`;
+    const formatAmount = (value) => `Rp ${(Number(value) || 0).toLocaleString('id-ID', {
+      maximumFractionDigits: 0
+    })}`;
     const marketlists = new Map();
     for (const invoice of invoices) {
       const marketlist = invoice.marketlist_id;
@@ -153,11 +155,8 @@ class InvoicePdfService {
       (total, invoice) => total + (Number(invoice.grand_total) || 0),
       0
     );
-    const overheadTotal = overheadDebts.reduce(
-      (total, overhead) => total + (Number(overhead.amount_remaining) || 0),
-      0
-    );
-    const overallTotal = invoiceTotal + overheadTotal;
+    const totalOverhead = Number(overheadTotal) || 0;
+    const overallTotal = invoiceTotal + totalOverhead;
 
     const drawMarketlistHeader = (y) => {
       doc
@@ -212,7 +211,7 @@ class InvoicePdfService {
       .font('Helvetica-Bold')
       .text(`Total Marketlist / Invoice: ${formatAmount(invoiceTotal)}`, 50, y + 15)
       .font('Helvetica')
-      .text(`Total Overhead: ${formatAmount(overheadTotal)}`, 50, y + 35)
+      .text(`Total Overhead: ${formatAmount(totalOverhead)}`, 50, y + 35)
       .fontSize(14)
       .font('Helvetica-Bold')
       .text(`TOTAL KESELURUHAN: ${formatAmount(overallTotal)}`, 50, y + 58);

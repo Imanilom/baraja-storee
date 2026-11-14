@@ -89,9 +89,9 @@ class InvoiceController {
   async downloadWeeklyPdf(req, res) {
     try {
       const { startDate, endDate } = req.query;
-      const [invoices, overheadDebts] = await Promise.all([
+      const [invoices, overheadSummary] = await Promise.all([
         invoiceService.getInvoicesForWeek(startDate, endDate),
-        overheadService.getOverheadDebtsForReport(startDate, endDate)
+        overheadService.getOverheadSummary({ startDate, endDate })
       ]);
       if (invoices.length === 0) {
         return sendError(res, 'No invoices found for the selected week', null, 404);
@@ -106,7 +106,7 @@ class InvoiceController {
         invoices,
         res,
         { startDate, endDate },
-        overheadDebts
+        overheadSummary.total_expense
       );
     } catch (error) {
       return sendError(
