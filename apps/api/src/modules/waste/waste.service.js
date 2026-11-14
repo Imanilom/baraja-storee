@@ -46,6 +46,13 @@ class WasteService {
     if (!validStages.includes(stage)) {
       throw new Error('Tahap waste tidak valid.');
     }
+    const isStockWaste = Boolean(data.stage && stage !== 'received');
+    if (stage === 'received' && !data.marketlist_id) {
+      throw new Error('Marketlist wajib dipilih untuk waste saat penerimaan.');
+    }
+    if (isStockWaste && (data.marketlist_id || data.marketlist_item_id)) {
+      throw new Error('Waste setelah penerimaan dicatat dari stok, tanpa Marketlist.');
+    }
     const notes = typeof data.notes === 'string' ? data.notes.trim() : '';
     if (notes.length > 1000) {
       throw new Error('Catatan waste maksimal 1000 karakter.');
@@ -106,7 +113,21 @@ class WasteService {
       throw new Error('Produk belum memiliki harga pembelian. Catat transaksi pembelian terlebih dahulu.');
     }
 
-    return Waste.create({
+    if (isStockWaste) {
+      const updatedProduct = await Product.findOneAndUpdate(
+        { _id: product._id, current_stock: { $gte: quantity } },
+        { $inc: { current_stock: -quantity } },
+        { new: true }
+      );
+      if (!updatedProduct) {
+        throw new Error(
+          `Stok tidak cukup. Stok tersedia: ${Number(product.current_stock) || 0}.`
+        );
+      }
+    }
+
+    try {
+      return await Waste.create({
       product_id: product._id,
       marketlist_id: data.marketlist_id || null,
       marketlist_item_id: marketlistItem?._id || null,
@@ -120,7 +141,16 @@ class WasteService {
       notes,
       wasted_at: wastedAt,
       recorded_by: user._id
-    });
+      });
+    } catch (error) {
+      if (isStockWaste) {
+        await Product.updateOne(
+          { _id: product._id },
+          { $inc: { current_stock: quantity } }
+        );
+      }
+      throw error;
+    }
   }
 }
 

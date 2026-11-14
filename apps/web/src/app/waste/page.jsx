@@ -19,6 +19,7 @@ export default function WastePage() {
   const [marketlists, setMarketlists] = useState([]);
   const [latestPrices, setLatestPrices] = useState([]);
   const [marketlistPurchases, setMarketlistPurchases] = useState([]);
+  const [stage, setStage] = useState('received');
   const [marketlistId, setMarketlistId] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [productId, setProductId] = useState('');
@@ -53,6 +54,7 @@ export default function WastePage() {
   useEffect(() => { load(); }, [load]);
 
   const selectedMarketlist = marketlists.find((marketlist) => marketlist._id === marketlistId);
+  const isReceivingStage = stage === 'received';
   const marketlistProducts = (selectedMarketlist?.items || [])
     .filter((item) => item.item_status !== 'rejected')
     .map((item) => {
@@ -71,12 +73,11 @@ export default function WastePage() {
     })
   );
   const visibleMarketlists = normalizedProductSearch ? matchingMarketlists : marketlists;
-  const visibleProducts = marketlistProducts.filter((product) =>
+  const availableProducts = isReceivingStage ? marketlistProducts : products;
+  const visibleProducts = availableProducts.filter((product) =>
     !normalizedProductSearch || product.name.toLocaleLowerCase('id-ID').includes(normalizedProductSearch)
   );
-  const selectedProduct = marketlistProducts.find((product) =>
-    product._id === productId || product.marketlistItemId === productId
-  );
+  const selectedProduct = availableProducts.find((product) => product._id === productId);
   const productDocumentId = selectedProduct?._id;
   const marketlistPurchasePrice = marketlistPurchases
     .flatMap((purchase) => purchase.items || [])
@@ -90,8 +91,12 @@ export default function WastePage() {
 
   const saveWaste = async (event) => {
     event.preventDefault();
-    if (!marketlistId || !productDocumentId || !(Number(quantity) > 0) || !reason.trim() || !date) {
-      setError('Marketlist, produk, jumlah, tanggal, dan alasan waste wajib diisi.');
+    if ((isReceivingStage && !marketlistId) || !productDocumentId || !(Number(quantity) > 0) || !reason.trim() || !date) {
+      setError(`${isReceivingStage ? 'Marketlist, ' : ''}produk, jumlah, tanggal, dan alasan waste wajib diisi.`);
+      return;
+    }
+    if (!isReceivingStage && Number(quantity) > (Number(selectedProduct?.current_stock) || 0)) {
+      setError(`Jumlah melebihi stok tersedia (${Number(selectedProduct?.current_stock) || 0}).`);
       return;
     }
     if (unitPrice <= 0) {
@@ -103,8 +108,9 @@ export default function WastePage() {
     try {
       await api.createWasteRecord({
         product_id: productDocumentId,
-        marketlist_id: marketlistId,
+        ...(isReceivingStage ? { marketlist_id: marketlistId } : {}),
         quantity: Number(quantity),
+        stage,
         reason: reason.trim(),
         wasted_at: new Date(`${date}T12:00:00`).toISOString()
       });
@@ -150,12 +156,31 @@ export default function WastePage() {
                     setProductSearch(event.target.value);
                     setProductId('');
                   }}
-                  placeholder="Ketik nama produk untuk mencari Marketlist..."
+                  placeholder={isReceivingStage ? 'Cari produk dalam Marketlist...' : 'Cari produk di stok...'}
                   className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
                 />
               </div>
             </label>
-            <label className="block text-xs font-semibold text-slate-600">Pilih Marketlist
+            <label className="block text-xs font-semibold text-slate-600">Tahap pencatatan
+              <select
+                value={stage}
+                onChange={(event) => {
+                  setStage(event.target.value);
+                  setMarketlistId('');
+                  setProductId('');
+                  setMarketlistPurchases([]);
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="received">Saat diterima</option>
+                <option value="processing">Saat diolah</option>
+                <option value="finished_product">Produk jadi</option>
+                <option value="spoiled">Busuk / rusak</option>
+                <option value="other">Lainnya</option>
+              </select>
+            </label>
+            {isReceivingStage ? <>
+            <label className="block text-xs font-semibold text-slate-600">Pilih Marketlist / PO
               <select
                 required
                 value={marketlistId}
@@ -240,6 +265,11 @@ export default function WastePage() {
                 </div>
               </section>
             )}
+            </> : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                Tahap ini mengambil jumlah langsung dari stok produk. Marketlist tidak perlu dipilih.
+              </div>
+            )}
             {normalizedProductSearch && (
               <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 p-2 text-[10px] text-blue-800">
                 <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -250,22 +280,28 @@ export default function WastePage() {
                 </span>
               </div>
             )}
-            {marketlistId && (
-              <label className="block text-xs font-semibold text-slate-600">Produk pada Marketlist
+            {(isReceivingStage ? marketlistId : true) && (
+              <label className="block text-xs font-semibold text-slate-600">
+                {isReceivingStage ? 'Produk pada Marketlist' : 'Produk dari stok'}
                 <select
                   required
                   value={productId}
                   onChange={(event) => setProductId(event.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="">-- Pilih produk --</option>
+                  <option value="">{isReceivingStage ? '-- Pilih produk --' : '-- Pilih produk dari stok --'}</option>
                   {visibleProducts.map((product) => (
-                    <option key={product.marketlistItemId} value={product._id}>
-                      {product.name} ({product.unit_id?.abbreviation || product.unit_id?.name || 'unit'})
+                    <option key={product.marketlistItemId || product._id} value={product._id}>
+                      {product.name} ({product.unit_id?.abbreviation || product.unit_id?.name || 'unit'}){!isReceivingStage ? ` · Stok ${Number(product.current_stock) || 0}` : ''}
                     </option>
                   ))}
                 </select>
               </label>
+            )}
+            {!isReceivingStage && selectedProduct && (
+              <p className="text-xs font-semibold text-slate-600">
+                Stok tersedia: {Number(selectedProduct.current_stock) || 0} {selectedProduct.unit_id?.abbreviation || selectedProduct.unit_id?.name || 'unit'}
+              </p>
             )}
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-xs font-semibold text-slate-600">Jumlah waste

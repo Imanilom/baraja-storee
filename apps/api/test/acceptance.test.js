@@ -1053,10 +1053,29 @@ async function runTests() {
     product_id: productAyam._id,
     marketlist_id: wasteMarketlist._id,
     quantity: 0.5,
-    stage: 'processing',
-    reason: 'Waste dari Marketlist terpilih',
+    stage: 'received',
+    reason: 'Waste saat penerimaan dari Marketlist',
     notes: 'Bahan rusak saat proses persiapan.'
   }, receiverUser);
+  await Product.updateOne({ _id: productAyam._id }, { current_stock: 2 });
+  const stockWasteRecord = await wasteService.createWaste({
+    product_id: productAyam._id,
+    quantity: 0.75,
+    stage: 'processing',
+    reason: 'Susut saat diolah'
+  }, receiverUser);
+  let insufficientStockRejected = false;
+  try {
+    await wasteService.createWaste({
+      product_id: productAyam._id,
+      quantity: 2,
+      stage: 'spoiled',
+      reason: 'Busuk'
+    }, receiverUser);
+  } catch (error) {
+    insufficientStockRejected = error.message.includes('Stok tidak cukup');
+  }
+  const productStockAfterWaste = await Product.findById(productAyam._id).select('current_stock');
   const searchedProducts = await productService.getAllProducts({ search: 'Ayam' });
   assert(
     actualPriceHistory[0].source === 'purchase' &&
@@ -1066,11 +1085,14 @@ async function runTests() {
       wasteRecord.total_cost === 78000 &&
       linkedWasteRecord.marketlist_id.toString() === wasteMarketlist._id.toString() &&
       linkedWasteRecord.marketlist_item_id.toString() === wasteMarketlist.items[0]._id.toString() &&
-      linkedWasteRecord.stage === 'processing' &&
+      linkedWasteRecord.stage === 'received' &&
       linkedWasteRecord.notes === 'Bahan rusak saat proses persiapan.' &&
+      stockWasteRecord.marketlist_id === null &&
+      productStockAfterWaste.current_stock === 1.25 &&
+      insufficientStockRejected &&
       searchedProducts.length === 1 &&
       searchedProducts[0]._id.toString() === productAyam._id.toString() &&
-      (await Waste.countDocuments({ product_id: productAyam._id })) === 2 &&
+      (await Waste.countDocuments({ product_id: productAyam._id })) === 3 &&
       (await ProductPrice.countDocuments({ product_id: productAyam._id, source: 'purchase' })) > 0,
     'Harga transaksi pembelian masuk ke tren harga dan menjadi dasar nilai waste.'
   );

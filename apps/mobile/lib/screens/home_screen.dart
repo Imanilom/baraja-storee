@@ -143,427 +143,446 @@ class _HomeScreenState extends State<HomeScreen> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // CTA Banner: Buat Marketlist Baru
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFD97706), Color(0xFFB45309)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFD97706).withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 960),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // CTA Banner: Buat Marketlist Baru
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFD97706), Color(0xFFB45309)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFD97706).withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.edit_note, color: Colors.white, size: 28),
-                        SizedBox(width: 8),
-                        Text(
-                          'Buat Marketlist Baru',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.edit_note,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Buat Marketlist Baru',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Rencanakan kebutuhan belanja bahan baku outlet langsung dari HP Anda.',
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                        const SizedBox(height: 14),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final created = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (ctx) =>
+                                    const CreateMarketlistScreen(),
+                              ),
+                            );
+                            if (created == true) {
+                              _loadDashboardData();
+                            }
+                          },
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text(
+                            '+ Tambah Marketlist',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFFD97706),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Rencanakan kebutuhan belanja bahan baku outlet langsung dari HP Anda.',
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                    const SizedBox(height: 14),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final created = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (ctx) => const CreateMarketlistScreen(),
-                          ),
-                        );
-                        if (created == true) {
-                          _loadDashboardData();
-                        }
-                      },
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text(
-                        '+ Tambah Marketlist',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFD97706),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildHomeMenuCard(
-                      context,
-                      title: 'Harga Terbaru',
-                      subtitle: 'Tren harga produk',
-                      icon: Icons.trending_up,
-                      color: const Color(0xFF2563EB),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PriceHistoryScreen(),
-                        ),
-                      ),
-                    ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildHomeMenuCard(
-                      context,
-                      title: 'Waste',
-                      subtitle: 'Catat waste & nilainya',
-                      icon: Icons.delete_outline,
-                      color: const Color(0xFFDC2626),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const WasteScreen()),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // Operational Stats
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      'Surat Jalan Aktif',
-                      '${_approvedMarketlists.length}',
-                      'Siap Diterima',
-                      Icons.local_shipping,
-                      const Color(0xFF0284C7),
-                      const Color(0xFFE0F2FE),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      'Total Marketlist',
-                      '$_totalMarketlists',
-                      'Semua Siklus',
-                      Icons.format_list_bulleted,
-                      const Color(0xFF16A34A),
-                      const Color(0xFFDCFCE7),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Rekap Agregat Barang Banner
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (ctx) => const MarketlistAggregateScreen(),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.analytics_outlined,
-                          color: Color(0xFFD97706),
-                          size: 24,
+                      Expanded(
+                        child: _buildHomeMenuCard(
+                          context,
+                          title: 'Harga Terbaru',
+                          subtitle: 'Tren harga produk',
+                          icon: Icons.trending_up,
+                          color: const Color(0xFF2563EB),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PriceHistoryScreen(),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Rekap Agregat Kebutuhan Barang',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: Color(0xFF0F172A),
-                              ),
+                      Expanded(
+                        child: _buildHomeMenuCard(
+                          context,
+                          title: 'Waste',
+                          subtitle: 'Catat waste & nilainya',
+                          icon: Icons.delete_outline,
+                          color: const Color(0xFFDC2626),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const WasteScreen(),
                             ),
-                            SizedBox(height: 2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Operational Stats
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          'Surat Jalan Aktif',
+                          '${_approvedMarketlists.length}',
+                          'Siap Diterima',
+                          Icons.local_shipping,
+                          const Color(0xFF0284C7),
+                          const Color(0xFFE0F2FE),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildStatCard(
+                          'Total Marketlist',
+                          '$_totalMarketlists',
+                          'Semua Siklus',
+                          Icons.format_list_bulleted,
+                          const Color(0xFF16A34A),
+                          const Color(0xFFDCFCE7),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Rekap Agregat Barang Banner
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (ctx) => const MarketlistAggregateScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.analytics_outlined,
+                              color: Color(0xFFD97706),
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Rekap Agregat Kebutuhan Barang',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Lihat total belanja per hari & per minggu (Perishable & Groceries)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Section: Surat Jalan Digital yang Harus Diperiksa
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Surat Jalan Digital (Approved)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: widget.onNavigateToMarketlist,
+                        child: const Text('Lihat Semua'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (_isLoading)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_approvedMarketlists.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Center(
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.check_circle_outline,
+                              size: 40,
+                              color: Colors.green,
+                            ),
+                            SizedBox(height: 8),
                             Text(
-                              'Lihat total belanja per hari & per minggu (Perishable & Groceries)',
+                              'Tidak ada Surat Jalan yang menunggu penerimaan.',
                               style: TextStyle(
-                                fontSize: 12,
                                 color: Color(0xFF64748B),
+                                fontSize: 13,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _approvedMarketlists.length,
+                      itemBuilder: (ctx, idx) {
+                        final ml = _approvedMarketlists[idx];
+                        final dateStr = ml['date'] != null
+                            ? ml['date'].toString().split('T')[0]
+                            : '-';
+                        final itemsCount =
+                            ml['totals'] != null &&
+                                ml['totals']['total_items'] != null
+                            ? ml['totals']['total_items']
+                            : (ml['items'] is List
+                                  ? (ml['items'] as List).length
+                                  : 0);
+                        final totalVal =
+                            ml['totals'] != null &&
+                                ml['totals']['estimated_amount'] != null
+                            ? ml['totals']['estimated_amount']
+                            : (ml['estimated_total'] ?? 0);
+                        final totalEst = currencyFormat.format(totalVal);
+                        final code =
+                            ml['marketlist_number'] ??
+                            ml['code'] ??
+                            'ML-UNTITLED';
 
-              // Section: Surat Jalan Digital yang Harus Diperiksa
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Surat Jalan Digital (Approved)',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: widget.onNavigateToMarketlist,
-                    child: const Text('Lihat Semua'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              if (_isLoading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
-                )
-              else if (_approvedMarketlists.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 40,
-                          color: Colors.green,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Tidak ada Surat Jalan yang menunggu penerimaan.',
-                          style: TextStyle(
-                            color: Color(0xFF64748B),
-                            fontSize: 13,
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Color(0xFFE2E8F0)),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _approvedMarketlists.length,
-                  itemBuilder: (ctx, idx) {
-                    final ml = _approvedMarketlists[idx];
-                    final dateStr = ml['date'] != null
-                        ? ml['date'].toString().split('T')[0]
-                        : '-';
-                    final itemsCount =
-                        ml['totals'] != null &&
-                            ml['totals']['total_items'] != null
-                        ? ml['totals']['total_items']
-                        : (ml['items'] is List
-                              ? (ml['items'] as List).length
-                              : 0);
-                    final totalVal =
-                        ml['totals'] != null &&
-                            ml['totals']['estimated_amount'] != null
-                        ? ml['totals']['estimated_amount']
-                        : (ml['estimated_total'] ?? 0);
-                    final totalEst = currencyFormat.format(totalVal);
-                    final code =
-                        ml['marketlist_number'] ?? ml['code'] ?? 'ML-UNTITLED';
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      elevation: 0,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () async {
-                          final res = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (ctx) =>
-                                  DigitalSuratJalanScreen(marketlist: ml),
-                            ),
-                          );
-                          if (res == true) {
-                            _loadDashboardData();
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                          elevation: 0,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () async {
+                              final res = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (ctx) =>
+                                      DigitalSuratJalanScreen(marketlist: ml),
+                                ),
+                              );
+                              if (res == true) {
+                                _loadDashboardData();
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Icon(
-                                        Icons.description,
-                                        size: 18,
-                                        color: Color(0xFF0284C7),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.description,
+                                            size: 18,
+                                            color: Color(0xFF0284C7),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            code,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFDCFCE7),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'APPROVED',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF16A34A),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Divider(height: 18),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
                                       Text(
-                                        code,
+                                        'Tanggal: $dateStr',
                                         style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: Color(0xFF0F172A),
+                                          fontSize: 12,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ),
+                                      Text(
+                                        '$itemsCount Barang',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF334155),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFDCFCE7),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Text(
-                                      'APPROVED',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF16A34A),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Divider(height: 18),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Tanggal: $dateStr',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF64748B),
-                                    ),
-                                  ),
-                                  Text(
-                                    '$itemsCount Barang',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF334155),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Total: $totalEst',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFFD97706),
-                                    ),
-                                  ),
-                                  const Row(
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        'Periksa Barang',
-                                        style: TextStyle(
+                                        'Total: $totalEst',
+                                        style: const TextStyle(
                                           fontSize: 12,
-                                          color: Color(0xFF0284C7),
                                           fontWeight: FontWeight.bold,
+                                          color: Color(0xFFD97706),
                                         ),
                                       ),
-                                      Icon(
-                                        Icons.arrow_forward_ios,
-                                        size: 12,
-                                        color: Color(0xFF0284C7),
+                                      const Row(
+                                        children: [
+                                          Text(
+                                            'Periksa Barang',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF0284C7),
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                            size: 12,
+                                            color: Color(0xFF0284C7),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-            ],
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
