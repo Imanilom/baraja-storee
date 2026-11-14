@@ -43,8 +43,12 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
   Future<void> _loadMasterData() async {
     setState(() => _isLoadingMaster = true);
     try {
-      final pRes = await ApiService.get('/products?limit=500').catchError((_) => {'data': []});
-      final cRes = await ApiService.get('/products/categories').catchError((_) => {'data': []});
+      final pRes = await ApiService.get(
+        '/products?limit=500',
+      ).catchError((_) => {'data': []});
+      final cRes = await ApiService.get(
+        '/products/categories',
+      ).catchError((_) => {'data': []});
 
       final products = (pRes['data'] is List) ? (pRes['data'] as List) : [];
 
@@ -69,10 +73,9 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
         }
       }
 
-      final categoryList = catMap.entries
-          .map((e) => {'id': e.key, 'name': e.value})
-          .toList()
-        ..sort((a, b) => a['name']!.compareTo(b['name']!));
+      final categoryList =
+          catMap.entries.map((e) => {'id': e.key, 'name': e.value}).toList()
+            ..sort((a, b) => a['name']!.compareTo(b['name']!));
 
       if (mounted) {
         setState(() {
@@ -80,8 +83,8 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
           _categories = categoryList;
         });
       }
-    } catch (_) {}
-    finally {
+    } catch (_) {
+    } finally {
       if (mounted) setState(() => _isLoadingMaster = false);
     }
   }
@@ -113,7 +116,8 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
     }
 
     // Price strictly follows last transaction purchase price
-    if (p['last_purchase_price'] != null && (p['last_purchase_price'] as num) > 0) {
+    if (p['last_purchase_price'] != null &&
+        (p['last_purchase_price'] as num) > 0) {
       item.price = (p['last_purchase_price'] as num).toDouble();
     } else {
       item.price = 0.0;
@@ -132,7 +136,11 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
 
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final filtered = _products.filterCategory(selectedCategory, searchQuery, itemType: selectedItemType);
+            final filtered = _products.filterCategory(
+              selectedCategory,
+              searchQuery,
+              itemType: selectedItemType,
+            );
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
@@ -157,13 +165,20 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
 
                   // Header
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.category_outlined, color: Color(0xFFD97706), size: 20),
+                            const Icon(
+                              Icons.category_outlined,
+                              color: Color(0xFF059669),
+                              size: 20,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               targetIndex != null
@@ -187,21 +202,31 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
 
                   // Search input
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
                     child: TextField(
                       decoration: InputDecoration(
                         hintText: 'Cari nama barang...',
                         prefixIcon: const Icon(Icons.search, size: 20),
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                          horizontal: 12,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                          ),
                         ),
                       ),
                       onChanged: (val) {
@@ -221,7 +246,9 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                           selected: selectedItemType == 'ALL',
                           selectedColor: const Color(0xFF1E293B),
                           labelStyle: TextStyle(
-                            color: selectedItemType == 'ALL' ? Colors.white : const Color(0xFF475569),
+                            color: selectedItemType == 'ALL'
+                                ? Colors.white
+                                : const Color(0xFF475569),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -234,11 +261,15 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                         ),
                         const SizedBox(width: 6),
                         ChoiceChip(
-                          label: Text('Perishable (${_products.where((p) => p['item_type'] == 'perishable').length})'),
+                          label: Text(
+                            'Perishable (${_products.where((p) => p['item_type'] == 'perishable').length})',
+                          ),
                           selected: selectedItemType == 'perishable',
                           selectedColor: const Color(0xFFE11D48),
                           labelStyle: TextStyle(
-                            color: selectedItemType == 'perishable' ? Colors.white : const Color(0xFFBE123C),
+                            color: selectedItemType == 'perishable'
+                                ? Colors.white
+                                : const Color(0xFFBE123C),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -251,11 +282,15 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                         ),
                         const SizedBox(width: 6),
                         ChoiceChip(
-                          label: Text('Groceries (${_products.where((p) => p['item_type'] == 'groceries').length})'),
+                          label: Text(
+                            'Groceries (${_products.where((p) => p['item_type'] == 'groceries').length})',
+                          ),
                           selected: selectedItemType == 'groceries',
                           selectedColor: const Color(0xFF059669),
                           labelStyle: TextStyle(
-                            color: selectedItemType == 'groceries' ? Colors.white : const Color(0xFF047857),
+                            color: selectedItemType == 'groceries'
+                                ? Colors.white
+                                : const Color(0xFF047857),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -281,13 +316,15 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: ChoiceChip(
-                            label: Text('Semua Kategori (${
-                              _products.where((p) => selectedItemType == 'ALL' || p['item_type'] == selectedItemType).length
-                            })'),
+                            label: Text(
+                              'Semua Kategori (${_products.where((p) => selectedItemType == 'ALL' || p['item_type'] == selectedItemType).length})',
+                            ),
                             selected: selectedCategory == 'ALL',
-                            selectedColor: const Color(0xFFD97706),
+                            selectedColor: const Color(0xFF059669),
                             labelStyle: TextStyle(
-                              color: selectedCategory == 'ALL' ? Colors.white : const Color(0xFF475569),
+                              color: selectedCategory == 'ALL'
+                                  ? Colors.white
+                                  : const Color(0xFF475569),
                               fontWeight: FontWeight.bold,
                               fontSize: 11,
                             ),
@@ -298,16 +335,20 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                         ),
                         ..._categories.map((cat) {
                           final count = _products.where((p) {
-                            final matchType = selectedItemType == 'ALL' || p['item_type'] == selectedItemType;
+                            final matchType =
+                                selectedItemType == 'ALL' ||
+                                p['item_type'] == selectedItemType;
                             bool matchCat = false;
                             if (p['category_id'] is Map) {
-                              matchCat = p['category_id']['_id'] == cat['id'] ||
+                              matchCat =
+                                  p['category_id']['_id'] == cat['id'] ||
                                   p['category_id']['name'] == cat['name'];
                             }
                             return matchType && matchCat;
                           }).length;
 
-                          if (count == 0 && selectedItemType != 'ALL') return const SizedBox.shrink();
+                          if (count == 0 && selectedItemType != 'ALL')
+                            return const SizedBox.shrink();
 
                           final isSelected = selectedCategory == cat['id'];
                           return Padding(
@@ -315,14 +356,18 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                             child: ChoiceChip(
                               label: Text('${cat['name']} ($count)'),
                               selected: isSelected,
-                              selectedColor: const Color(0xFFD97706),
+                              selectedColor: const Color(0xFF059669),
                               labelStyle: TextStyle(
-                                color: isSelected ? Colors.white : const Color(0xFF475569),
+                                color: isSelected
+                                    ? Colors.white
+                                    : const Color(0xFF475569),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
                               ),
                               onSelected: (_) {
-                                setSheetState(() => selectedCategory = cat['id']!);
+                                setSheetState(
+                                  () => selectedCategory = cat['id']!,
+                                );
                               },
                             ),
                           );
@@ -339,12 +384,16 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                         ? const Center(
                             child: Text(
                               'Tidak ada barang ditemukan di kategori ini.',
-                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
                             ),
                           )
                         : ListView.separated(
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, i) {
                               final p = filtered[i];
                               final pName = p['name'] ?? 'Barang';
@@ -361,10 +410,10 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                               return ListTile(
                                 dense: true,
                                 leading: CircleAvatar(
-                                  backgroundColor: const Color(0xFFFEF3C7),
+                                  backgroundColor: const Color(0xFFD1FAE5),
                                   child: const Icon(
                                     Icons.inventory_2_outlined,
-                                    color: Color(0xFFD97706),
+                                    color: Color(0xFF059669),
                                     size: 18,
                                   ),
                                 ),
@@ -382,18 +431,27 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                     Row(
                                       children: [
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 1,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: p['item_type'] == 'perishable'
+                                            color:
+                                                p['item_type'] == 'perishable'
                                                 ? const Color(0xFFFFE4E6)
                                                 : const Color(0xFFDCFCE7),
-                                            borderRadius: BorderRadius.circular(4),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
                                           ),
                                           child: Text(
-                                            p['item_type'] == 'perishable' ? 'Perishable' : 'Groceries',
+                                            p['item_type'] == 'perishable'
+                                                ? 'Perishable'
+                                                : 'Groceries',
                                             style: TextStyle(
                                               fontSize: 9,
-                                              color: p['item_type'] == 'perishable'
+                                              color:
+                                                  p['item_type'] == 'perishable'
                                                   ? const Color(0xFFBE123C)
                                                   : const Color(0xFF15803D),
                                               fontWeight: FontWeight.bold,
@@ -402,10 +460,15 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                         ),
                                         const SizedBox(width: 5),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 1,
+                                          ),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFF1F5F9),
-                                            borderRadius: BorderRadius.circular(4),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
                                           ),
                                           child: Text(
                                             catName,
@@ -419,7 +482,10 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                         const SizedBox(width: 6),
                                         Text(
                                           'Satuan: $uName',
-                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -427,7 +493,11 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                       padding: const EdgeInsets.only(top: 2),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.lock_outline, size: 11, color: Color(0xFFB45309)),
+                                          const Icon(
+                                            Icons.lock_outline,
+                                            size: 11,
+                                            color: Color(0xFF047857),
+                                          ),
                                           const SizedBox(width: 3),
                                           Text(
                                             price > 0
@@ -436,7 +506,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                             style: const TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
-                                              color: Color(0xFFB45309),
+                                              color: Color(0xFF047857),
                                             ),
                                           ),
                                         ],
@@ -446,17 +516,24 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                 ),
                                 trailing: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFD97706),
+                                    backgroundColor: const Color(0xFF059669),
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
                                     visualDensity: VisualDensity.compact,
                                   ),
                                   onPressed: () {
                                     setState(() {
                                       if (targetIndex != null) {
-                                        _applyProductToItem(_items[targetIndex], p);
+                                        _applyProductToItem(
+                                          _items[targetIndex],
+                                          p,
+                                        );
                                       } else {
-                                        if (_items.length == 1 && _items[0].productId == null) {
+                                        if (_items.length == 1 &&
+                                            _items[0].productId == null) {
                                           _applyProductToItem(_items[0], p);
                                         } else {
                                           final newItem = _MarketlistFormItem();
@@ -466,14 +543,19 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                                       }
                                     });
                                     Navigator.pop(context);
-                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                    ScaffoldMessenger.of(
+                                      this.context,
+                                    ).showSnackBar(
                                       SnackBar(
                                         duration: const Duration(seconds: 1),
                                         content: Text('✅ $pName ditambahkan'),
                                       ),
                                     );
                                   },
-                                  child: const Text('Pilih', style: TextStyle(fontSize: 11)),
+                                  child: const Text(
+                                    'Pilih',
+                                    style: TextStyle(fontSize: 11),
+                                  ),
                                 ),
                               );
                             },
@@ -492,7 +574,11 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
     for (int i = 0; i < _items.length; i++) {
       if (_items[i].productId == null || _items[i].qty <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Pilih nama barang dan kuantitas > 0 pada baris ke-${i + 1}')),
+          SnackBar(
+            content: Text(
+              'Pilih nama barang dan kuantitas > 0 pada baris ke-${i + 1}',
+            ),
+          ),
         );
         return;
       }
@@ -504,12 +590,16 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
         'date': DateFormat('yyyy-MM-dd').format(_date),
         'required_date': DateFormat('yyyy-MM-dd').format(_requiredDate),
         'location_id': '663673f8e538ef94b0000001',
-        'items': _items.map((it) => {
-          'product_id': it.productId,
-          'requested_qty': it.qty,
-          'unit_price': it.price,
-          'notes': it.notes,
-        }).toList(),
+        'items': _items
+            .map(
+              (it) => {
+                'product_id': it.productId,
+                'requested_qty': it.qty,
+                'unit_price': it.price,
+                'notes': it.notes,
+              },
+            )
+            .toList(),
         'notes': _notesController.text.trim(),
       };
 
@@ -538,7 +628,9 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
-            content: Text('Gagal membuat Marketlist: ${e.toString().replaceAll('Exception:', '')}'),
+            content: Text(
+              'Gagal membuat Marketlist: ${e.toString().replaceAll('Exception:', '')}',
+            ),
           ),
         );
       }
@@ -597,7 +689,7 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFFD97706),
+                      color: Color(0xFF059669),
                     ),
                   ),
                 ],
@@ -607,7 +699,9 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _isSubmitting ? null : () => _handleSubmit(false),
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => _handleSubmit(false),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         side: const BorderSide(color: Color(0xFF94A3B8)),
@@ -618,9 +712,11 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : () => _handleSubmit(true),
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => _handleSubmit(true),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD97706),
+                        backgroundColor: const Color(0xFF059669),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 13),
                       ),
@@ -649,408 +745,473 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Form header: Tanggal & Dibutuhkan
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Informasi Pengajuan',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Form header: Tanggal & Dibutuhkan
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        const SizedBox(height: 12),
-                        Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: _buildDatePicker(
-                                'Tanggal Dibuat',
-                                _date,
-                                (picked) => setState(() => _date = picked),
+                            const Text(
+                              'Informasi Pengajuan',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E293B),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildDatePicker(
-                                'Tanggal Dibutuhkan',
-                                _requiredDate,
-                                (picked) => setState(() => _requiredDate = picked),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildDatePicker(
+                                    'Tanggal Dibuat',
+                                    _date,
+                                    (picked) => setState(() => _date = picked),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildDatePicker(
+                                    'Tanggal Dibutuhkan',
+                                    _requiredDate,
+                                    (picked) =>
+                                        setState(() => _requiredDate = picked),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _notesController,
+                              decoration: const InputDecoration(
+                                labelText: 'Catatan Pengajuan (Opsional)',
+                                border: OutlineInputBorder(),
+                                isDense: true,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _notesController,
-                          decoration: const InputDecoration(
-                            labelText: 'Catatan Pengajuan (Opsional)',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Info Supplier & Harga Terkunci Notice
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 18),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Supplier akan ditentukan oleh Tim Purchasing saat transaksi belanja. Harga satuan otomatis terkunci mengikuti transaksi terakhir.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF1E40AF),
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Quick Category Catalog Banner
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFEF3C7), Color(0xFFFDE68A)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFCD34D)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD97706),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.category, color: Colors.white, size: 20),
+                      const SizedBox(height: 12),
+
+                      // Info Supplier & Harga Terkunci Notice
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text(
-                                'Pilih Barang per Kategori',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Color(0xFF78350F),
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Kelompokkan barang per kategori agar cepat ditemukan.',
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Icon(
+                              Icons.info_outline,
+                              color: Color(0xFF2563EB),
+                              size: 18,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Supplier akan ditentukan oleh Tim Purchasing saat transaksi belanja. Harga satuan otomatis terkunci mengikuti transaksi terakhir.',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: Color(0xFF92400E),
+                                  color: Color(0xFF1E40AF),
+                                  height: 1.3,
                                 ),
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Quick Category Catalog Banner
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFD1FAE5), Color(0xFF6EE7B7)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
                         ),
-                        ElevatedButton.icon(
-                          onPressed: () => _openProductCategoryPicker(),
-                          icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Katalog'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFD97706),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Section Title & Add Item Button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Daftar Barang Belanja (${_items.length})',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _addItem,
-                        icon: const Icon(Icons.add_circle_outline, size: 18),
-                        label: const Text('+ Baris Baru'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Item Cards
-                  ..._items.asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    final it = entry.value;
-
-                    // Filter products for this item if categoryId is set
-                    final availableProds = (it.categoryId == null || it.categoryId!.isEmpty)
-                        ? _products
-                        : _products.where((p) {
-                            if (p['category_id'] is Map) {
-                              return p['category_id']['_id'] == it.categoryId;
-                            }
-                            return false;
-                          }).toList();
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF059669),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.category,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
                                   Text(
-                                    'Barang #${idx + 1}',
-                                    style: const TextStyle(
+                                    'Pilih Barang per Kategori',
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF475569),
-                                    ),
-                                  ),
-                                  if (it.categoryName != null) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFEF3C7),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        it.categoryName!,
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFB45309),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.search, color: Color(0xFFD97706), size: 20),
-                                    tooltip: 'Cari dari Katalog Kategori',
-                                    onPressed: () => _openProductCategoryPicker(targetIndex: idx),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                  if (_items.length > 1) ...[
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                      onPressed: () => _removeItem(idx),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-
-                          // Dropdown Filter Kategori Baris Ini
-                          DropdownButtonFormField<String>(
-                            value: it.categoryId,
-                            isExpanded: true,
-                            hint: const Text('Semua Kategori (Filter)'),
-                            decoration: const InputDecoration(
-                              labelText: 'Filter Kategori',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                              prefixIcon: Icon(Icons.filter_list, size: 18),
-                            ),
-                            items: [
-                              const DropdownMenuItem<String>(
-                                value: null,
-                                child: Text('Semua Kategori'),
-                              ),
-                              ..._categories.map((c) {
-                                return DropdownMenuItem<String>(
-                                  value: c['id'],
-                                  child: Text(c['name']!),
-                                );
-                              }),
-                            ],
-                            onChanged: (val) {
-                              setState(() {
-                                it.categoryId = val;
-                                if (val != null) {
-                                  final matchCat = _categories.firstWhere(
-                                    (c) => c['id'] == val,
-                                    orElse: () => {'name': ''},
-                                  );
-                                  it.categoryName = matchCat['name'];
-                                } else {
-                                  it.categoryName = null;
-                                }
-                                // Reset selected product if not in this category
-                                if (it.productId != null) {
-                                  final exists = availableProds.any((p) => p['_id'] == it.productId);
-                                  if (!exists) {
-                                    it.productId = null;
-                                    it.price = 0;
-                                  }
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 10),
-
-                          // Dropdown Produk
-                          DropdownButtonFormField<String>(
-                            value: it.productId,
-                            isExpanded: true,
-                            hint: const Text('Pilih Nama Barang'),
-                            decoration: const InputDecoration(
-                              labelText: 'Nama Produk',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            items: availableProds.map((p) {
-                              final pId = p['_id']?.toString() ?? '';
-                              final pName = p['name'] ?? 'Item';
-                              final uName = p['unit_id'] is Map ? p['unit_id']['name'] : 'Satuan';
-                              final cName = p['category_id'] is Map ? p['category_id']['name'] : '';
-                              final label = cName.isNotEmpty ? '[$cName] $pName ($uName)' : '$pName ($uName)';
-                              return DropdownMenuItem<String>(
-                                value: pId,
-                                child: Text(
-                                  label,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                final p = _products.firstWhere((prod) => prod['_id'] == val, orElse: () => null);
-                                if (p != null) {
-                                  _applyProductToItem(it, p);
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              // Kuantitas
-                              Expanded(
-                                flex: 2,
-                                child: TextFormField(
-                                  key: ValueKey('qty_${idx}_${it.productId}'),
-                                  initialValue: it.qty.toString(),
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Kuantitas',
-                                    border: OutlineInputBorder(),
-                                    isDense: true,
-                                  ),
-                                  onChanged: (val) {
-                                    setState(() {
-                                      it.qty = double.tryParse(val) ?? 0;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // Harga Satuan Terakhir (Read-Only / Terkunci)
-                              Expanded(
-                                flex: 3,
-                                child: InputDecorator(
-                                  decoration: const InputDecoration(
-                                    labelText: 'Harga Satuan Terakhir',
-                                    helperText: 'Terkunci dari transaksi',
-                                    border: OutlineInputBorder(),
-                                    isDense: true,
-                                    filled: true,
-                                    fillColor: Color(0xFFF1F5F9),
-                                    suffixIcon: Icon(Icons.lock, size: 16, color: Colors.grey),
-                                  ),
-                                  child: Text(
-                                    it.price > 0 ? currencyFormat.format(it.price) : 'Rp 0',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF334155),
                                       fontSize: 13,
+                                      color: Color(0xFF78350F),
                                     ),
                                   ),
-                                ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Kelompokkan barang per kategori agar cepat ditemukan.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF047857),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Subtotal: ${currencyFormat.format(it.subtotal)}',
-                                style: const TextStyle(
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () => _openProductCategoryPicker(),
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('Katalog'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E293B),
                                 ),
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Section Title & Add Item Button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Daftar Barang Belanja (${_items.length})',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _addItem,
+                            icon: const Icon(
+                              Icons.add_circle_outline,
+                              size: 18,
+                            ),
+                            label: const Text('+ Baris Baru'),
                           ),
                         ],
                       ),
-                    );
-                  }),
-                ],
+                      const SizedBox(height: 8),
+
+                      // Item Cards
+                      ..._items.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final it = entry.value;
+
+                        // Filter products for this item if categoryId is set
+                        final availableProds =
+                            (it.categoryId == null || it.categoryId!.isEmpty)
+                            ? _products
+                            : _products.where((p) {
+                                if (p['category_id'] is Map) {
+                                  return p['category_id']['_id'] ==
+                                      it.categoryId;
+                                }
+                                return false;
+                              }).toList();
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Barang #${idx + 1}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                      if (it.categoryName != null) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFD1FAE5),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            it.categoryName!,
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF047857),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.search,
+                                          color: Color(0xFF059669),
+                                          size: 20,
+                                        ),
+                                        tooltip: 'Cari dari Katalog Kategori',
+                                        onPressed: () =>
+                                            _openProductCategoryPicker(
+                                              targetIndex: idx,
+                                            ),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                      if (_items.length > 1) ...[
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red,
+                                            size: 20,
+                                          ),
+                                          onPressed: () => _removeItem(idx),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+
+                              // Dropdown Filter Kategori Baris Ini
+                              DropdownButtonFormField<String>(
+                                value: it.categoryId,
+                                isExpanded: true,
+                                hint: const Text('Semua Kategori (Filter)'),
+                                decoration: const InputDecoration(
+                                  labelText: 'Filter Kategori',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  prefixIcon: Icon(Icons.filter_list, size: 18),
+                                ),
+                                items: [
+                                  const DropdownMenuItem<String>(
+                                    value: null,
+                                    child: Text('Semua Kategori'),
+                                  ),
+                                  ..._categories.map((c) {
+                                    return DropdownMenuItem<String>(
+                                      value: c['id'],
+                                      child: Text(c['name']!),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (val) {
+                                  setState(() {
+                                    it.categoryId = val;
+                                    if (val != null) {
+                                      final matchCat = _categories.firstWhere(
+                                        (c) => c['id'] == val,
+                                        orElse: () => {'name': ''},
+                                      );
+                                      it.categoryName = matchCat['name'];
+                                    } else {
+                                      it.categoryName = null;
+                                    }
+                                    // Reset selected product if not in this category
+                                    if (it.productId != null) {
+                                      final exists = availableProds.any(
+                                        (p) => p['_id'] == it.productId,
+                                      );
+                                      if (!exists) {
+                                        it.productId = null;
+                                        it.price = 0;
+                                      }
+                                    }
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 10),
+
+                              // Dropdown Produk
+                              DropdownButtonFormField<String>(
+                                value: it.productId,
+                                isExpanded: true,
+                                hint: const Text('Pilih Nama Barang'),
+                                decoration: const InputDecoration(
+                                  labelText: 'Nama Produk',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                items: availableProds.map((p) {
+                                  final pId = p['_id']?.toString() ?? '';
+                                  final pName = p['name'] ?? 'Item';
+                                  final uName = p['unit_id'] is Map
+                                      ? p['unit_id']['name']
+                                      : 'Satuan';
+                                  final cName = p['category_id'] is Map
+                                      ? p['category_id']['name']
+                                      : '';
+                                  final label = cName.isNotEmpty
+                                      ? '[$cName] $pName ($uName)'
+                                      : '$pName ($uName)';
+                                  return DropdownMenuItem<String>(
+                                    value: pId,
+                                    child: Text(
+                                      label,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  setState(() {
+                                    final p = _products.firstWhere(
+                                      (prod) => prod['_id'] == val,
+                                      orElse: () => null,
+                                    );
+                                    if (p != null) {
+                                      _applyProductToItem(it, p);
+                                    }
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  // Kuantitas
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      key: ValueKey(
+                                        'qty_${idx}_${it.productId}',
+                                      ),
+                                      initialValue: it.qty.toString(),
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Kuantitas',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          it.qty = double.tryParse(val) ?? 0;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Harga Satuan Terakhir (Read-Only / Terkunci)
+                                  Expanded(
+                                    flex: 3,
+                                    child: InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Harga Satuan Terakhir',
+                                        helperText: 'Terkunci dari transaksi',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                        filled: true,
+                                        fillColor: Color(0xFFF1F5F9),
+                                        suffixIcon: Icon(
+                                          Icons.lock,
+                                          size: 16,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        it.price > 0
+                                            ? currencyFormat.format(it.price)
+                                            : 'Rp 0',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF334155),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Subtotal: ${currencyFormat.format(it.subtotal)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
               ),
             ),
     );
   }
 
-  Widget _buildDatePicker(String label, DateTime selectedDate, Function(DateTime) onSelect) {
+  Widget _buildDatePicker(
+    String label,
+    DateTime selectedDate,
+    Function(DateTime) onSelect,
+  ) {
     return InkWell(
       onTap: () async {
         final picked = await showDatePicker(
@@ -1083,17 +1244,24 @@ class _CreateMarketlistScreenState extends State<CreateMarketlistScreen> {
 }
 
 extension ProductListFilter on List<dynamic> {
-  List<dynamic> filterCategory(String categoryId, String query, {String itemType = 'ALL'}) {
+  List<dynamic> filterCategory(
+    String categoryId,
+    String query, {
+    String itemType = 'ALL',
+  }) {
     return where((p) {
       bool typeMatch = true;
       if (itemType != 'ALL') {
-        typeMatch = (p['item_type']?.toString().toLowerCase() == itemType.toLowerCase());
+        typeMatch =
+            (p['item_type']?.toString().toLowerCase() ==
+            itemType.toLowerCase());
       }
 
       bool catMatch = true;
       if (categoryId != 'ALL') {
         if (p['category_id'] is Map) {
-          catMatch = p['category_id']['_id'] == categoryId ||
+          catMatch =
+              p['category_id']['_id'] == categoryId ||
               p['category_id']['name'] == categoryId;
         } else {
           catMatch = false;

@@ -31,9 +31,12 @@ class ProfileScreen extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
             // User Card
             Container(
               padding: const EdgeInsets.all(18),
@@ -46,7 +49,7 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 28,
-                    backgroundColor: const Color(0xFFD97706),
+                    backgroundColor: const Color(0xFF059669),
                     child: Text(
                       user.name.isNotEmpty
                           ? user.name.substring(0, 1).toUpperCase()
@@ -80,7 +83,7 @@ class ProfileScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
+                            color: const Color(0xFFD1FAE5),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -88,7 +91,7 @@ class ProfileScreen extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFFD97706),
+                              color: Color(0xFF059669),
                             ),
                           ),
                         ),
@@ -193,6 +196,8 @@ class ProfileScreen extends StatelessWidget {
             ),
           ],
         ),
+        ),
+      ),
       ),
     );
   }

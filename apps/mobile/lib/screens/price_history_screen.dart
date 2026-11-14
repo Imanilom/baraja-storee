@@ -111,9 +111,12 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
                 ))
               : RefreshIndicator(
                   onRefresh: _loadPrices,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 960),
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
@@ -207,7 +210,9 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
                           }),
                         ],
                       ],
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
     );

@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFFD97706),
+                color: const Color(0xFF059669),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.coffee, color: Colors.white, size: 20),
@@ -123,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFFD97706),
+                      color: Color(0xFF059669),
                     ),
                   ),
                 ],
@@ -154,14 +154,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFD97706), Color(0xFFB45309)],
+                        colors: [Color(0xFF059669), Color(0xFF047857)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFD97706).withOpacity(0.3),
+                          color: const Color(0xFF059669).withOpacity(0.3),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -214,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFFD97706),
+                            foregroundColor: const Color(0xFF059669),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 10,
@@ -323,12 +323,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
+                              color: const Color(0xFFD1FAE5),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
                               Icons.analytics_outlined,
-                              color: Color(0xFFD97706),
+                              color: Color(0xFF059669),
                               size: 24,
                             ),
                           ),
@@ -551,7 +551,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
-                                          color: Color(0xFFD97706),
+                                          color: Color(0xFF059669),
                                         ),
                                       ),
                                       const Row(

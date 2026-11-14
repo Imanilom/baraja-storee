@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../widgets/responsive_content.dart';
 
 class WasteScreen extends StatefulWidget {
   const WasteScreen({super.key});
@@ -40,7 +41,7 @@ class _WasteScreenState extends State<WasteScreen> {
     'other': 'Lainnya',
   };
   static const _indigo = Color(0xFF3730A3);
-  static const _amber = Color(0xFFD97706);
+  static const _primary = Color(0xFF059669);
 
   bool get _isReceivingStage => _stage == 'received';
 
@@ -391,7 +392,7 @@ class _WasteScreenState extends State<WasteScreen> {
       appBar: AppBar(
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: _amber, size: 22),
+            Icon(Icons.warning_amber_rounded, color: _primary, size: 22),
             SizedBox(width: 8),
             Text('Pencatatan Waste'),
           ],
@@ -406,8 +407,9 @@ class _WasteScreenState extends State<WasteScreen> {
           : RefreshIndicator(
               onRefresh: _load,
               child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
+                child: ResponsiveContent(
+                  maxWidth: 1000,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
@@ -551,7 +553,7 @@ class _WasteScreenState extends State<WasteScreen> {
                                       children: [
                                         Icon(
                                           Icons.inventory_2_outlined,
-                                          color: Color(0xFFB45309),
+                                          color: Color(0xFF047857),
                                           size: 19,
                                         ),
                                         SizedBox(width: 8),
@@ -580,23 +582,10 @@ class _WasteScreenState extends State<WasteScreen> {
                                   items: _availableProducts.map((product) {
                                     return DropdownMenuItem<String>(
                                       value: product['_id'].toString(),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            product['name']?.toString() ?? '-',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          Text(
-                                            'Stok saat ini: ${_stockOf(product)} ${product['unit_id'] is Map ? (product['unit_id']['abbreviation'] ?? product['unit_id']['name'] ?? '') : ''}',
-                                            style: const TextStyle(
-                                              color: Color(0xFF64748B),
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
+                                      child: Text(
+                                        product['name']?.toString() ?? '-',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     );
                                   }).toList(),
@@ -709,7 +698,7 @@ class _WasteScreenState extends State<WasteScreen> {
                                     _saving ? 'Menyimpan...' : 'Simpan Waste',
                                   ),
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: _amber,
+                                    backgroundColor: _primary,
                                     foregroundColor: Colors.white,
                                   ),
                                 ),
@@ -769,6 +758,9 @@ class _WasteScreenState extends State<WasteScreen> {
                               isThreeLine: true,
                               trailing: Text(
                                 _currency.format(total),
+                                maxLines: 2,
+                                textAlign: TextAlign.end,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: Colors.red,
                                   fontWeight: FontWeight.bold,

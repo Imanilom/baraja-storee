@@ -46,8 +46,8 @@ class _PurchasingAppState extends State<PurchasingApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFD97706),
-          primary: const Color(0xFFD97706),
+          seedColor: const Color(0xFF059669),
+          primary: const Color(0xFF059669),
         ),
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF8F9FA),
@@ -84,6 +84,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final useRail = MediaQuery.sizeOf(context).width >= 800;
     final screens = [
       HomeScreen(
         user: widget.user,
@@ -99,11 +100,57 @@ class _MainShellState extends State<MainShell> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
+      body: Row(
+        children: [
+          if (useRail) ...[
+            NavigationRail(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: (index) =>
+                  setState(() => _currentIndex = index),
+              labelType: NavigationRailLabelType.all,
+              selectedIconTheme: const IconThemeData(
+                color: Color(0xFF059669),
+              ),
+              selectedLabelTextStyle: const TextStyle(
+                color: Color(0xFF059669),
+                fontWeight: FontWeight.bold,
+              ),
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: Text('Beranda'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: Text('Marketlist'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.history_outlined),
+                  selectedIcon: Icon(Icons.history),
+                  label: Text('Riwayat'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.person_outline),
+                  selectedIcon: Icon(Icons.person),
+                  label: Text('Akun'),
+                ),
+              ],
+            ),
+            const VerticalDivider(width: 1, thickness: 1),
+          ],
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: screens,
+            ),
+          ),
+        ],
       ),
-      bottomNavigationBar: Container(
+      bottomNavigationBar: useRail
+          ? null
+          : Container(
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
@@ -119,7 +166,7 @@ class _MainShellState extends State<MainShell> {
           onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFFD97706),
+          selectedItemColor: const Color(0xFF059669),
           unselectedItemColor: const Color(0xFF64748B),
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
           unselectedLabelStyle: const TextStyle(fontSize: 11),

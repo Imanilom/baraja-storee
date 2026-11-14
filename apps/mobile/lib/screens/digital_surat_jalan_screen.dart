@@ -316,12 +316,12 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
+                  color: const Color(0xFFD1FAE5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.scale_outlined,
-                  color: Color(0xFFD97706),
+                  color: Color(0xFF059669),
                 ),
               ),
               title: const Text('Foto Timbangan / Label Supplier'),
@@ -346,7 +346,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                 suffixIcon: IconButton(
                   icon: const Icon(
                     Icons.add_photo_alternate,
-                    color: Color(0xFFD97706),
+                    color: Color(0xFF059669),
                   ),
                   onPressed: () {
                     final text = customUrlController.text.trim();
@@ -440,7 +440,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Color(0xFFD97706),
+            backgroundColor: Color(0xFF059669),
             content: Text(
               '⚠️ Koneksi offline. Data surat jalan tersimpan di antrean lokal dan akan disinkronkan otomatis.',
             ),
@@ -531,9 +531,12 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
             // Header Info Dokumen
             Container(
               padding: const EdgeInsets.all(14),
@@ -685,7 +688,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
+                              color: const Color(0xFFD1FAE5),
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
                                 color: const Color(0xFFFCD34D),
@@ -696,7 +699,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFFB45309),
+                                color: Color(0xFF047857),
                               ),
                             ),
                           )
@@ -1245,7 +1248,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.notes, size: 18, color: Color(0xFFD97706)),
+                      Icon(Icons.notes, size: 18, color: Color(0xFF059669)),
                       SizedBox(width: 6),
                       Text(
                         'One Marketlist Note (Catatan Penerima)',
@@ -1279,6 +1282,8 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
             ),
             const SizedBox(height: 30),
           ],
+            ),
+          ),
         ),
       ),
     );

@@ -104,7 +104,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
       case 'partial_rejection':
         return const Color(0xFFDC2626);
       default:
-        return const Color(0xFFD97706);
+        return const Color(0xFF059669);
     }
   }
 
@@ -123,7 +123,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
       case 'partial_rejection':
         return const Color(0xFFFEE2E2);
       default:
-        return const Color(0xFFFEF3C7);
+        return const Color(0xFFD1FAE5);
     }
   }
 
@@ -214,9 +214,9 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFFD97706),
+          labelColor: const Color(0xFF059669),
           unselectedLabelColor: const Color(0xFF64748B),
-          indicatorColor: const Color(0xFFD97706),
+          indicatorColor: const Color(0xFF059669),
           tabs: const [
             Tab(text: 'Semua'),
             Tab(text: 'Draft / Diajukan'),
@@ -236,7 +236,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
             _fetchMarketlists();
           }
         },
-        backgroundColor: const Color(0xFFD97706),
+        backgroundColor: const Color(0xFF059669),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text(
@@ -248,7 +248,10 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _fetchMarketlists,
-              child: list.isEmpty
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  child: list.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -381,7 +384,7 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                                         style: const TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.bold,
-                                          color: Color(0xFFD97706),
+                                          color: Color(0xFF059669),
                                         ),
                                       ),
                                     ],
@@ -454,6 +457,8 @@ class _MarketlistListScreenState extends State<MarketlistListScreen>
                         );
                       },
                     ),
+                  ),
+                ),
             ),
     );
   }

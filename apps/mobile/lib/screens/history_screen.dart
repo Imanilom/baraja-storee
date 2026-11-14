@@ -91,14 +91,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 960),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                     // Offline Queue Card
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: _queue.isEmpty ? Colors.white : const Color(0xFFFEF3C7),
+                        color: _queue.isEmpty ? Colors.white : const Color(0xFFD1FAE5),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: _queue.isEmpty
@@ -118,7 +121,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     Icons.cloud_upload_outlined,
                                     color: _queue.isEmpty
                                         ? const Color(0xFF64748B)
-                                        : const Color(0xFFD97706),
+                                        : const Color(0xFF059669),
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
@@ -138,7 +141,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 decoration: BoxDecoration(
                                   color: _queue.isEmpty
                                       ? const Color(0xFFF1F5F9)
-                                      : const Color(0xFFD97706),
+                                      : const Color(0xFF059669),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -177,7 +180,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   : const Icon(Icons.sync, size: 16),
                               label: const Text('Sinkronkan Sekarang'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFD97706),
+                                backgroundColor: const Color(0xFF059669),
                                 foregroundColor: Colors.white,
                               ),
                             ),
@@ -244,9 +247,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       }),
                   ],
                 ),
+                  ),
+                ),
               ),
             ),
     );
   }
 }
-
