@@ -1,5 +1,6 @@
 const invoiceService = require('./invoice.service');
 const invoicePdfService = require('./invoice-pdf.service');
+const overheadService = require('../overheads/overhead.service');
 const { sendSuccess, sendError, sendPaginated } = require('../../utils/response');
 
 class InvoiceController {
@@ -88,7 +89,10 @@ class InvoiceController {
   async downloadWeeklyPdf(req, res) {
     try {
       const { startDate, endDate } = req.query;
-      const invoices = await invoiceService.getInvoicesForWeek(startDate, endDate);
+      const [invoices, overheadDebts] = await Promise.all([
+        invoiceService.getInvoicesForWeek(startDate, endDate),
+        overheadService.getOverheadDebtsForReport(startDate, endDate)
+      ]);
       if (invoices.length === 0) {
         return sendError(res, 'No invoices found for the selected week', null, 404);
       }
@@ -98,7 +102,12 @@ class InvoiceController {
         'Content-Disposition',
         `inline; filename="invoice-mingguan-${startDate}-${endDate}.pdf"`
       );
-      invoicePdfService.generateInvoicesPdf(invoices, res, { startDate, endDate });
+      invoicePdfService.generateInvoicesPdf(
+        invoices,
+        res,
+        { startDate, endDate },
+        overheadDebts
+      );
     } catch (error) {
       return sendError(
         res,

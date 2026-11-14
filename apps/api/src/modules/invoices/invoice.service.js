@@ -171,7 +171,7 @@ class InvoiceService {
       status: { $ne: INVOICE_STATUS.CANCELLED }
     })
       .populate('supplier_id', 'name code phone')
-      .populate('marketlist_id', 'marketlist_number required_date status')
+      .populate('marketlist_id', 'marketlist_number date required_date status')
       .sort({ invoice_date: 1, invoice_number: 1 });
   }
 

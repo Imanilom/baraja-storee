@@ -123,54 +123,104 @@ class InvoicePdfService {
     doc.end();
   }
 
-  generateInvoicesPdf(invoices, res, dateRange) {
+  generateInvoicesPdf(invoices, res, dateRange, overheadDebts = []) {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     doc.pipe(res);
-    invoices.forEach((invoice, index) => {
-      if (index > 0) doc.addPage();
-      this.renderInvoice(doc, invoice);
-    });
 
-    const formatDate = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('id-ID');
-    const subtotal = invoices.reduce((total, invoice) => total + (Number(invoice.subtotal) || 0), 0);
-    const discount = invoices.reduce((total, invoice) => total + (Number(invoice.discount) || 0), 0);
-    const tax = invoices.reduce((total, invoice) => total + (Number(invoice.tax) || 0), 0);
-    const grandTotal = invoices.reduce((total, invoice) => total + (Number(invoice.grand_total) || 0), 0);
+    const formatDate = (value) => {
+      const date = value instanceof Date ? value : new Date(`${value}T00:00:00`);
+      return Number.isFinite(date.getTime()) ? date.toLocaleDateString('id-ID') : '-';
+    };
+    const formatAmount = (value) => `Rp ${(Number(value) || 0).toLocaleString('id-ID')}`;
+    const marketlists = new Map();
+    for (const invoice of invoices) {
+      const marketlist = invoice.marketlist_id;
+      const marketlistNumber = marketlist?.marketlist_number || 'Tanpa Marketlist';
+      const marketlistId = marketlist?._id?.toString() || marketlist?.toString() || marketlistNumber;
+      const row = marketlists.get(marketlistId) || {
+        marketlistNumber,
+        date: marketlist?.date || invoice.invoice_date,
+        total: 0
+      };
+      row.total += Number(invoice.grand_total) || 0;
+      marketlists.set(marketlistId, row);
+    }
 
-    doc.addPage();
+    const marketlistRows = [...marketlists.values()].sort(
+      (first, second) => new Date(first.date || 0) - new Date(second.date || 0)
+    );
+    const invoiceTotal = invoices.reduce(
+      (total, invoice) => total + (Number(invoice.grand_total) || 0),
+      0
+    );
+    const overheadTotal = overheadDebts.reduce(
+      (total, overhead) => total + (Number(overhead.amount_remaining) || 0),
+      0
+    );
+    const overallTotal = invoiceTotal + overheadTotal;
+
+    const drawMarketlistHeader = (y) => {
+      doc
+        .fontSize(9)
+        .font('Helvetica-Bold')
+        .text('Marketlist', 50, y, { width: 200 })
+        .text('Tanggal Marketlist', 255, y, { width: 125 })
+        .text('Total Tagihan', 385, y, { width: 165, align: 'right' });
+      doc.moveTo(50, y + 15).lineTo(550, y + 15).stroke('#cccccc');
+      return y + 21;
+    };
+
     doc
       .fontSize(20)
       .font('Helvetica-Bold')
-      .text('REKAP TOTAL INVOICE', 50, 50)
+      .text('RINGKASAN TAGIHAN', 50, 50)
       .fontSize(11)
       .font('Helvetica')
       .text(`Periode: ${formatDate(dateRange.startDate)} - ${formatDate(dateRange.endDate)}`, 50, 90)
-      .text(`Jumlah invoice: ${invoices.length}`, 50, 110);
+      .text(`Jumlah invoice: ${invoices.length}`, 50, 108);
 
-    doc.moveTo(50, 145).lineTo(550, 145).stroke('#cccccc');
-    const rows = [
-      ['Subtotal:', subtotal],
-      ['Diskon:', -discount],
-      ['Pajak:', tax]
-    ];
-    let y = 170;
-    for (const [label, amount] of rows) {
+    let y = drawMarketlistHeader(140);
+    doc.fontSize(9).font('Helvetica');
+    for (const row of marketlistRows) {
+      if (y > 690) {
+        doc.addPage();
+        doc
+          .fontSize(14)
+          .font('Helvetica-Bold')
+          .text('RINGKASAN TAGIHAN (LANJUTAN)', 50, 45);
+        y = drawMarketlistHeader(80);
+        doc.fontSize(9).font('Helvetica');
+      }
+
       doc
-        .fontSize(12)
-        .font('Helvetica')
-        .text(label, 320, y, { width: 130, align: 'right' })
-        .text(`Rp ${amount.toLocaleString('id-ID')}`, 460, y, { width: 90, align: 'right' });
-      y += 24;
+        .text(row.marketlistNumber, 50, y, { width: 200, height: 16, ellipsis: true })
+        .text(formatDate(row.date), 255, y, { width: 125 })
+        .text(formatAmount(row.total), 385, y, { width: 165, align: 'right' });
+      y += 18;
+      doc.moveTo(50, y - 3).lineTo(550, y - 3).stroke('#eeeeee');
     }
 
+    if (y > 700) {
+      doc.addPage();
+      y = 55;
+    }
     doc
-      .moveTo(320, y)
-      .lineTo(550, y)
+      .moveTo(50, y + 5)
+      .lineTo(550, y + 5)
       .stroke('#000000')
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .text(`Total Marketlist / Invoice: ${formatAmount(invoiceTotal)}`, 50, y + 15)
+      .font('Helvetica')
+      .text(`Total Overhead: ${formatAmount(overheadTotal)}`, 50, y + 35)
       .fontSize(14)
       .font('Helvetica-Bold')
-      .text('TOTAL AKHIR:', 320, y + 12, { width: 130, align: 'right' })
-      .text(`Rp ${grandTotal.toLocaleString('id-ID')}`, 460, y + 12, { width: 90, align: 'right' });
+      .text(`TOTAL KESELURUHAN: ${formatAmount(overallTotal)}`, 50, y + 58);
+
+    invoices.forEach((invoice) => {
+      doc.addPage();
+      this.renderInvoice(doc, invoice);
+    });
     doc.end();
   }
 }
