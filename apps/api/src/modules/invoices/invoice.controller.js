@@ -98,7 +98,7 @@ class InvoiceController {
         'Content-Disposition',
         `inline; filename="invoice-mingguan-${startDate}-${endDate}.pdf"`
       );
-      invoicePdfService.generateInvoicesPdf(invoices, res);
+      invoicePdfService.generateInvoicesPdf(invoices, res, { startDate, endDate });
     } catch (error) {
       return sendError(
         res,

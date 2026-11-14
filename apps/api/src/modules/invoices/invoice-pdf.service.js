@@ -123,13 +123,54 @@ class InvoicePdfService {
     doc.end();
   }
 
-  generateInvoicesPdf(invoices, res) {
+  generateInvoicesPdf(invoices, res, dateRange) {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     doc.pipe(res);
     invoices.forEach((invoice, index) => {
       if (index > 0) doc.addPage();
       this.renderInvoice(doc, invoice);
     });
+
+    const formatDate = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('id-ID');
+    const subtotal = invoices.reduce((total, invoice) => total + (Number(invoice.subtotal) || 0), 0);
+    const discount = invoices.reduce((total, invoice) => total + (Number(invoice.discount) || 0), 0);
+    const tax = invoices.reduce((total, invoice) => total + (Number(invoice.tax) || 0), 0);
+    const grandTotal = invoices.reduce((total, invoice) => total + (Number(invoice.grand_total) || 0), 0);
+
+    doc.addPage();
+    doc
+      .fontSize(20)
+      .font('Helvetica-Bold')
+      .text('REKAP TOTAL INVOICE', 50, 50)
+      .fontSize(11)
+      .font('Helvetica')
+      .text(`Periode: ${formatDate(dateRange.startDate)} - ${formatDate(dateRange.endDate)}`, 50, 90)
+      .text(`Jumlah invoice: ${invoices.length}`, 50, 110);
+
+    doc.moveTo(50, 145).lineTo(550, 145).stroke('#cccccc');
+    const rows = [
+      ['Subtotal:', subtotal],
+      ['Diskon:', -discount],
+      ['Pajak:', tax]
+    ];
+    let y = 170;
+    for (const [label, amount] of rows) {
+      doc
+        .fontSize(12)
+        .font('Helvetica')
+        .text(label, 320, y, { width: 130, align: 'right' })
+        .text(`Rp ${amount.toLocaleString('id-ID')}`, 460, y, { width: 90, align: 'right' });
+      y += 24;
+    }
+
+    doc
+      .moveTo(320, y)
+      .lineTo(550, y)
+      .stroke('#000000')
+      .fontSize(14)
+      .font('Helvetica-Bold')
+      .text('TOTAL AKHIR:', 320, y + 12, { width: 130, align: 'right' })
+      .text(`Rp ${grandTotal.toLocaleString('id-ID')}`, 460, y + 12, { width: 90, align: 'right' });
     doc.end();
   }
 }
