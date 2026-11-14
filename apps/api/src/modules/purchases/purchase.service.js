@@ -361,6 +361,55 @@ class PurchaseService {
     return { data: debts, total, page: Number(page), limit: Number(limit) };
   }
 
+  async getDebtsForReport(startDate, endDate) {
+    const parseDate = (value) => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const error = new Error('Tanggal awal dan akhir harus berformat YYYY-MM-DD.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const [year, month, day] = value.split('-').map(Number);
+      const dateNumber = Date.UTC(year, month - 1, day);
+      const parsed = new Date(dateNumber);
+      if (
+        parsed.getUTCFullYear() !== year ||
+        parsed.getUTCMonth() !== month - 1 ||
+        parsed.getUTCDate() !== day
+      ) {
+        const error = new Error('Rentang tanggal hutang tidak valid.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      return { year, month, day, dateNumber };
+    };
+
+    const startParts = parseDate(startDate);
+    const endParts = parseDate(endDate);
+    const daysBetween = (endParts.dateNumber - startParts.dateNumber) / 86400000;
+    if (daysBetween < 0 || daysBetween > 6) {
+      const error = new Error('Rentang tanggal hutang maksimal 7 hari.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const start = new Date(startParts.year, startParts.month - 1, startParts.day);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endParts.year, endParts.month - 1, endParts.day);
+    end.setHours(23, 59, 59, 999);
+
+    return Purchase.find({
+      payment_method: 'tempo',
+      payment_status: { $ne: PAYMENT_STATUS.PAID },
+      amount_remaining: { $gt: 0 },
+      purchased_at: { $gte: start, $lte: end }
+    })
+      .populate('supplier_id', 'name code')
+      .populate('marketlist_id', 'marketlist_number')
+      .sort({ due_date: 1, purchased_at: 1 });
+  }
+
   async getDailySummary(query = {}) {
     const start = new Date(query.start);
     const end = new Date(query.end);

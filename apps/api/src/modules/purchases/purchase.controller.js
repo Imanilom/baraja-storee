@@ -1,4 +1,5 @@
 const purchaseService = require('./purchase.service');
+const debtPdfService = require('./debt-pdf.service');
 
 class PurchaseController {
   async create(req, res, next) {
@@ -56,6 +57,34 @@ class PurchaseController {
       });
     } catch (error) {
       next(error);
+    }
+  }
+
+  async downloadDebtReportPdf(req, res, next) {
+    try {
+      const { startDate, endDate } = req.query;
+      const debts = await purchaseService.getDebtsForReport(startDate, endDate);
+      if (debts.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tidak ada hutang aktif pada rentang tanggal tersebut.'
+        });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="laporan-hutang-${startDate}-${endDate}.pdf"`
+      );
+      debtPdfService.generateDebtReportPdf(debts, { startDate, endDate }, res);
+    } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          success: false,
+          message: error.message
+        });
+      }
+      return next(error);
     }
   }
 

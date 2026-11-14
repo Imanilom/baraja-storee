@@ -185,6 +185,12 @@ export const api = {
     if (token) params.set('token', token);
     return `${API_BASE}/invoices/weekly-pdf?${params.toString()}`;
   },
+  getDebtReportPdfUrl: (startDate, endDate) => {
+    const token = getStoredToken();
+    const params = new URLSearchParams({ startDate, endDate });
+    if (token) params.set('token', token);
+    return `${API_BASE}/purchases/debts/report-pdf?${params.toString()}`;
+  },
   getWeeklyInvoiceSummary: (startDate, endDate) => {
     const params = new URLSearchParams({ startDate, endDate });
     return fetchApi(`/invoices/weekly-summary?${params.toString()}`);

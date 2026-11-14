@@ -156,6 +156,11 @@ export default function InvoicesPage() {
     window.open(api.getWeeklyInvoicePdfUrl(startDate, endDate), '_blank');
   };
 
+  const handleDownloadDebtPdf = () => {
+    const { startDate, endDate } = invoiceDateRange;
+    window.open(api.getDebtReportPdfUrl(startDate, endDate), '_blank');
+  };
+
   const handleStartInvoiceEdit = (invoice) => {
     setEditingInvoiceId(invoice._id);
     setInvoiceEditError('');
@@ -314,6 +319,15 @@ export default function InvoicesPage() {
             >
               <CalendarDays className="w-4 h-4" />
               Unduh 1 PDF
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadDebtPdf}
+              disabled={!isValidInvoiceDateRange(invoiceDateRange.startDate, invoiceDateRange.endDate)}
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+            >
+              <FileDown className="w-4 h-4" />
+              Unduh Hutang Saja
             </button>
           </div>
         </div>

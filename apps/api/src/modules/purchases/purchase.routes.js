@@ -16,6 +16,12 @@ router.get(
 
 // Daftar hutang aktif (unpaid / partial / overdue)
 router.get(
+  '/debts/report-pdf',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  purchaseController.downloadDebtReportPdf
+);
+
+router.get(
   '/debts',
   authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
   purchaseController.listDebts
