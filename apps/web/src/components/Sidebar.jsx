@@ -20,7 +20,8 @@ import {
   X,
   ChevronLeft,
   Landmark,
-  ClipboardCheck
+  ClipboardCheck,
+  Clock3
 } from 'lucide-react';
 import { clearStoredAuth, getStoredUser } from '../lib/api';
 import { useEffect, useState } from 'react';
@@ -87,6 +88,12 @@ const navigation = [
     href: '/cash-flow',
     icon: Landmark,
     roles: ['admin', 'management', 'accounting', 'purchasing', 'leader']
+  },
+  {
+    name: 'Perencanaan Hutang',
+    href: '/debt-planning',
+    icon: Clock3,
+    roles: ['admin', 'management', 'accounting', 'purchasing']
   },
   {
     name: 'Kelola Overhead',

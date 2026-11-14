@@ -346,7 +346,7 @@ export default function CashFlowPage() {
     <div className="flex-1 flex flex-col">
       <Navbar title="Manajemen Arus Kas & Saldo Bank" />
 
-      <main className="p-8 space-y-6 max-w-7xl">
+      <main className="w-full min-w-0 max-w-none p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Info Banner */}
         <div className="bg-indigo-500/10 border border-indigo-500/30 p-4 rounded-2xl flex items-start gap-3 text-xs text-indigo-950">
           <Landmark className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
