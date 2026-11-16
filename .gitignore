@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 .next/
+apps/web/public/pdf.worker.min.mjs
 coverage/
 *.log
 npm-debug.log*

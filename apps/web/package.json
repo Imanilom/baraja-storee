@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "node -e \"process.env.NEXT_IGNORE_INCORRECT_LOCKFILE='1'; require('child_process').execSync('npx next build', {stdio:'inherit'})\"",
+    "dev": "node scripts/copy-pdf-worker.js && next dev",
+    "build": "node scripts/copy-pdf-worker.js && node -e \"process.env.NEXT_IGNORE_INCORRECT_LOCKFILE='1'; require('child_process').execSync('npx next build', {stdio:'inherit'})\"",
     "start": "next start"
   },
   "dependencies": {
@@ -13,6 +13,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.378.0",
     "next": "^14.2.3",
+    "pdfjs-dist": "5.4.394",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "read-excel-file": "^9.3.17",

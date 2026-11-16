@@ -3,7 +3,12 @@
 import { useState } from 'react';
 import { AlertCircle, CheckCircle2, FileSearch, LoaderCircle, Upload, X } from 'lucide-react';
 import { api } from '../lib/api';
-import { cellToText, detectMutationColumns, parseMutationCsv } from '../lib/mutation-statement';
+import {
+  cellToText,
+  detectMutationColumns,
+  parseMutationCsv,
+  parseMutationPdf
+} from '../lib/mutation-statement';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_DATA_ROWS = 2000;
@@ -76,11 +81,13 @@ export default function PurchaseReconciliationModal({ onClose }) {
       let rawRows;
       if (extension === 'csv') {
         rawRows = parseMutationCsv(await file.text());
+      } else if (extension === 'pdf') {
+        rawRows = await parseMutationPdf(file);
       } else if (extension === 'xlsx') {
         const { default: readXlsxFile } = await import('read-excel-file/browser');
         rawRows = await readXlsxFile(file, { sheet: 1 });
       } else {
-        throw new Error('Gunakan file rekening koran berformat CSV atau Excel (.xlsx).');
+        throw new Error('Gunakan file rekening koran berformat PDF, CSV, atau Excel (.xlsx).');
       }
 
       const nonEmptyRows = rawRows.filter((row) => row.some((value) => cellToText(value)));
@@ -176,11 +183,13 @@ export default function PurchaseReconciliationModal({ onClose }) {
               <span className="block text-sm font-bold text-slate-800">
                 {loadingFile ? 'Membaca file...' : statement?.fileName || 'Pilih rekening koran'}
               </span>
-              <span className="mt-0.5 block text-xs text-slate-500">CSV atau Excel .xlsx · maksimal 10 MB dan 2.000 baris</span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                PDF teks, CSV, atau Excel .xlsx · maksimal 10 MB dan 2.000 baris
+              </span>
             </span>
             <input
               type="file"
-              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept=".pdf,.csv,.xlsx,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={handleFile}
               disabled={loadingFile || submitting}
               className="sr-only"
