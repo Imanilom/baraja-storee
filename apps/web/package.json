@@ -15,6 +15,7 @@
     "next": "^14.2.3",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "read-excel-file": "^9.3.17",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {

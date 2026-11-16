@@ -14,6 +14,7 @@ require('../modules/approvals/marketlist-approval.model');
 require('../modules/notes/marketlist-note.model');
 require('../modules/receiving/goods-receipt.model');
 require('../modules/receiving/goods-receipt-item.model');
+require('../modules/integrations/integration-event.model');
 require('../modules/invoices/invoice.model');
 require('../modules/prices/product-price.model');
 require('../modules/kpi/kpi-record.model');

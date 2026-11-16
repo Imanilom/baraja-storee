@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
-import { Truck, CheckCircle2, AlertTriangle, FileText, Smartphone, Pencil, Save, X } from 'lucide-react';
+import { Truck, CheckCircle2, AlertTriangle, FileText, Smartphone, Pencil, Save, X, RefreshCw } from 'lucide-react';
 
 export default function ReceivingMonitorPage() {
   const [activeMarketlists, setActiveMarketlists] = useState([]);
@@ -14,6 +14,7 @@ export default function ReceivingMonitorPage() {
   const [receiptEditItems, setReceiptEditItems] = useState([]);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [receiptEditError, setReceiptEditError] = useState('');
+  const [syncError, setSyncError] = useState('');
 
   const handleSelectMarketlist = async (ml) => {
     try {
@@ -96,6 +97,19 @@ export default function ReceivingMonitorPage() {
     setEditingReceiptId(null);
     setReceiptEditItems([]);
     setReceiptEditError('');
+  };
+
+  const handleSyncReceipt = async (receiptId) => {
+    setSyncError('');
+    try {
+      await api.syncReceipt(receiptId);
+      if (selectedMl) {
+        const receiptRes = await api.getReceiptsByMarketlist(selectedMl._id);
+        setReceipts(receiptRes?.data || []);
+      }
+    } catch (error) {
+      setSyncError(error.message || 'Gagal mengirim penerimaan ke Amphitheater.');
+    }
   };
 
   return (
@@ -217,6 +231,11 @@ export default function ReceivingMonitorPage() {
                 {/* Surat Jalan Receipts Log */}
                 <div className="space-y-3">
                   <h4 className="font-bold text-slate-800">Bukti Surat Jalan & Checklist Datang:</h4>
+                  {syncError && (
+                    <p role="alert" className="rounded-lg bg-rose-50 p-3 text-[11px] font-semibold text-rose-700">
+                      {syncError}
+                    </p>
+                  )}
                   {selectedMl.has_invoice && (
                     <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800">
                       Marketlist ini sudah memiliki invoice. Koreksi penerimaan tidak mengubah invoice secara otomatis;
@@ -231,8 +250,29 @@ export default function ReceivingMonitorPage() {
                     receipts.map((rcv) => (
                       <div key={rcv._id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                         <div className="flex items-center justify-between font-bold text-slate-800">
-                          <span className="text-emerald-700">{rcv.receipt_number}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-700">{rcv.receipt_number}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                              ['posted', 'approved'].includes(rcv.amphitheater_status)
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : rcv.amphitheater_status === 'sync_failed'
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-slate-200 text-slate-600'
+                            }`}>
+                              Amphitheater: {rcv.amphitheater_status || 'not_synced'}
+                            </span>
+                          </div>
                           <div className="flex items-center gap-3">
+                            {['not_synced', 'sync_failed', 'rejected'].includes(rcv.amphitheater_status || 'not_synced') &&
+                              selectedMl.status !== 'cancelled' && rcv.status !== 'cancelled' && (
+                                <button
+                                  onClick={() => handleSyncReceipt(rcv._id)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-bold text-sky-700 hover:bg-sky-50"
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                  Sinkronkan
+                                </button>
+                              )}
                             <span className="text-[11px] text-slate-500 font-normal">
                               {new Date(rcv.received_at).toLocaleString('id-ID')} &bull; Petugas: {rcv.received_by?.name}
                             </span>

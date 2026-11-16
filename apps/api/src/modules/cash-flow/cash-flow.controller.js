@@ -1,4 +1,5 @@
 const cashFlowService = require('./cash-flow.service');
+const { reconcilePurchaseMutations } = require('./purchase-reconciliation.service');
 
 class CashFlowController {
   async getSummary(req, res, next) {
@@ -23,6 +24,18 @@ class CashFlowController {
         page: result.page,
         limit: result.limit,
         totalPages: result.totalPages
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async reconcilePurchases(req, res, next) {
+    try {
+      const result = await reconcilePurchaseMutations(req.body);
+      return res.status(200).json({
+        success: true,
+        data: result
       });
     } catch (error) {
       next(error);

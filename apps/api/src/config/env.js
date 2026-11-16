@@ -10,6 +10,8 @@ module.exports = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '1d',
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET || 'purchasing_refresh_secret_key_2026',
   REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
+  BARAJA_AMPHITHEATER_API_URL: process.env.BARAJA_AMPHITHEATER_API_URL,
+  BARAJA_STORE_INTEGRATION_SECRET: process.env.BARAJA_STORE_INTEGRATION_SECRET,
 
   // Baraja Coffee Store OAuth 2.0 configuration
   BARAJA_STORE_BASE_URL: process.env.BARAJA_STORE_BASE_URL || 'https://app.barajacoffee.site',

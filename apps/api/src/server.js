@@ -2,11 +2,13 @@ const http = require('http');
 const app = require('./app');
 const connectDB = require('./config/db');
 const { PORT } = require('./config/env');
+const { startOutboxWorker } = require('./modules/integrations/integration.service');
 
 const server = http.createServer(app);
 
 const startServer = async () => {
   await connectDB();
+  startOutboxWorker();
 
   server.listen(PORT, () => {
     console.log(`[Purchasing API] Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);

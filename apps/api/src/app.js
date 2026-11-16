@@ -25,6 +25,7 @@ const locationRoutes = require('./modules/locations/location.routes');
 const externalPosRoutes = require('./modules/external-pos/external-pos.routes');
 const wasteRoutes = require('./modules/waste/waste.routes');
 const inventoryRoutes = require('./modules/inventory/inventory.routes');
+const integrationRoutes = require('./modules/integrations/integration.routes');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
   })
 );
+app.use('/api/v1/cash-flow/reconciliation/purchases', express.json({ limit: '2mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -73,6 +75,7 @@ apiRouter.use('/overheads', overheadRoutes);
 apiRouter.use('/prices', priceRoutes);
 apiRouter.use('/waste', wasteRoutes);
 apiRouter.use('/inventory', inventoryRoutes);
+apiRouter.use('/integration', integrationRoutes);
 apiRouter.use('/locations', locationRoutes);
 apiRouter.use('/kpi', kpiRoutes);
 apiRouter.use('/finance', financeRoutes);

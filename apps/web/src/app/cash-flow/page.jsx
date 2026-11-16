@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Navbar from '../../components/Navbar';
+import PurchaseReconciliationModal from '../../components/PurchaseReconciliationModal';
 import { api } from '../../lib/api';
 import { getDateRange } from '../../lib/date-range';
 import {
   Landmark, Wallet, ArrowDownRight, ArrowUpRight, ArrowLeftRight,
   Plus, Calendar, Filter, Trash2, CheckCircle2, AlertCircle,
-  FileText, ShoppingCart, RefreshCw, X, CreditCard, Banknote, ShieldAlert, Zap
+  FileText, ShoppingCart, RefreshCw, X, CreditCard, Banknote, ShieldAlert, Zap,
+  FileSearch
 } from 'lucide-react';
 
 const fmt = (v) => `Rp ${(v || 0).toLocaleString('id-ID')}`;
@@ -66,6 +68,7 @@ export default function CashFlowPage() {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showOutModal, setShowOutModal] = useState(false);
   const [showPettyModal, setShowPettyModal] = useState(false);
+  const [showReconciliation, setShowReconciliation] = useState(false);
   const [pettyAction, setPettyAction] = useState('fund');
   const [pettyAmount, setPettyAmount] = useState('');
   const [pettyDate, setPettyDate] = useState(toLocalDateTimeInput());
@@ -507,6 +510,13 @@ export default function CashFlowPage() {
             >
               <ArrowUpRight className="w-4 h-4" />
               <span>- Pengeluaran Manual</span>
+            </button>
+            <button
+              onClick={() => setShowReconciliation(true)}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-sm"
+            >
+              <FileSearch className="w-4 h-4" />
+              <span>Rekonsiliasi Mutasi</span>
             </button>
             <button
               onClick={() => openPettyModal('fund')}
@@ -1242,6 +1252,9 @@ export default function CashFlowPage() {
           </div>
         )}
       </main>
+      {showReconciliation && (
+        <PurchaseReconciliationModal onClose={() => setShowReconciliation(false)} />
+      )}
     </div>
   );
 }

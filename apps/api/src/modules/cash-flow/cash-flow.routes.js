@@ -21,6 +21,12 @@ router.get(
   cashFlowController.getMutations
 );
 
+router.post(
+  '/reconciliation/purchases',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.reconcilePurchases
+);
+
 // Catat uang masuk
 router.post(
   '/in',

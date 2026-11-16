@@ -52,7 +52,9 @@ const GoodsReceiptItemSchema = new mongoose.Schema(
         url: String,
         uploaded_at: { type: Date, default: Date.now }
       }
-    ]
+    ],
+    amphitheater_movement_id: { type: String, default: null },
+    amphitheater_posted_qty: { type: Number, default: 0, min: 0 }
   },
   { timestamps: true }
 );

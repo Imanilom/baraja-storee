@@ -5,6 +5,7 @@ const MarketlistItem = require('../marketlists/marketlist-item.model');
 const Purchase = require('../purchases/purchase.model');
 const PurchaseItem = require('../purchases/purchase-item.model');
 const auditService = require('../audit/audit.service');
+const integrationService = require('../integrations/integration.service');
 const { generateGoodsReceiptNumber } = require('../../utils/number-generator');
 const { MARKETLIST_STATUS, GOODS_RECEIPT_STATUS, RECEIVING_STATUS, PURCHASE_STATUS } = require('@purchasing/constants');
 
@@ -97,6 +98,7 @@ class ReceivingService {
     if (data.client_request_id) {
       const existing = await GoodsReceipt.findOne({ client_request_id: data.client_request_id });
       if (existing) {
+        await integrationService.enqueueGoodsReceiptSync(existing._id);
         return this.getReceiptById(existing._id);
       }
     }
@@ -192,6 +194,7 @@ class ReceivingService {
       description: `Surat Jalan Digital / Goods Receipt ${receipt_number} created for Marketlist ${marketlist.marketlist_number}`
     });
 
+    await integrationService.enqueueGoodsReceiptSync(receipt._id);
     return this.getReceiptById(receipt._id);
   }
 
@@ -203,6 +206,9 @@ class ReceivingService {
 
     if (receipt.status === GOODS_RECEIPT_STATUS.CANCELLED) {
       throw new Error('Cancelled goods receipts cannot be edited');
+    }
+    if (['verified', 'pending_approval', 'approved', 'posted', 'reversed'].includes(receipt.amphitheater_status)) {
+      throw new Error('Goods receipts verified or pending approval in Amphitheater cannot be edited');
     }
 
     const marketlist = await Marketlist.findById(receipt.marketlist_id);
@@ -322,6 +328,9 @@ class ReceivingService {
     });
 
     await this.recalculateMarketlistProgress(receipt.marketlist_id);
+    receipt.amphitheater_status = 'sync_pending';
+    await receipt.save();
+    await integrationService.enqueueGoodsReceiptSync(receipt._id, { force: true });
     return this.getReceiptById(receipt._id);
   }
 

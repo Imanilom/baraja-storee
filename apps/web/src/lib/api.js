@@ -152,6 +152,10 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(data)
     }),
+  syncReceipt: (receiptId) =>
+    fetchApi(`/integration/receipts/${receiptId}/sync`, {
+      method: 'POST'
+    }),
   getReceiptById: (id) => fetchApi(`/receipts/${id}`),
 
   // Invoices
@@ -229,6 +233,11 @@ export const api = {
   // Arus Kas & Saldo Kas/Bank
   getCashFlowSummary: (params = '') => fetchApi(`/cash-flow/summary${params}`),
   getCashFlowMutations: (params = '') => fetchApi(`/cash-flow/mutations${params}`),
+  reconcilePurchaseMutations: (data) =>
+    fetchApi('/cash-flow/reconciliation/purchases', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   recordCashIn: (data) =>
     fetchApi('/cash-flow/in', {
       method: 'POST',

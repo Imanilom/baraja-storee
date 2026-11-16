@@ -36,6 +36,28 @@ const GoodsReceiptSchema = new mongoose.Schema(
       enum: Object.values(GOODS_RECEIPT_STATUS),
       default: GOODS_RECEIPT_STATUS.SUBMITTED
     },
+    amphitheater_status: {
+      type: String,
+      enum: [
+        'not_synced',
+        'sync_pending',
+        'submitted',
+        'verified',
+        'pending_approval',
+        'approved',
+        'posted',
+        'rejected',
+        'reversed',
+        'sync_failed'
+      ],
+      default: 'not_synced'
+    },
+    amphitheater_receipt_id: {
+      type: String,
+      default: null
+    },
+    amphitheater_posted_at: Date,
+    amphitheater_last_sync_at: Date,
     general_condition: String,
     attachments: [
       {
