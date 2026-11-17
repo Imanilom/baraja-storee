@@ -5,6 +5,7 @@ const Marketlist = require('../marketlists/marketlist.model');
 const MarketlistItem = require('../marketlists/marketlist-item.model');
 const Purchase = require('../purchases/purchase.model');
 const PurchaseItem = require('../purchases/purchase-item.model');
+const Waste = require('../waste/waste.model');
 const IntegrationEvent = require('./integration-event.model');
 const { PURCHASE_STATUS } = require('@purchasing/constants');
 
@@ -65,14 +66,15 @@ async function buildGoodsReceiptPayload(receiptId) {
     ? await GoodsReceiptItem.find({
         receipt_id: { $in: priorReceipts.map((prior) => prior._id) },
         marketlist_item_id: { $in: marketlistItemIds }
-      }).select('receipt_id marketlist_item_id accepted_qty').lean()
+      }).select('receipt_id marketlist_item_id accepted_qty receiving_waste_qty').lean()
     : [];
   const priorReceivedBySupplierAndItem = new Map();
   for (const priorItem of priorItems) {
     const key = `${priorReceiptSupplier.get(priorItem.receipt_id.toString()) || '*'}:${priorItem.marketlist_item_id}`;
     priorReceivedBySupplierAndItem.set(
       key,
-      (priorReceivedBySupplierAndItem.get(key) || 0) + (priorItem.accepted_qty || 0)
+      (priorReceivedBySupplierAndItem.get(key) || 0) +
+        Math.max(0, (priorItem.accepted_qty || 0) - (priorItem.receiving_waste_qty || 0))
     );
   }
   const candidateMap = new Map();
@@ -120,6 +122,10 @@ async function buildGoodsReceiptPayload(receiptId) {
     const historicalReceivedQty =
       (priorReceivedBySupplierAndItem.get(`${supplierId}:${marketlistItem._id}`) || 0) +
       (priorReceivedBySupplierAndItem.get(`*:${marketlistItem._id}`) || 0);
+    const receivingWasteQty = Number(receiptItem.receiving_waste_qty) || 0;
+    if (receivingWasteQty > Number(receiptItem.accepted_qty || 0) + 1e-9) {
+      throw new Error(`Receiving waste exceeds accepted quantity for receipt item ${receiptItem._id}`);
+    }
     return {
       external_receipt_item_id: receiptItem._id.toString(),
       external_product_id: product._id.toString(),
@@ -134,10 +140,11 @@ async function buildGoodsReceiptPayload(receiptId) {
       purchased_qty: purchaseItem.actual_qty,
       previously_received_qty: historicalReceivedQty,
       received_qty: receiptItem.received_qty,
-      accepted_qty: receiptItem.accepted_qty,
+      accepted_qty: Math.max(0, receiptItem.accepted_qty - receivingWasteQty),
+      received_waste_qty: receivingWasteQty,
       rejected_qty: receiptItem.rejected_qty,
       condition: receiptItem.condition,
-      notes: receiptItem.item_note || ''
+      notes: receiptItem.item_note || (receivingWasteQty ? `Waste saat penerimaan: ${receivingWasteQty} ${sourceUnit}` : '')
     };
   });
 
@@ -164,9 +171,42 @@ async function buildGoodsReceiptPayload(receiptId) {
   };
 }
 
+async function buildWastePayload(wasteId, eventId = randomUUID()) {
+  const waste = await Waste.findById(wasteId)
+    .populate('product_id', 'name sku unit_id')
+    .populate('product_id.unit_id', 'name abbreviation')
+    .populate('location_id', 'name code')
+    .lean();
+  if (!waste) {
+    const error = new Error('Waste record not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (waste.stage === 'received' || !waste.location_id) {
+    throw new Error('Only post-receiving waste with a mapped location can be synchronized');
+  }
+  const product = waste.product_id;
+  if (!product) throw new Error('Waste product is unavailable');
+  return {
+    event_id: eventId,
+    event_type: 'STOCK_WASTE_RECORDED',
+    source_system: 'BARAJA_STORE',
+    external_waste_id: waste._id.toString(),
+    external_product_id: product._id.toString(),
+    external_unit_id: product.unit_id?._id?.toString() || product.unit_id?.toString() || '',
+    source_unit: waste.unit_name || product.unit_id?.abbreviation || product.unit_id?.name || '',
+    external_location_id: waste.location_id._id.toString(),
+    location_name: waste.location_id.name || '',
+    quantity: waste.quantity,
+    wasted_at: waste.wasted_at,
+    reason: waste.reason,
+    notes: waste.notes || ''
+  };
+}
+
 async function enqueueGoodsReceiptSync(receiptId, { force = false } = {}) {
   if (!force) {
-    const existing = await IntegrationEvent.findOne({ aggregate_id: receiptId })
+    const existing = await IntegrationEvent.findOne({ aggregate_id: receiptId, aggregate_type: 'goods_receipt' })
       .sort({ createdAt: -1 });
     if (existing) return existing;
   }
@@ -174,6 +214,7 @@ async function enqueueGoodsReceiptSync(receiptId, { force = false } = {}) {
   const event = await IntegrationEvent.create({
     event_id: randomUUID(),
     event_type: 'GOODS_RECEIPT_SUBMITTED',
+    aggregate_type: 'goods_receipt',
     aggregate_id: receiptId,
     status: 'pending',
     attempts: 0,
@@ -186,6 +227,31 @@ async function enqueueGoodsReceiptSync(receiptId, { force = false } = {}) {
   return event;
 }
 
+async function enqueueWasteSync(wasteId, { force = false } = {}) {
+  if (!force) {
+    const existing = await IntegrationEvent.findOne({ aggregate_id: wasteId, aggregate_type: 'waste' })
+      .sort({ createdAt: -1 });
+    if (existing) return existing;
+  }
+  const eventId = randomUUID();
+  const payload = await buildWastePayload(wasteId, eventId);
+  const event = await IntegrationEvent.create({
+    event_id: eventId,
+    event_type: 'STOCK_WASTE_RECORDED',
+    aggregate_type: 'waste',
+    aggregate_id: wasteId,
+    payload,
+    status: 'pending',
+    attempts: 0,
+    next_attempt_at: new Date()
+  });
+  await Waste.updateOne(
+    { _id: wasteId },
+    { $set: { integration_status: 'sync_pending', integration_error: '' } }
+  );
+  return event;
+}
+
 async function deliverEvent(event) {
   const baseUrl = process.env.BARAJA_AMPHITHEATER_API_URL;
   const secret = process.env.BARAJA_STORE_INTEGRATION_SECRET;
@@ -193,11 +259,14 @@ async function deliverEvent(event) {
 
   let payload = event.payload;
   if (!payload) {
-    payload = await buildGoodsReceiptPayload(event.aggregate_id);
-    payload.event_id = event.event_id;
+    payload = event.aggregate_type === 'waste'
+      ? await buildWastePayload(event.aggregate_id, event.event_id)
+      : await buildGoodsReceiptPayload(event.aggregate_id);
+    if (event.aggregate_type !== 'waste') payload.event_id = event.event_id;
     await IntegrationEvent.updateOne({ _id: event._id }, { $set: { payload } });
   }
-  const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/integration/receivings`, {
+  const endpoint = event.aggregate_type === 'waste' ? 'wastes' : 'receivings';
+  const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/integration/${endpoint}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -212,6 +281,26 @@ async function deliverEvent(event) {
   }
 
   const result = await response.json();
+  if (event.aggregate_type === 'waste') {
+    const data = result.data || result;
+    await Waste.updateOne(
+      { _id: event.aggregate_id },
+      {
+        $set: {
+          integration_status: 'synced',
+          integration_movement_id: data.movement_id || null,
+          integration_stock_balance: Number.isFinite(Number(data.stock_balance)) ? Number(data.stock_balance) : undefined,
+          integration_last_sync_at: new Date(),
+          integration_error: ''
+        }
+      }
+    );
+    await IntegrationEvent.updateOne(
+      { _id: event._id },
+      { $set: { status: 'delivered', delivered_at: new Date(), last_error: null, lease_until: null } }
+    );
+    return;
+  }
   const receiptId = result.data?.receipt_id || result.receipt_id || result.data?.receiptId;
   await GoodsReceipt.updateOne(
     { _id: event.aggregate_id },
@@ -252,6 +341,33 @@ async function processOneEvent() {
     await deliverEvent(event);
   } catch (error) {
     const retryDelay = Math.min(15 * 60 * 1000, 1000 * (2 ** Math.min(event.attempts, 10)));
+    const aggregateUpdate = event.aggregate_type === 'waste'
+      ? Waste.updateOne(
+          { _id: event.aggregate_id },
+          {
+            $set: {
+              integration_status: 'sync_failed',
+              integration_last_sync_at: new Date(),
+              integration_error: error.message.slice(0, 500)
+            }
+          }
+        )
+      : GoodsReceipt.updateOne(
+          { _id: event.aggregate_id, amphitheater_status: { $ne: 'posted' } },
+          { $set: { amphitheater_status: 'sync_failed', amphitheater_last_sync_at: new Date() } }
+        );
+    const linkedWasteUpdate = event.aggregate_type === 'goods_receipt'
+      ? Waste.updateMany(
+          { goods_receipt_id: event.aggregate_id },
+          {
+            $set: {
+              integration_status: 'sync_failed',
+              integration_last_sync_at: new Date(),
+              integration_error: error.message.slice(0, 500)
+            }
+          }
+        )
+      : Promise.resolve();
     await Promise.all([
       IntegrationEvent.updateOne(
         { _id: event._id },
@@ -264,10 +380,8 @@ async function processOneEvent() {
           }
         }
       ),
-      GoodsReceipt.updateOne(
-        { _id: event.aggregate_id, amphitheater_status: { $ne: 'posted' } },
-        { $set: { amphitheater_status: 'sync_failed', amphitheater_last_sync_at: new Date() } }
-      )
+      aggregateUpdate,
+      linkedWasteUpdate
     ]);
     console.error(`[Receiving integration] Event ${event.event_id} failed: ${error.message}`);
   }
@@ -298,6 +412,8 @@ function startOutboxWorker() {
 module.exports = {
   buildGoodsReceiptPayload,
   enqueueGoodsReceiptSync,
+  buildWastePayload,
+  enqueueWasteSync,
   processOneEvent,
   startOutboxWorker
 };

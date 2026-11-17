@@ -7,6 +7,7 @@ import 'digital_surat_jalan_screen.dart';
 import 'marketlist_aggregate_screen.dart';
 import 'price_history_screen.dart';
 import 'waste_screen.dart';
+import '../theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserModel user;
@@ -90,40 +91,43 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: const Color(0xFF059669),
-                borderRadius: BorderRadius.circular(8),
+                color: BarajaPalette.forest,
+                borderRadius: BorderRadius.circular(13),
               ),
-              child: const Icon(Icons.coffee, color: Colors.white, size: 20),
+              child: const Icon(
+                Icons.shopping_bag_outlined,
+                color: Colors.white,
+                size: 19,
+              ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.user.name,
+                    'Baraja Store',
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
+                      fontWeight: FontWeight.w800,
+                      color: BarajaPalette.ink,
                     ),
                   ),
                   Text(
-                    widget.user.role.toUpperCase(),
+                    'Hai, ${widget.user.name}',
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF059669),
+                      fontWeight: FontWeight.w500,
+                      color: BarajaPalette.muted,
                     ),
                   ),
                 ],
@@ -132,9 +136,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF64748B)),
-            onPressed: _loadDashboardData,
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton.filledTonal(
+              tooltip: 'Muat ulang dashboard',
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: _loadDashboardData,
+            ),
           ),
         ],
       ),
@@ -142,92 +150,15 @@ class _HomeScreenState extends State<HomeScreen> {
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 960),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // CTA Banner: Buat Marketlist Baru
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF059669), Color(0xFF047857)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF059669).withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.edit_note,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Buat Marketlist Baru',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Rencanakan kebutuhan belanja bahan baku outlet langsung dari HP Anda.',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
-                        const SizedBox(height: 14),
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            final created = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (ctx) =>
-                                    const CreateMarketlistScreen(),
-                              ),
-                            );
-                            if (created == true) {
-                              _loadDashboardData();
-                            }
-                          },
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text(
-                            '+ Tambah Marketlist',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF059669),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  _buildMarketlistHero(context),
+                  const SizedBox(height: 18),
                   Row(
                     children: [
                       Expanded(
@@ -236,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           title: 'Harga Terbaru',
                           subtitle: 'Tren harga produk',
                           icon: Icons.trending_up,
-                          color: const Color(0xFF2563EB),
+                          color: const Color(0xFF476D84),
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -252,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           title: 'Waste',
                           subtitle: 'Catat waste & nilainya',
                           icon: Icons.delete_outline,
-                          color: const Color(0xFFDC2626),
+                          color: const Color(0xFFB65A4D),
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -263,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
 
                   // Operational Stats
                   Row(
@@ -274,8 +205,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           '${_approvedMarketlists.length}',
                           'Siap Diterima',
                           Icons.local_shipping,
-                          const Color(0xFF0284C7),
-                          const Color(0xFFE0F2FE),
+                          const Color(0xFF53798E),
+                          const Color(0xFFEAF1F4),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -285,8 +216,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           '$_totalMarketlists',
                           'Semua Siklus',
                           Icons.format_list_bulleted,
-                          const Color(0xFF16A34A),
-                          const Color(0xFFDCFCE7),
+                          BarajaPalette.forest,
+                          BarajaPalette.mint,
                         ),
                       ),
                     ],
@@ -305,14 +236,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: BarajaPalette.outline),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
+                            color: Colors.black.withValues(alpha: 0.03),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -323,12 +254,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFD1FAE5),
-                              borderRadius: BorderRadius.circular(10),
+                              color: BarajaPalette.mint,
+                              borderRadius: BorderRadius.circular(13),
                             ),
                             child: const Icon(
                               Icons.analytics_outlined,
-                              color: Color(0xFF059669),
+                              color: BarajaPalette.forest,
                               size: 24,
                             ),
                           ),
@@ -342,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color: Color(0xFF0F172A),
+                                    color: BarajaPalette.ink,
                                   ),
                                 ),
                                 SizedBox(height: 2),
@@ -350,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   'Lihat total belanja per hari & per minggu (Perishable & Groceries)',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Color(0xFF64748B),
+                                    color: BarajaPalette.muted,
                                   ),
                                 ),
                               ],
@@ -589,6 +520,125 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildMarketlistHero(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [BarajaPalette.forest, BarajaPalette.forestDeep],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: BarajaPalette.forest.withValues(alpha: 0.18),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -44,
+            top: -64,
+            child: Container(
+              width: 190,
+              height: 190,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            right: 12,
+            bottom: -96,
+            child: Container(
+              width: 170,
+              height: 170,
+              decoration: BoxDecoration(
+                color: BarajaPalette.honey.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'PENGADAAN · OPERASIONAL',
+                    style: TextStyle(
+                      color: Color(0xFFE2EFE7),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 17),
+                const Text(
+                  'Belanja lebih\nterencana.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 25,
+                    height: 1.12,
+                    letterSpacing: -0.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Buat kebutuhan outlet dan pantau proses penerimaan dalam satu tempat.',
+                  style: TextStyle(
+                    color: Color(0xFFD4E3D9),
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: () async {
+                    final created = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CreateMarketlistScreen(),
+                      ),
+                    );
+                    if (created == true) _loadDashboardData();
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: BarajaPalette.forest,
+                    minimumSize: const Size(0, 46),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 19),
+                  label: const Text('Buat marketlist'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatCard(
     String title,
     String value,
@@ -601,8 +651,8 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BarajaPalette.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -612,13 +662,17 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Text(
                 title,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: BarajaPalette.muted,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
                   color: bgColor,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, size: 16, color: color),
               ),
@@ -628,15 +682,15 @@ class _HomeScreenState extends State<HomeScreen> {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: BarajaPalette.ink,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+            style: const TextStyle(fontSize: 11, color: BarajaPalette.muted),
           ),
         ],
       ),
@@ -653,18 +707,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: BarajaPalette.outline),
         ),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(width: 9),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, color: color, size: 21),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,15 +734,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: BarajaPalette.ink,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      color: Color(0xFF64748B),
+                      color: BarajaPalette.muted,
                       fontSize: 10,
                     ),
                   ),

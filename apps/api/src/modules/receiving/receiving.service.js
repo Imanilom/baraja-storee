@@ -256,6 +256,9 @@ class ReceivingService {
       if (accepted + rejected > received + 1e-9) {
         throw new Error('Accepted and rejected quantities cannot exceed received quantity');
       }
+      if ((Number(existingItem.receiving_waste_qty) || 0) > accepted + 1e-9) {
+        throw new Error('Accepted quantity cannot be lower than waste already recorded for this receipt item');
+      }
 
       const quantitiesChanged =
         received !== existingItem.received_qty ||
@@ -359,7 +362,10 @@ class ReceivingService {
     allReceiptItems.forEach((ri) => {
       const key = ri.marketlist_item_id.toString();
       const current = acceptedMap.get(key) || 0;
-      acceptedMap.set(key, current + (ri.accepted_qty || 0));
+      acceptedMap.set(
+        key,
+        current + Math.max(0, (ri.accepted_qty || 0) - (ri.receiving_waste_qty || 0))
+      );
     });
 
     let allCompleted = true;

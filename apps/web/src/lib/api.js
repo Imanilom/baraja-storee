@@ -96,6 +96,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  syncWasteRecord: (id) =>
+    fetchApi(`/waste/${id}/sync`, {
+      method: 'POST'
+    }),
   getSuppliers: () => fetchApi('/suppliers'),
   createSupplier: (data) =>
     fetchApi('/suppliers', {

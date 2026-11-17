@@ -8,8 +8,9 @@ import {
   ShoppingCart, Plus, Eye, X, Package, Calendar, CreditCard,
   FileText, Store, ClipboardList, AlertTriangle, CheckCircle2,
   Wallet, AlertOctagon, Clock, TrendingDown, ChevronRight, Banknote,
-  Truck, RotateCcw, Sparkles, Check, Pencil, Trash2, PackagePlus
+  Truck, RotateCcw, Sparkles, Check, Pencil, Trash2, PackagePlus, Download
 } from 'lucide-react';
+import { downloadCsv } from '../../lib/csv-export.mjs';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: '💵 Kas Tunai (Uang Cash Fisik)' },
@@ -111,6 +112,31 @@ const getMlStatusMeta = (status) => {
   };
 };
 
+const buildPurchaseQuery = ({
+  filterSupplier,
+  filterPeriod,
+  filterDate,
+  filterStartDate,
+  filterEndDate,
+  page = 1,
+  limit = 50
+}) => {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit)
+  });
+  if (filterSupplier) params.set('supplier_id', filterSupplier);
+  if (filterPeriod === 'daily' || filterPeriod === 'weekly') {
+    const range = getDateRange(filterDate, filterPeriod);
+    params.set('startDate', range.startDate);
+    params.set('endDate', range.endDate);
+  } else {
+    if (filterStartDate) params.set('startDate', filterStartDate);
+    if (filterEndDate) params.set('endDate', filterEndDate);
+  }
+  return `?${params.toString()}`;
+};
+
 export default function TransactionsPage() {
   const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'debts'
 
@@ -194,6 +220,7 @@ export default function TransactionsPage() {
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [purchaseTotalAmount, setPurchaseTotalAmount] = useState(0);
+  const [exportingTransactions, setExportingTransactions] = useState(false);
 
   // Default tempo: 7 hari dari tanggal pembelian
   const getDefaultDueDate = (baseDateStr) => {
@@ -244,15 +271,13 @@ export default function TransactionsPage() {
     fetchDailySummary();
     setLoading(true);
     try {
-      let params = '?limit=50';
-      if (filterSupplier) params += `&supplier_id=${filterSupplier}`;
-      if (filterPeriod === 'daily' || filterPeriod === 'weekly') {
-        const range = getDateRange(filterDate, filterPeriod);
-        params += `&startDate=${range.startDate}&endDate=${range.endDate}`;
-      } else {
-        if (filterStartDate) params += `&startDate=${filterStartDate}`;
-        if (filterEndDate) params += `&endDate=${filterEndDate}`;
-      }
+      const params = buildPurchaseQuery({
+        filterSupplier,
+        filterPeriod,
+        filterDate,
+        filterStartDate,
+        filterEndDate
+      });
       const res = await api.getPurchases(params);
       setPurchases(res.data || []);
       setPurchaseTotalAmount(Number(res.total_amount) || 0);
@@ -262,6 +287,96 @@ export default function TransactionsPage() {
       setLoading(false);
     }
   }, [filterSupplier, filterPeriod, filterDate, filterStartDate, filterEndDate, fetchDailySummary]);
+
+  const handleExportTransactions = async () => {
+    setExportingTransactions(true);
+    try {
+      const purchases = [];
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const params = buildPurchaseQuery({
+          filterSupplier,
+          filterPeriod,
+          filterDate,
+          filterStartDate,
+          filterEndDate,
+          page,
+          limit: 500
+        });
+        const response = await api.getPurchases(params);
+        if (!Array.isArray(response.data)) {
+          throw new Error('Data transaksi pembelian tidak valid.');
+        }
+        purchases.push(...response.data);
+        totalPages = Number(response.totalPages) || 1;
+        page += 1;
+      } while (page <= totalPages);
+
+      if (purchases.length === 0) {
+        alert('Tidak ada transaksi pembelian pada filter yang dipilih.');
+        return;
+      }
+
+      purchases.sort(
+        (a, b) => new Date(a.purchased_at).getTime() - new Date(b.purchased_at).getTime()
+      );
+      const rows = [
+        [
+          'Tanggal Pembelian',
+          'No. Transaksi',
+          'Supplier',
+          'Metode Pembayaran',
+          'Status Pembayaran',
+          'Akun Pembayaran',
+          'Jatuh Tempo',
+          'Total Aktual (Rp)',
+          'Total Dibayar (Rp)',
+          'Sisa Hutang (Rp)',
+          'Referensi Invoice',
+          'Catatan'
+        ],
+        ...purchases.map((purchase) => {
+          const paymentSource = purchase.payment_source ||
+            (purchase.payment_method === 'transfer' ? 'bank' : 'cash');
+          return [
+            purchase.purchased_at ? new Date(purchase.purchased_at).toLocaleString('sv-SE') : '',
+            purchase.purchase_number || '',
+            purchase.supplier_id?.name || '',
+            purchase.payment_method === 'tempo'
+              ? 'Tempo / Hutang'
+              : purchase.payment_method === 'transfer' ? 'Transfer Bank' : 'Tunai',
+            purchase.payment_method === 'tempo'
+              ? debtStatusLabel(purchase.payment_status)
+              : 'Lunas',
+            paymentSource === 'bank'
+              ? 'Rekening Bank'
+              : paymentSource === 'petty_cash' ? 'Kas Kecil' : 'Kas Tunai',
+            purchase.due_date ? new Date(purchase.due_date).toLocaleDateString('sv-SE') : '',
+            Number(purchase.total_actual) || 0,
+            Number(purchase.amount_paid) || 0,
+            Number(purchase.amount_remaining) || 0,
+            purchase.invoice_ref || '',
+            purchase.notes || ''
+          ];
+        })
+      ];
+
+      const fileRange = filterPeriod === 'daily' || filterPeriod === 'weekly'
+        ? getDateRange(filterDate, filterPeriod)
+        : filterPeriod === 'custom'
+          ? { startDate: filterStartDate || 'awal', endDate: filterEndDate || 'akhir' }
+          : { startDate: 'semua', endDate: 'tanggal' };
+      downloadCsv(
+        `transaksi-pembelian-${fileRange.startDate}-${fileRange.endDate}.csv`,
+        rows
+      );
+    } catch (error) {
+      alert(`Gagal mengekspor transaksi pembelian: ${error.message}`);
+    } finally {
+      setExportingTransactions(false);
+    }
+  };
 
   const fetchDebts = useCallback(async () => {
     setDebtsLoading(true);
@@ -1140,6 +1255,15 @@ export default function TransactionsPage() {
                   />
                 </>
               )}
+              <button
+                type="button"
+                onClick={handleExportTransactions}
+                disabled={exportingTransactions}
+                className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {exportingTransactions ? 'Menyiapkan...' : 'Export Lunas + Hutang'}
+              </button>
             </div>
           )}
         </div>

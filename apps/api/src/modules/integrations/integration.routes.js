@@ -2,14 +2,30 @@ const express = require('express');
 const mongoose = require('mongoose');
 const GoodsReceipt = require('../receiving/goods-receipt.model');
 const GoodsReceiptItem = require('../receiving/goods-receipt-item.model');
+const Waste = require('../waste/waste.model');
 const IntegrationEvent = require('./integration-event.model');
 const integrationAuth = require('./integration-auth');
 const integrationService = require('./integration.service');
+const coffeeInventoryController = require('./coffee-inventory.controller');
 const authenticate = require('../../middleware/auth');
 const authorize = require('../../middleware/rbac');
 const { ROLES } = require('@purchasing/constants');
 
 const router = express.Router();
+const inventoryRoles = [
+  ROLES.ADMIN,
+  ROLES.MANAGEMENT,
+  ROLES.PURCHASING,
+  ROLES.RECEIVER,
+  ROLES.LEADER,
+  ROLES.ACCOUNTING
+];
+const recipeManagerRoles = [ROLES.ADMIN, ROLES.MANAGEMENT, ROLES.LEADER];
+
+router.get('/coffee/inventory', authenticate, authorize(...inventoryRoles), coffeeInventoryController.getInventory);
+router.get('/coffee/recipes', authenticate, authorize(...inventoryRoles), coffeeInventoryController.getRecipes);
+router.post('/coffee/recipes', authenticate, authorize(...recipeManagerRoles), coffeeInventoryController.createRecipe);
+router.put('/coffee/recipes/:recipeId', authenticate, authorize(...recipeManagerRoles), coffeeInventoryController.updateRecipe);
 
 router.post('/receipts/:id/sync', authenticate, authorize(ROLES.ADMIN, ROLES.RECEIVER, ROLES.LEADER, ROLES.PURCHASING), async (req, res) => {
   try {
@@ -89,8 +105,23 @@ router.post('/receiving-status', integrationAuth, async (req, res) => {
         }
       }
     );
+    const receivingWasteStatus = status === 'posted'
+      ? 'synced'
+      : status === 'sync_failed'
+        ? 'sync_failed'
+        : 'receipt_sync_pending';
+    await Waste.updateMany(
+      { goods_receipt_id: receipt._id },
+      {
+        $set: {
+          integration_status: receivingWasteStatus,
+          integration_last_sync_at: new Date(),
+          integration_error: status === 'sync_failed' ? 'Sinkronisasi penerimaan gagal di Baraja Coffee.' : ''
+        }
+      }
+    );
     await IntegrationEvent.updateMany(
-      { aggregate_id: receipt._id, status: { $in: ['pending', 'failed'] } },
+      { aggregate_id: receipt._id, aggregate_type: 'goods_receipt', status: { $in: ['pending', 'failed'] } },
       { $set: { status: 'delivered', delivered_at: new Date(), last_error: null, lease_until: null } }
     );
     return res.json({ success: true, status });

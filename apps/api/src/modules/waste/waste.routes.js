@@ -17,5 +17,6 @@ const operationalRoles = [
 router.use(authenticate);
 router.get('/', authorize(...operationalRoles, ROLES.ACCOUNTING), wasteController.list);
 router.post('/', authorize(...operationalRoles), wasteController.create);
+router.post('/:id/sync', authorize(...operationalRoles), wasteController.retrySync);
 
 module.exports = router;

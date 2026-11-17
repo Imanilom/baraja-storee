@@ -27,6 +27,11 @@ const GoodsReceiptItemSchema = new mongoose.Schema(
       default: 0,
       min: 0
     },
+    receiving_waste_qty: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     rejected_qty: {
       type: Number,
       default: 0,

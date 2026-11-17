@@ -7,8 +7,12 @@ const IntegrationEventSchema = new mongoose.Schema(
     source_system: { type: String, required: true, default: 'BARAJA_STORE' },
     aggregate_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'GoodsReceipt',
       required: true
+    },
+    aggregate_type: {
+      type: String,
+      enum: ['goods_receipt', 'waste'],
+      default: 'goods_receipt'
     },
     payload: {
       type: mongoose.Schema.Types.Mixed,

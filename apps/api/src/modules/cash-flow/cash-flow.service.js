@@ -4,6 +4,7 @@ const DebtPayment = require('../purchases/debt-payment.model');
 const Overhead = require('../overheads/overhead.model');
 const OverheadPayment = require('../overheads/overhead-payment.model');
 const ActivityLog = require('../audit/activity-log.model');
+const INITIAL_DOWN_PAYMENT_NOTE = 'Uang muka / DP saat transaksi';
 
 const parseDateBoundary = (value, endOfDay = false) => {
   if (!value) return null;
@@ -23,6 +24,35 @@ const isWithinPeriod = (value, startDate, endDate) => {
 };
 
 class CashFlowService {
+  async getPurchaseInitialDownPayments(purchases) {
+    if (!purchases.length) return new Map();
+    const purchaseIds = purchases.map((purchase) => purchase._id);
+    const payments = await DebtPayment.find({
+      purchase_id: { $in: purchaseIds },
+      notes: { $ne: INITIAL_DOWN_PAYMENT_NOTE }
+    })
+      .select('purchase_id amount')
+      .lean();
+    const laterPaymentsByPurchase = new Map();
+
+    payments.forEach((payment) => {
+      const purchaseId = payment.purchase_id.toString();
+      const laterPayments = laterPaymentsByPurchase.get(purchaseId) || 0;
+      laterPaymentsByPurchase.set(
+        purchaseId,
+        laterPayments + (Number(payment.amount) || 0)
+      );
+    });
+
+    return new Map(purchases.map((purchase) => {
+      const laterPayments = laterPaymentsByPurchase.get(purchase._id.toString()) || 0;
+      return [
+        purchase._id.toString(),
+        Math.max(0, (Number(purchase.amount_paid) || 0) - laterPayments)
+      ];
+    }));
+  }
+
   async generateTransactionNumber(prefix = 'KM') {
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
@@ -262,6 +292,7 @@ class CashFlowService {
         purchased_at: { $lte: cutoff }
       }).select('total_actual amount_paid payment_method purchased_at').lean()
     ]);
+    const initialDownPayments = await this.getPurchaseInitialDownPayments(purchases);
 
     let balance = 0;
     transactions.forEach((transaction) => {
@@ -275,7 +306,7 @@ class CashFlowService {
     });
     purchases.forEach((purchase) => {
       balance -= purchase.payment_method === 'tempo'
-        ? Number(purchase.amount_paid) || 0
+        ? initialDownPayments.get(purchase._id.toString()) || 0
         : Number(purchase.total_actual) || 0;
     });
     return balance;
@@ -297,6 +328,7 @@ class CashFlowService {
         purchased_at: { $gte: startDate, $lte: endDate }
       }).select('total_actual amount_paid payment_method').lean()
     ]);
+    const initialDownPayments = await this.getPurchaseInitialDownPayments(purchases);
     let balance = 0;
     transactions.forEach((transaction) => {
       if (transaction.type === 'petty_transfer') {
@@ -309,7 +341,7 @@ class CashFlowService {
     });
     purchases.forEach((purchase) => {
       balance -= purchase.payment_method === 'tempo'
-        ? Number(purchase.amount_paid) || 0
+        ? initialDownPayments.get(purchase._id.toString()) || 0
         : Number(purchase.total_actual) || 0;
     });
     return balance;
@@ -394,10 +426,11 @@ class CashFlowService {
     const [transactions, purchases, debtPayments, overheads, overheadPayments] = await Promise.all([
       CashTransaction.find().lean(),
       Purchase.find().lean(),
-      DebtPayment.find({ notes: { $ne: 'Uang muka / DP saat transaksi' } }).lean(),
+      DebtPayment.find({ notes: { $ne: INITIAL_DOWN_PAYMENT_NOTE } }).lean(),
       Overhead.find().lean(),
       OverheadPayment.find().lean()
     ]);
+    const initialDownPayments = await this.getPurchaseInitialDownPayments(purchases);
 
     transactions.forEach((transaction) => {
       if (transaction.type === 'in') {
@@ -429,7 +462,7 @@ class CashFlowService {
       const account = purchase.payment_source ||
         (purchase.payment_method === 'transfer' ? 'bank' : 'cash');
       const amount = purchase.payment_method === 'tempo'
-        ? Number(purchase.amount_paid) || 0
+        ? initialDownPayments.get(purchase._id.toString()) || 0
         : Number(purchase.total_actual) || 0;
       addExpense(account, amount, purchase.purchased_at, 'purchase');
     });
@@ -656,6 +689,7 @@ class CashFlowService {
         .populate('purchased_by', 'name')
         .sort({ purchased_at: -1 })
         .lean();
+      const initialDownPayments = await this.getPurchaseInitialDownPayments(purchases);
 
       purchases.forEach((p) => {
         if (!isWithinDate(p.purchased_at)) return;
@@ -663,7 +697,7 @@ class CashFlowService {
         if (account && account !== 'all' && src !== account) return;
 
         if (p.payment_method === 'tempo') {
-          const dp = Number(p.amount_paid) || 0;
+          const dp = initialDownPayments.get(p._id.toString()) || 0;
           if (dp > 0) {
             list.push({
               _id: p._id,

@@ -23,13 +23,19 @@ class _WasteScreenState extends State<WasteScreen> {
 
   bool _loading = true;
   bool _saving = false;
+  String? _syncingWasteId;
   String? _error;
   List<dynamic> _products = [];
   List<dynamic> _marketlists = [];
+  List<dynamic> _receipts = [];
+  List<dynamic> _locations = [];
+  List<dynamic> _marketlistPurchases = [];
   List<dynamic> _latestPrices = [];
   List<dynamic> _records = [];
   String? _productId;
   String? _marketlistId;
+  String? _receiptId;
+  String? _locationId;
   String _stage = 'received';
   DateTime _wastedAt = DateTime.now();
 
@@ -44,9 +50,6 @@ class _WasteScreenState extends State<WasteScreen> {
   static const _primary = Color(0xFF059669);
 
   bool get _isReceivingStage => _stage == 'received';
-
-  double _stockOf(Map<String, dynamic> product) =>
-      num.tryParse('${product['current_stock'] ?? 0}')?.toDouble() ?? 0;
 
   String _marketlistStatus(dynamic value) {
     final status = value?.toString().replaceAll('_', ' ') ?? 'status tidak ada';
@@ -80,6 +83,15 @@ class _WasteScreenState extends State<WasteScreen> {
     return null;
   }
 
+  Map<String, dynamic>? get _selectedReceipt {
+    for (final receipt in _receipts) {
+      if (receipt is Map && receipt['_id']?.toString() == _receiptId) {
+        return Map<String, dynamic>.from(receipt);
+      }
+    }
+    return null;
+  }
+
   List<Map<String, dynamic>> get _availableProducts {
     final marketlist = _selectedMarketlist;
     if (marketlist == null) {
@@ -90,13 +102,32 @@ class _WasteScreenState extends State<WasteScreen> {
           .toList();
     }
 
-    final items = marketlist['items'];
-    if (items is! List) return [];
-    return items
+    final receiptItems = _selectedReceipt?['items'];
+    final marketlistItems = marketlist['items'];
+    if (receiptItems is! List || marketlistItems is! List) return [];
+    return receiptItems
         .whereType<Map>()
-        .where((item) => item['item_status'] != 'rejected')
-        .where((item) => item['product_id'] is Map)
-        .map((item) => Map<String, dynamic>.from(item['product_id'] as Map))
+        .map((receiptItem) {
+          final marketlistItemRef = receiptItem['marketlist_item_id'];
+          final marketlistItemId = marketlistItemRef is Map
+              ? marketlistItemRef['_id']?.toString()
+              : marketlistItemRef?.toString();
+          Map? marketlistItem;
+          for (final item in marketlistItems.whereType<Map>()) {
+            if (item['_id']?.toString() == marketlistItemId) {
+              marketlistItem = item;
+              break;
+            }
+          }
+          final product = marketlistItem?['product_id'];
+          if (product is! Map) return null;
+          return <String, dynamic>{
+            ...Map<String, dynamic>.from(product),
+            'marketlistItemId': marketlistItemId,
+            'receiptItemId': receiptItem['_id']?.toString(),
+          };
+        })
+        .whereType<Map<String, dynamic>>()
         .toList();
   }
 
@@ -109,9 +140,46 @@ class _WasteScreenState extends State<WasteScreen> {
     return null;
   }
 
+  Map<String, dynamic>? get _selectedPurchaseItem {
+    final marketlistItemId = _selectedProduct?['marketlistItemId']?.toString();
+    if (marketlistItemId == null) return null;
+    for (final purchase in _marketlistPurchases.whereType<Map>()) {
+      final items = purchase['items'];
+      if (items is! List) continue;
+      for (final item in items.whereType<Map>()) {
+        final itemRef = item['marketlist_item_id'];
+        final itemId = itemRef is Map
+            ? itemRef['_id']?.toString()
+            : itemRef?.toString();
+        if (itemId == marketlistItemId) {
+          return Map<String, dynamic>.from(item);
+        }
+      }
+    }
+    return null;
+  }
+
+  String get _unitName {
+    final purchaseUnit = _selectedPurchaseItem?['unit_name']?.toString();
+    if (_isReceivingStage && purchaseUnit != null && purchaseUnit.isNotEmpty) {
+      return purchaseUnit;
+    }
+    final unit = _selectedProduct?['unit_id'];
+    if (unit is Map) {
+      return unit['abbreviation']?.toString() ??
+          unit['name']?.toString() ??
+          'unit';
+    }
+    return 'unit';
+  }
+
   double get _unitPrice => _latestPurchasePrice().toDouble();
 
   num _latestPurchasePrice() {
+    final marketlistPrice = num.tryParse(
+      '${_selectedPurchaseItem?['actual_unit_price'] ?? 0}',
+    );
+    if (marketlistPrice != null && marketlistPrice > 0) return marketlistPrice;
     for (final entry in _latestPrices) {
       if (entry is Map &&
           entry['product'] is Map &&
@@ -160,6 +228,7 @@ class _WasteScreenState extends State<WasteScreen> {
         ),
         ApiService.get('/waste'),
         ApiService.get('/prices/overview'),
+        ApiService.get('/locations'),
       ]);
       final productsData = responses[0] is Map ? responses[0]['data'] : null;
       final marketlistsData = responses[1] is Map
@@ -169,6 +238,7 @@ class _WasteScreenState extends State<WasteScreen> {
           : null;
       final recordsData = responses[2] is Map ? responses[2]['data'] : null;
       final pricesData = responses[3] is Map ? responses[3]['data'] : null;
+      final locationsData = responses[4] is Map ? responses[4]['data'] : null;
       if (mounted) {
         setState(() {
           _products = productsData is List ? productsData : [];
@@ -177,6 +247,9 @@ class _WasteScreenState extends State<WasteScreen> {
               : [];
           _records = recordsData is List ? recordsData : [];
           _latestPrices = pricesData is List ? pricesData : [];
+          _locations = locationsData is List
+              ? locationsData.whereType<Map>().toList()
+              : [];
           if (_marketlistId != null &&
               !_marketlists.any(
                 (marketlist) =>
@@ -201,21 +274,24 @@ class _WasteScreenState extends State<WasteScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_isReceivingStage && _marketlistId == null) {
-      setState(() => _error = 'Pilih Marketlist untuk waste saat penerimaan.');
+    if (_isReceivingStage &&
+        (_marketlistId == null ||
+            _receiptId == null ||
+            _selectedProduct?['receiptItemId'] == null)) {
+      setState(
+        () => _error = 'Pilih Marketlist, penerimaan, dan item penerimaan.',
+      );
       return;
     }
-    final selectedProduct = _selectedProduct;
-    if (selectedProduct == null) {
-      setState(() => _error = 'Pilih produk yang valid.');
-      return;
-    }
-    if (!_isReceivingStage &&
-        double.parse(_quantityController.text) > _stockOf(selectedProduct)) {
+    if (!_isReceivingStage && _locationId == null) {
       setState(
         () => _error =
-            'Jumlah melebihi stok tersedia (${_stockOf(selectedProduct)}).',
+            'Pilih lokasi stok untuk menyinkronkan waste ke Baraja Coffee.',
       );
+      return;
+    }
+    if (_selectedProduct == null) {
+      setState(() => _error = 'Pilih produk yang valid.');
       return;
     }
     if (_unitPrice <= 0) {
@@ -229,9 +305,14 @@ class _WasteScreenState extends State<WasteScreen> {
       _error = null;
     });
     try {
-      await ApiService.post('/waste', {
+      final response = await ApiService.post('/waste', {
         'product_id': _productId,
+        'unit_name': _unitName,
         if (_isReceivingStage) 'marketlist_id': _marketlistId,
+        if (_isReceivingStage) 'goods_receipt_id': _receiptId,
+        if (_isReceivingStage)
+          'goods_receipt_item_id': _selectedProduct?['receiptItemId'],
+        if (!_isReceivingStage) 'location_id': _locationId,
         'quantity': double.parse(_quantityController.text),
         'stage': _stage,
         'reason': _reasonController.text.trim(),
@@ -243,9 +324,17 @@ class _WasteScreenState extends State<WasteScreen> {
       _notesController.clear();
       await _load();
       if (mounted) {
+        final wasteData = response is Map ? response['data'] : null;
+        final integrationStatus = wasteData is Map
+            ? wasteData['integration_status']?.toString()
+            : null;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Waste dicatat dengan harga beli terakhir.'),
+          SnackBar(
+            content: Text(
+              integrationStatus == 'sync_failed'
+                  ? 'Waste tercatat, tetapi sinkronisasi Coffee gagal. Periksa riwayat waste.'
+                  : 'Waste dicatat dengan harga beli terakhir.',
+            ),
           ),
         );
       }
@@ -257,6 +346,32 @@ class _WasteScreenState extends State<WasteScreen> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _retryWasteSync(Map record) async {
+    final wasteId = record['_id']?.toString();
+    if (wasteId == null) return;
+    setState(() {
+      _syncingWasteId = wasteId;
+      _error = null;
+    });
+    try {
+      await ApiService.post('/waste/$wasteId/sync', {});
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sinkronisasi waste dikirim ulang.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = error.toString().replaceFirst('Exception:', '').trim(),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _syncingWasteId = null);
     }
   }
 
@@ -378,15 +493,53 @@ class _WasteScreenState extends State<WasteScreen> {
     if (selectedId != null && mounted) {
       setState(() {
         _marketlistId = selectedId;
+        _receiptId = null;
+        _receipts = [];
+        _marketlistPurchases = [];
         _productId = null;
         _error = null;
       });
+      try {
+        final responses = await Future.wait([
+          ApiService.get('/marketlists/$selectedId/receipts'),
+          ApiService.get('/purchases?marketlist_id=$selectedId&limit=500'),
+        ]);
+        final data = responses[0] is Map ? responses[0]['data'] : null;
+        final purchaseData = responses[1] is Map ? responses[1]['data'] : null;
+        if (mounted) {
+          setState(() {
+            _receipts = data is List
+                ? data
+                      .whereType<Map>()
+                      .where(
+                        (receipt) =>
+                            receipt['status'] != 'cancelled' &&
+                            ![
+                              'verified',
+                              'pending_approval',
+                              'approved',
+                              'posted',
+                              'reversed',
+                            ].contains(receipt['amphitheater_status']),
+                      )
+                      .toList()
+                : [];
+            _marketlistPurchases = purchaseData is List ? purchaseData : [];
+          });
+        }
+      } catch (error) {
+        if (mounted) {
+          setState(
+            () =>
+                _error = error.toString().replaceFirst('Exception:', '').trim(),
+          );
+        }
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedProduct = _selectedProduct;
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -460,9 +613,10 @@ class _WasteScreenState extends State<WasteScreen> {
                                       .toList(),
                                   onChanged: (value) => setState(() {
                                     _stage = value ?? 'received';
-                                    if (!_isReceivingStage) {
-                                      _marketlistId = null;
-                                    }
+                                    _marketlistId = null;
+                                    _receiptId = null;
+                                    _receipts = [];
+                                    _marketlistPurchases = [];
                                     _productId = null;
                                     _error = null;
                                   }),
@@ -536,6 +690,50 @@ class _WasteScreenState extends State<WasteScreen> {
                                       ),
                                     ),
                                   ],
+                                  DropdownButtonFormField<String>(
+                                    key: ValueKey(
+                                      'receipt-$_marketlistId-$_receiptId',
+                                    ),
+                                    initialValue: _receiptId,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Penerimaan',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: _receipts.map((receipt) {
+                                      final data = Map<String, dynamic>.from(
+                                        receipt as Map,
+                                      );
+                                      return DropdownMenuItem<String>(
+                                        value: data['_id'].toString(),
+                                        child: Text(
+                                          '${data['receipt_number'] ?? 'Penerimaan'} · ${_formatDate(data['received_at'])}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (value) => setState(() {
+                                      _receiptId = value;
+                                      _productId = null;
+                                    }),
+                                    validator: (value) =>
+                                        _isReceivingStage && value == null
+                                        ? 'Pilih penerimaan'
+                                        : null,
+                                  ),
+                                  if (_marketlistId != null &&
+                                      _receipts.isEmpty)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 6),
+                                      child: Text(
+                                        'Tidak ada penerimaan yang masih dapat diubah. Jika sudah diposting di Coffee, catat sebagai waste stok.',
+                                        style: TextStyle(
+                                          color: Colors.orange,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
                                   const SizedBox(height: 12),
                                 ] else ...[
                                   Container(
@@ -559,7 +757,7 @@ class _WasteScreenState extends State<WasteScreen> {
                                         SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            'Pengolahan dan tahap setelahnya mengurangi stok produk langsung. Marketlist tidak perlu dipilih.',
+                                            'Waste akan dikurangi dari stok Baraja Coffee pada lokasi yang dipilih. Stok lokal tidak dikurangi agar tidak terjadi pengurangan ganda.',
                                             style: TextStyle(
                                               color: Color(0xFF92400E),
                                               fontSize: 12,
@@ -568,6 +766,41 @@ class _WasteScreenState extends State<WasteScreen> {
                                         ),
                                       ],
                                     ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    key: ValueKey('location-$_locationId'),
+                                    initialValue: _locationId,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Lokasi stok',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: _locations
+                                        .where(
+                                          (location) =>
+                                              location['is_active'] != false,
+                                        )
+                                        .map((location) {
+                                          final data =
+                                              Map<String, dynamic>.from(
+                                                location as Map,
+                                              );
+                                          return DropdownMenuItem<String>(
+                                            value: data['_id'].toString(),
+                                            child: Text(
+                                              data['name']?.toString() ?? '-',
+                                            ),
+                                          );
+                                        })
+                                        .toList(),
+                                    onChanged: (value) => setState(() {
+                                      _locationId = value;
+                                    }),
+                                    validator: (value) =>
+                                        !_isReceivingStage && value == null
+                                        ? 'Pilih lokasi stok'
+                                        : null,
                                   ),
                                   const SizedBox(height: 12),
                                 ],
@@ -590,9 +823,10 @@ class _WasteScreenState extends State<WasteScreen> {
                                     );
                                   }).toList(),
                                   hint: Text(
-                                    _selectedMarketlist == null
-                                        ? 'Pilih produk'
-                                        : 'Tidak ada produk pada Marketlist',
+                                    _isReceivingStage &&
+                                            _selectedReceipt == null
+                                        ? 'Pilih penerimaan terlebih dahulu'
+                                        : 'Tidak ada produk pada penerimaan',
                                   ),
                                   onChanged: (value) =>
                                       setState(() => _productId = value),
@@ -600,26 +834,14 @@ class _WasteScreenState extends State<WasteScreen> {
                                       value == null ? 'Pilih produk' : null,
                                 ),
                                 const SizedBox(height: 12),
-                                if (!_isReceivingStage &&
-                                    selectedProduct != null) ...[
-                                  Text(
-                                    'Stok tersedia: ${_stockOf(selectedProduct)} ${selectedProduct['unit_id'] is Map ? (selectedProduct['unit_id']['abbreviation'] ?? selectedProduct['unit_id']['name'] ?? '') : ''}',
-                                    style: const TextStyle(
-                                      color: Color(0xFF475569),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                ],
                                 TextFormField(
                                   controller: _quantityController,
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
                                         decimal: true,
                                       ),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Jumlah waste',
+                                  decoration: InputDecoration(
+                                    labelText: 'Jumlah waste ($_unitName)',
                                     border: OutlineInputBorder(),
                                   ),
                                   validator: (value) {
@@ -657,7 +879,7 @@ class _WasteScreenState extends State<WasteScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(
-                                    'Harga beli: ${_currency.format(_unitPrice)} per unit\nNilai waste: ${_currency.format(_wasteValue)}',
+                                    'Harga beli: ${_currency.format(_unitPrice)} per $_unitName\nNilai waste: ${_currency.format(_wasteValue)}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -748,6 +970,12 @@ class _WasteScreenState extends State<WasteScreen> {
                                 [
                                   '${_stages[record['stage']] ?? _stages['other']} · ${_formatDate(record['wasted_at'])}',
                                   ?marketlistText,
+                                  'Sinkronisasi Coffee: ${record['integration_status'] ?? 'belum disinkronkan'}',
+                                  if ((record['integration_error']
+                                              ?.toString() ??
+                                          '')
+                                      .isNotEmpty)
+                                    record['integration_error'].toString(),
                                   '$qty $unit × ${_currency.format(price)}',
                                   record['reason']?.toString() ?? '',
                                   if ((record['notes']?.toString() ?? '')
@@ -756,15 +984,35 @@ class _WasteScreenState extends State<WasteScreen> {
                                 ].join('\n'),
                               ),
                               isThreeLine: true,
-                              trailing: Text(
-                                _currency.format(total),
-                                maxLines: 2,
-                                textAlign: TextAlign.end,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              trailing: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _currency.format(total),
+                                    maxLines: 2,
+                                    textAlign: TextAlign.end,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (record['integration_status'] ==
+                                      'sync_failed')
+                                    IconButton(
+                                      tooltip: 'Coba sinkronisasi lagi',
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed:
+                                          _syncingWasteId ==
+                                              record['_id']?.toString()
+                                          ? null
+                                          : () => _retryWasteSync(record),
+                                      icon: const Icon(
+                                        Icons.sync,
+                                        color: _indigo,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           );

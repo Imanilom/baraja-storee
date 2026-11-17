@@ -5,12 +5,14 @@ import Navbar from '../../components/Navbar';
 import PurchaseReconciliationModal from '../../components/PurchaseReconciliationModal';
 import { api } from '../../lib/api';
 import { getDateRange } from '../../lib/date-range';
+import { createCashFlowExportRows } from '../../lib/cash-flow-export.mjs';
 import {
   Landmark, Wallet, ArrowDownRight, ArrowUpRight, ArrowLeftRight,
   Plus, Calendar, Filter, Trash2, CheckCircle2, AlertCircle,
   FileText, ShoppingCart, RefreshCw, X, CreditCard, Banknote, ShieldAlert, Zap,
-  FileSearch
+  FileSearch, Download
 } from 'lucide-react';
+import { downloadCsv } from '../../lib/csv-export.mjs';
 
 const fmt = (v) => `Rp ${(v || 0).toLocaleString('id-ID')}`;
 const toLocalDateInput = (date = new Date()) => {
@@ -57,6 +59,7 @@ export default function CashFlowPage() {
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [bankOpeningBalance, setBankOpeningBalance] = useState(0);
+  const [exportingMutations, setExportingMutations] = useState(false);
 
   // Filters
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'cash' | 'bank' | 'in' | 'withdrawal' | 'purchase'
@@ -133,7 +136,7 @@ export default function CashFlowPage() {
       let params = `?limit=500&${dateRangeQuery(startDate, endDate)}`;
       if (['cash', 'bank', 'petty_cash'].includes(activeTab)) {
         params += `&account=${activeTab}`;
-      } else if (['in', 'withdrawal', 'purchase', 'overhead', 'petty_cash'].includes(activeTab)) {
+      } else if (['in', 'withdrawal', 'purchase', 'debt_payment', 'overhead', 'petty_cash'].includes(activeTab)) {
         params += `&type=${activeTab}`;
       }
 
@@ -145,6 +148,57 @@ export default function CashFlowPage() {
       setLoading(false);
     }
   }, [activeTab, filterDate, filterPeriod]);
+
+  const handleExportMutations = async () => {
+    setExportingMutations(true);
+    try {
+      const { startDate, endDate } = getDateRange(filterDate, filterPeriod);
+      const rangeParams = new URLSearchParams(dateRangeQuery(startDate, endDate));
+      const allMutations = [];
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        rangeParams.set('account', 'all');
+        rangeParams.set('type', 'all');
+        rangeParams.set('limit', '500');
+        rangeParams.set('page', String(page));
+        const response = await api.getCashFlowMutations(`?${rangeParams.toString()}`);
+        if (!Array.isArray(response.data)) {
+          throw new Error('Data mutasi arus kas tidak valid.');
+        }
+        allMutations.push(...response.data);
+        totalPages = Number(response.totalPages) || 1;
+        page += 1;
+      } while (page <= totalPages);
+
+      const rangeStart = new Date(`${startDate}T00:00:00`);
+      const previousDayEnd = new Date(rangeStart.getTime() - 1);
+      const openingResponse = await api.getCashFlowSummary(
+        `?endDate=${encodeURIComponent(previousDayEnd.toISOString())}`
+      );
+      const opening = openingResponse.data || {};
+      const rows = createCashFlowExportRows(
+        allMutations,
+        {
+          cash: opening.current_cash_balance,
+          bank: opening.current_bank_balance,
+          petty_cash: opening.current_petty_cash_balance
+        },
+        activeTab
+      );
+      if (rows.length === 1) {
+        alert('Tidak ada mutasi pada filter yang dipilih untuk diekspor.');
+        return;
+      }
+
+      downloadCsv(`mutasi-${activeTab}-${startDate}-${endDate}.csv`, rows);
+    } catch (error) {
+      alert(`Gagal mengekspor mutasi: ${error.message}`);
+    } finally {
+      setExportingMutations(false);
+    }
+  };
 
   useEffect(() => {
     fetchSummary();
@@ -561,6 +615,15 @@ export default function CashFlowPage() {
                 return `${range.startDate} – ${range.endDate}`;
               })()}
             </span>
+            <button
+              type="button"
+              onClick={handleExportMutations}
+              disabled={exportingMutations}
+              className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exportingMutations ? 'Menyiapkan...' : 'Export Mutasi'}
+            </button>
           </div>
         </div>
 
@@ -574,6 +637,7 @@ export default function CashFlowPage() {
             { id: 'in', label: '📥 Uang Masuk' },
             { id: 'withdrawal', label: '🏧 Tarik Tunai' },
             { id: 'purchase', label: '🛒 Belanja Supplier' },
+            { id: 'debt_payment', label: '💳 Bayar Hutang' },
             { id: 'overhead', label: '⚡ Biaya Overhead' }
           ].map((tab) => (
             <button

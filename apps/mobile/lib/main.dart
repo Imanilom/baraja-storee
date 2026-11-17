@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'models/user_model.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/inventory_management_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/marketlist_list_screen.dart';
 import 'screens/profile_screen.dart';
 import 'services/auth_service.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,29 +44,45 @@ class _PurchasingAppState extends State<PurchasingApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Baraja Purchasing',
+      title: 'Baraja Store',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF059669),
-          primary: const Color(0xFF059669),
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-        fontFamily: 'Roboto',
-      ),
+      theme: BarajaTheme.light,
       home: _isLoading
-          ? const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+          ? Scaffold(
+              body: DecoratedBox(
+                decoration: const BoxDecoration(color: BarajaPalette.canvas),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: BarajaPalette.forest,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(
+                          Icons.shopping_bag_outlined,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const CircularProgressIndicator(),
+                    ],
+                  ),
+                ),
+              ),
             )
           : _currentUser == null
-              ? LoginScreen(onLoginSuccess: _checkAuth)
-              : MainShell(
-                  user: _currentUser!,
-                  onLogout: () {
-                    setState(() => _currentUser = null);
-                  },
-                ),
+          ? LoginScreen(onLoginSuccess: _checkAuth)
+          : MainShell(
+              user: _currentUser!,
+              onLogout: () {
+                setState(() => _currentUser = null);
+              },
+            ),
     );
   }
 }
@@ -89,14 +107,12 @@ class _MainShellState extends State<MainShell> {
       HomeScreen(
         user: widget.user,
         onNavigateToMarketlist: () => setState(() => _currentIndex = 1),
-        onNavigateToHistory: () => setState(() => _currentIndex = 2),
+        onNavigateToHistory: () => setState(() => _currentIndex = 3),
       ),
       const MarketlistListScreen(),
+      InventoryManagementScreen(user: widget.user),
       const HistoryScreen(),
-      ProfileScreen(
-        user: widget.user,
-        onLogout: widget.onLogout,
-      ),
+      ProfileScreen(user: widget.user, onLogout: widget.onLogout),
     ];
 
     return Scaffold(
@@ -104,16 +120,40 @@ class _MainShellState extends State<MainShell> {
         children: [
           if (useRail) ...[
             NavigationRail(
+              extended: true,
               selectedIndex: _currentIndex,
               onDestinationSelected: (index) =>
                   setState(() => _currentIndex = index),
-              labelType: NavigationRailLabelType.all,
-              selectedIconTheme: const IconThemeData(
-                color: Color(0xFF059669),
-              ),
-              selectedLabelTextStyle: const TextStyle(
-                color: Color(0xFF059669),
-                fontWeight: FontWeight.bold,
+              groupAlignment: -0.55,
+              minExtendedWidth: 216,
+              leading: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 12, 24),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: BarajaPalette.forest,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        Icons.shopping_bag_outlined,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Baraja Store',
+                      style: TextStyle(
+                        color: BarajaPalette.ink,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               destinations: const [
                 NavigationRailDestination(
@@ -125,6 +165,11 @@ class _MainShellState extends State<MainShell> {
                   icon: Icon(Icons.receipt_long_outlined),
                   selectedIcon: Icon(Icons.receipt_long),
                   label: Text('Marketlist'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.inventory_2_outlined),
+                  selectedIcon: Icon(Icons.inventory_2_rounded),
+                  label: Text('Stok & Resep'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.history_outlined),
@@ -141,60 +186,44 @@ class _MainShellState extends State<MainShell> {
             const VerticalDivider(width: 1, thickness: 1),
           ],
           Expanded(
-            child: IndexedStack(
-              index: _currentIndex,
-              children: screens,
-            ),
+            child: IndexedStack(index: _currentIndex, children: screens),
           ),
         ],
       ),
       bottomNavigationBar: useRail
           ? null
-          : Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
+          : NavigationBar(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: (index) =>
+                  setState(() => _currentIndex = index),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Beranda',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long_rounded),
+                  label: 'Marketlist',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.inventory_2_outlined),
+                  selectedIcon: Icon(Icons.inventory_2_rounded),
+                  label: 'Stok & Resep',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.history_outlined),
+                  selectedIcon: Icon(Icons.history_rounded),
+                  label: 'Riwayat',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded),
+                  label: 'Akun',
+                ),
+              ],
             ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFF059669),
-          unselectedItemColor: const Color(0xFF64748B),
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-          unselectedLabelStyle: const TextStyle(fontSize: 11),
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Beranda',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long),
-              label: 'Marketlist',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_outlined),
-              activeIcon: Icon(Icons.history),
-              label: 'Riwayat',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Akun',
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

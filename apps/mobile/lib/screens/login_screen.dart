@@ -14,6 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _passwordVisible = false;
   String? _errorMessage;
 
   @override
@@ -39,202 +40,279 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await AuthService.login(email, password);
-      if (mounted) {
-        widget.onLoginSuccess();
-      }
-    } catch (e) {
+      if (mounted) widget.onLoginSuccess();
+    } catch (error) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceAll('Exception:', '').trim();
+          _errorMessage = error.toString().replaceAll('Exception:', '').trim();
         });
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                // Logo & Header
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF059669),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF059669).withOpacity(0.3),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.inventory_2_rounded,
-                    color: Colors.white,
-                    size: 38,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Baraja Coffee',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Purchasing & Surat Jalan Digital',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-                ),
-                const SizedBox(height: 28),
+    final colors = Theme.of(context).colorScheme;
 
-                // Card Login
-                Container(
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned(
+              top: -100,
+              right: -80,
+              child: Container(
+                width: 240,
+                height: 240,
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer.withValues(alpha: 0.65),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 32,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Masuk Akun',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (_errorMessage != null)
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEE2E2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFFCA5A5)),
-                          ),
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(
-                              color: Color(0xFF991B1B),
-                              fontSize: 13,
+                      Row(
+                        children: [
+                          Container(
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: colors.primary,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colors.primary.withValues(alpha: 0.2),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.shopping_bag_outlined,
+                              color: Colors.white,
+                              size: 27,
                             ),
                           ),
-                        ),
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          hintText: 'nama@baraja.com',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Masuk ke Aplikasi',
+                          const SizedBox(width: 14),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'BARAJA STORE',
                                 style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
+                                  color: colors.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.5,
                                 ),
                               ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Purchasing & Operations',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 38),
+                      Text(
+                        'Selamat datang\nkembali',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              height: 1.15,
+                              letterSpacing: -0.8,
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Masuk untuk mengelola pengadaan dan penerimaan barang.',
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontSize: 14,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: colors.outlineVariant),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(
+                                0xFF123F34,
+                              ).withValues(alpha: 0.06),
+                              blurRadius: 28,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Masuk ke akun',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Gunakan email kerja yang terdaftar.',
+                              style: TextStyle(
+                                color: colors.onSurfaceVariant,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            if (_errorMessage != null) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: colors.errorContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: colors.error.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline_rounded,
+                                      color: colors.error,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        _errorMessage!,
+                                        style: TextStyle(
+                                          color: colors.onErrorContainer,
+                                          fontSize: 13,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            TextField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.username],
+                              decoration: const InputDecoration(
+                                labelText: 'Email',
+                                hintText: 'nama@baraja.com',
+                                prefixIcon: Icon(Icons.mail_outline_rounded),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            TextField(
+                              controller: _passwordController,
+                              obscureText: !_passwordVisible,
+                              textInputAction: TextInputAction.done,
+                              autofillHints: const [AutofillHints.password],
+                              onSubmitted: (_) {
+                                if (!_isLoading) _handleLogin();
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                prefixIcon: const Icon(
+                                  Icons.lock_outline_rounded,
+                                ),
+                                suffixIcon: IconButton(
+                                  tooltip: _passwordVisible
+                                      ? 'Sembunyikan password'
+                                      : 'Tampilkan password',
+                                  onPressed: () => setState(
+                                    () => _passwordVisible = !_passwordVisible,
+                                  ),
+                                  icon: Icon(
+                                    _passwordVisible
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            FilledButton(
+                              onPressed: _isLoading ? null : _handleLogin,
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text('Masuk'),
+                                        SizedBox(width: 8),
+                                        Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 18,
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.verified_user_outlined,
+                            size: 16,
+                            color: colors.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Akses aman · Baraja Store',
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-
-                // Server Status (Static)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF16A34A),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Terhubung ke Server Cloud Baraja Store',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
-    ),
     );
   }
 }

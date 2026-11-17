@@ -15,6 +15,8 @@ const Purchase = mongoose.model('Purchase');
 const PurchaseItem = mongoose.model('PurchaseItem');
 const GoodsReceipt = mongoose.model('GoodsReceipt');
 const GoodsReceiptItem = mongoose.model('GoodsReceiptItem');
+const Waste = mongoose.model('Waste');
+const wasteService = require('../src/modules/waste/waste.service');
 
 async function run() {
   const mongod = await MongoMemoryServer.create({ binary: { version: '7.0.11' } });
@@ -34,7 +36,9 @@ async function run() {
     const product = await Product.create({
       name: 'Integration Rice',
       sku: 'RCV-RICE',
-      unit_id: unit._id
+      unit_id: unit._id,
+      current_stock: 10,
+      last_purchase_price: 2
     });
     const marketlist = await Marketlist.create({
       marketlist_number: 'ML-RECEIVING-TEST',
@@ -100,11 +104,45 @@ async function run() {
       rejected_qty: 0,
       is_checked: true
     });
+    const receivingWaste = await wasteService.createWaste({
+      product_id: product._id,
+      marketlist_id: marketlist._id,
+      goods_receipt_id: receipt._id.toString(),
+      goods_receipt_item_id: receiptItem._id.toString(),
+      unit_name: 'KG',
+      quantity: 1,
+      stage: 'received',
+      reason: 'rusak saat diterima',
+      wasted_at: new Date().toISOString()
+    }, { _id: userId });
+    assert.equal(receivingWaste.integration_status, 'receipt_sync_pending');
+    assert.equal((await GoodsReceiptItem.findById(receiptItem._id)).receiving_waste_qty, 1);
+    await assert.rejects(
+      wasteService.createWaste({
+        product_id: product._id.toString(),
+        marketlist_id: marketlist._id.toString(),
+        goods_receipt_id: receipt._id.toString(),
+        goods_receipt_item_id: receiptItem._id.toString(),
+        unit_name: 'KG',
+        quantity: 4,
+        stage: 'received',
+        reason: 'lebih dari diterima'
+      }, { _id: userId }),
+      /Jumlah waste melebihi/
+    );
+    const queuedReceiptSync = await IntegrationEvent.findOne({
+      aggregate_id: receipt._id,
+      aggregate_type: 'goods_receipt'
+    });
+    assert.ok(queuedReceiptSync, 'receiving waste must enqueue receipt sync');
+    await IntegrationEvent.updateOne({ _id: queuedReceiptSync._id }, { $set: { status: 'delivered' } });
 
     const exported = await integrationService.buildGoodsReceiptPayload(receipt._id);
     assert.equal(exported.items.length, 1);
     assert.equal(exported.items[0].external_purchase_item_id, purchaseItem._id.toString());
     assert.equal(exported.items[0].previously_received_qty, 3);
+    assert.equal(exported.items[0].accepted_qty, 3);
+    assert.equal(exported.items[0].received_waste_qty, 1);
 
     const event = await IntegrationEvent.create({
       event_id: 'store-receiving-outbox-test',
@@ -146,6 +184,34 @@ async function run() {
     const syncedReceipt = await GoodsReceipt.findById(receipt._id);
     assert.equal(syncedReceipt.amphitheater_status, 'submitted');
     assert.equal(syncedReceipt.amphitheater_receipt_id, 'AMP-GR-1');
+
+    const stockWaste = await wasteService.createWaste({
+      product_id: product._id.toString(),
+      location_id: location._id.toString(),
+      quantity: 2,
+      stage: 'processing',
+      reason: 'rusak saat diolah'
+    }, { _id: userId });
+    assert.equal(stockWaste.integration_status, 'sync_pending');
+    assert.equal((await Product.findById(product._id)).current_stock, 10, 'Store must not maintain a second stock deduction');
+    const wasteEvent = await IntegrationEvent.findOne({ aggregate_id: stockWaste._id, aggregate_type: 'waste' });
+    assert.equal(wasteEvent.payload.quantity, 2);
+    global.fetch = async (url, options) => {
+      assert.equal(url, 'https://amphitheater.test/api/integration/wastes');
+      const requestPayload = JSON.parse(options.body);
+      assert.equal(requestPayload.external_waste_id, stockWaste._id.toString());
+      assert.equal(requestPayload.external_location_id, location._id.toString());
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({ data: { movement_id: 'AMP-WASTE-MOVEMENT-1', stock_balance: 8 } })
+      };
+    };
+    assert.equal(await integrationService.processOneEvent(), true);
+    const syncedWaste = await Waste.findById(stockWaste._id);
+    assert.equal(syncedWaste.integration_status, 'synced');
+    assert.equal(syncedWaste.integration_movement_id, 'AMP-WASTE-MOVEMENT-1');
+    assert.equal(syncedWaste.integration_stock_balance, 8);
   } finally {
     global.fetch = originalFetch;
     if (originalUrl === undefined) delete process.env.BARAJA_AMPHITHEATER_API_URL;
