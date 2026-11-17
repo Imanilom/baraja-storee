@@ -8,7 +8,7 @@ import {
   ShoppingCart, Plus, Eye, X, Package, Calendar, CreditCard,
   FileText, Store, ClipboardList, AlertTriangle, CheckCircle2,
   Wallet, AlertOctagon, Clock, TrendingDown, ChevronRight, Banknote,
-  Truck, RotateCcw, Sparkles, Check, Pencil, Trash2
+  Truck, RotateCcw, Sparkles, Check, Pencil, Trash2, PackagePlus
 } from 'lucide-react';
 
 const PAYMENT_METHODS = [
@@ -135,11 +135,15 @@ export default function TransactionsPage() {
   // Form state
   const [approvedMLs, setApprovedMLs] = useState([]);
   const [products, setProducts] = useState([]);
+  const [units, setUnits] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [entryMode, setEntryMode] = useState('marketlist');
   const [selectedMlId, setSelectedMlId] = useState('');
   const [manualProductId, setManualProductId] = useState('');
   const [manualProductSearch, setManualProductSearch] = useState('');
+  const [newProductUnitId, setNewProductUnitId] = useState('');
+  const [newProductType, setNewProductType] = useState('groceries');
+  const [creatingProduct, setCreatingProduct] = useState(false);
   const [selectedMlDetail, setSelectedMlDetail] = useState(null);
   const [mlFilterTab, setMlFilterTab] = useState('all'); // 'all' | 'active' | 'delivered'
   const [mlSearch, setMlSearch] = useState('');
@@ -274,10 +278,11 @@ export default function TransactionsPage() {
   const fetchMasterForForm = async () => {
     try {
       let mlList = [];
-      const [mlMultiRes, supRes, productRes] = await Promise.all([
+      const [mlMultiRes, supRes, productRes, unitRes] = await Promise.all([
         api.getMarketlists('?status=approved,partial_rejection,in_progress,partially_received,received,completed&limit=100&all=true').catch(() => ({ data: [] })),
         api.getSuppliers().catch(() => ({ data: [] })),
-        api.getProducts().catch(() => ({ data: [] }))
+        api.getProducts().catch(() => ({ data: [] })),
+        api.getUnits().catch(() => ({ data: [] }))
       ]);
       mlList = mlMultiRes.data?.items || mlMultiRes.data || [];
 
@@ -300,6 +305,7 @@ export default function TransactionsPage() {
       setApprovedMLs(mlList);
       setSuppliers(supRes.data?.items || supRes.data || []);
       setProducts(productRes.data?.items || productRes.data || []);
+      setUnits(unitRes.data || []);
     } catch (_) {}
   };
 
@@ -433,11 +439,12 @@ export default function TransactionsPage() {
     setShowAllMarketlists(false);
     setManualProductId('');
     setManualProductSearch('');
+    setNewProductUnitId('');
+    setNewProductType('groceries');
     setSelectedSupplierId('');
   };
 
-  const addManualProduct = () => {
-    const product = products.find((entry) => entry._id === manualProductId);
+  const addProductToForm = (product) => {
     if (!product) return;
     if (formItems.some((item) => item.product_id?.toString() === product._id.toString())) {
       alert('Barang ini sudah ada di daftar transaksi.');
@@ -470,6 +477,60 @@ export default function TransactionsPage() {
       alreadyPurchased: null
     }]);
     setManualProductId('');
+  };
+
+  const addManualProduct = () => {
+    const product = products.find((entry) => entry._id === manualProductId);
+    addProductToForm(product);
+  };
+
+  const createAndAddManualProduct = async () => {
+    const name = manualProductSearch.trim();
+    if (!name) return;
+
+    const existingProduct = products.find((product) =>
+      String(product.name || '').trim().toLocaleLowerCase('id-ID') === name.toLocaleLowerCase('id-ID')
+    );
+    if (existingProduct) {
+      addProductToForm(existingProduct);
+      setManualProductSearch('');
+      return;
+    }
+
+    if (!newProductUnitId) {
+      alert('Pilih satuan untuk item baru.');
+      return;
+    }
+    const unit = units.find((entry) => entry._id === newProductUnitId);
+    if (!unit) {
+      alert('Satuan yang dipilih sudah tidak tersedia. Muat ulang form lalu coba lagi.');
+      return;
+    }
+
+    setCreatingProduct(true);
+    try {
+      const response = await api.createProduct({
+        name,
+        unit_id: newProductUnitId,
+        item_type: newProductType,
+        last_purchase_price: 0,
+        is_active: true
+      });
+      if (!response.data?._id) {
+        throw new Error('Data item baru tidak diterima dari server.');
+      }
+
+      const createdProduct = { ...response.data, unit_id: unit };
+      setProducts((currentProducts) => [...currentProducts, createdProduct]);
+      addProductToForm(createdProduct);
+      setManualProductSearch('');
+      setNewProductUnitId('');
+      setNewProductType('groceries');
+    } catch (error) {
+      alert(`Gagal membuat item baru: ${error.message}`);
+    } finally {
+      setCreatingProduct(false);
+    }
   };
 
   const removeManualProduct = (index) => {
@@ -660,6 +721,8 @@ export default function TransactionsPage() {
     setFormItems([]);
     setManualProductId('');
     setManualProductSearch('');
+    setNewProductUnitId('');
+    setNewProductType('groceries');
   };
 
   // ---------- view detail ----------
@@ -1378,6 +1441,59 @@ export default function TransactionsPage() {
                               <Plus className="h-4 w-4" /> Tambah Barang
                             </button>
                           </div>
+                          {manualProductSearch.trim() && !products.some((product) =>
+                            String(product.name || '').trim().toLocaleLowerCase('id-ID') ===
+                            manualProductSearch.trim().toLocaleLowerCase('id-ID')
+                          ) && (
+                            <div className="mt-3 rounded-lg border border-emerald-200 bg-white p-3">
+                              <p className="text-[11px] font-bold text-slate-800">
+                                Item “{manualProductSearch.trim()}” belum ada di master.
+                              </p>
+                              <p className="mt-0.5 text-[10px] text-slate-500">
+                                Buat item baru; setelah tersimpan, item langsung ditambahkan ke transaksi ini.
+                              </p>
+                              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                <select
+                                  value={newProductUnitId}
+                                  onChange={(event) => setNewProductUnitId(event.target.value)}
+                                  disabled={creatingProduct || units.length === 0}
+                                  className="rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                                  aria-label="Satuan item baru"
+                                >
+                                  <option value="">-- Pilih satuan --</option>
+                                  {units.map((unit) => (
+                                    <option key={unit._id} value={unit._id}>
+                                      {unit.name} ({unit.abbreviation})
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={newProductType}
+                                  onChange={(event) => setNewProductType(event.target.value)}
+                                  disabled={creatingProduct}
+                                  className="rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                                  aria-label="Tipe item baru"
+                                >
+                                  <option value="groceries">Groceries (Kering)</option>
+                                  <option value="perishable">Perishable (Basah)</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={createAndAddManualProduct}
+                                  disabled={creatingProduct || !newProductUnitId || units.length === 0}
+                                  className="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <PackagePlus className="h-4 w-4" />
+                                  {creatingProduct ? 'Menyimpan...' : 'Buat & Tambahkan'}
+                                </button>
+                              </div>
+                              {units.length === 0 && (
+                                <p className="mt-2 text-[10px] text-red-700">
+                                  Daftar satuan belum tersedia. Muat ulang form atau hubungi administrator.
+                                </p>
+                              )}
+                            </div>
+                          )}
                           {mlSearch.trim() && filteredMLs.length > 0 && (
                             <p className="mt-2 text-[10px] text-blue-800">
                               Ditemukan di {filteredMLs.filter((ml) =>

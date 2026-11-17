@@ -1,4 +1,5 @@
 const Purchase = require('../purchases/purchase.model');
+const PurchaseItem = require('../purchases/purchase-item.model');
 const DebtPayment = require('../purchases/debt-payment.model');
 
 const MAX_STATEMENT_ROWS = 2000;
@@ -83,7 +84,8 @@ const makeCandidate = ({
   purchase,
   amount,
   date,
-  reference
+  reference,
+  items = []
 }) => ({
   key,
   kind,
@@ -93,6 +95,8 @@ const makeCandidate = ({
   purchaseNumber: purchase.purchase_number || '',
   invoiceReference: purchase.invoice_ref || '',
   supplierName: purchase.supplier_id?.name || '',
+  purchaseTotal: Math.round(Number(purchase.total_actual) || 0),
+  items,
   reference: reference || '',
   purchaseDate: purchase.purchased_at || null
 });
@@ -100,6 +104,7 @@ const makeCandidate = ({
 const scoreCandidate = (row, candidate) => {
   const narrative = `${row.description} ${row.reference}`;
   const supplierMatch = containsPhrase(narrative, candidate.supplierName);
+  const invoiceReferenceMatch = containsPhrase(narrative, candidate.invoiceReference);
   const candidateReferences = [
     candidate.reference,
     candidate.purchaseNumber,
@@ -117,7 +122,7 @@ const scoreCandidate = (row, candidate) => {
     else if (daysApart <= 7) score += 10;
   }
 
-  return { score, supplierMatch, referenceMatch };
+  return { score, supplierMatch, referenceMatch, invoiceReferenceMatch };
 };
 
 const indexCandidates = (candidates) => {
@@ -162,8 +167,17 @@ const candidateSummary = (candidate, signals, amountDifference = 0) => ({
   date: candidate.date,
   amount: candidate.amount,
   amount_difference: amountDifference,
+  purchase_total: candidate.purchaseTotal,
+  invoice_reference: candidate.invoiceReference,
+  items: candidate.items,
+  checks: {
+    supplier_name: signals.supplierMatch,
+    supplier_reference: signals.invoiceReferenceMatch,
+    amount: amountDifference === 0
+  },
   matched_by: [
-    ...(signals.referenceMatch ? ['referensi'] : []),
+    ...(signals.invoiceReferenceMatch ? ['no. nota supplier'] : []),
+    ...(signals.referenceMatch && !signals.invoiceReferenceMatch ? ['referensi transaksi'] : []),
     ...(signals.supplierMatch ? ['nama supplier'] : [])
   ]
 });
@@ -182,6 +196,25 @@ const buildCandidates = async () => {
       .select('_id purchase_id amount paid_at reference_number payment_method notes')
       .lean()
   ]);
+
+  const purchaseItems = await PurchaseItem.find({
+    purchase_id: { $in: purchases.map((purchase) => purchase._id) }
+  })
+    .select('purchase_id product_name unit_name actual_qty actual_unit_price actual_subtotal')
+    .lean();
+  const itemsByPurchase = new Map();
+  purchaseItems.forEach((item) => {
+    const key = String(item.purchase_id);
+    const items = itemsByPurchase.get(key) || [];
+    items.push({
+      name: item.product_name || '',
+      unit: item.unit_name || '',
+      quantity: Number(item.actual_qty) || 0,
+      unit_price: Math.round(Number(item.actual_unit_price) || 0),
+      subtotal: Math.round(Number(item.actual_subtotal) || 0)
+    });
+    itemsByPurchase.set(key, items);
+  });
 
   const candidates = [];
   const paymentsByPurchase = new Map();
@@ -209,7 +242,8 @@ const buildCandidates = async () => {
           purchase,
           amount: downPayment,
           date: purchase.purchased_at,
-          reference: purchase.invoice_ref
+          reference: purchase.invoice_ref,
+          items: itemsByPurchase.get(String(purchase._id)) || []
         }));
       }
       return;
@@ -221,7 +255,8 @@ const buildCandidates = async () => {
       purchase,
       amount: purchase.total_actual,
       date: purchase.purchased_at,
-      reference: purchase.invoice_ref
+      reference: purchase.invoice_ref,
+      items: itemsByPurchase.get(String(purchase._id)) || []
     }));
   });
 
@@ -236,7 +271,8 @@ const buildCandidates = async () => {
         purchase,
         amount: payment.amount,
         date: payment.paid_at,
-        reference: payment.reference_number || purchase.invoice_ref
+        reference: payment.reference_number || purchase.invoice_ref,
+        items: itemsByPurchase.get(String(purchase._id)) || []
       }));
       return;
     }
@@ -246,7 +282,8 @@ const buildCandidates = async () => {
       purchase,
       amount: payment.amount,
       date: payment.paid_at,
-      reference: payment.reference_number || purchase.invoice_ref
+      reference: payment.reference_number || purchase.invoice_ref,
+      items: itemsByPurchase.get(String(purchase._id)) || []
     }));
   });
 

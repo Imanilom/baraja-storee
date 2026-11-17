@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const Supplier = require('../src/modules/suppliers/supplier.model');
 const Purchase = require('../src/modules/purchases/purchase.model');
+const PurchaseItem = require('../src/modules/purchases/purchase-item.model');
 const DebtPayment = require('../src/modules/purchases/debt-payment.model');
 const {
   reconcilePurchaseMutations,
@@ -30,6 +31,14 @@ const run = async () => {
       payment_source: 'bank',
       total_actual: 125000,
       purchased_at: purchaseDate
+    });
+    await PurchaseItem.create({
+      purchase_id: directPurchase._id,
+      product_name: 'Biji Kopi Arabika',
+      unit_name: 'kg',
+      actual_qty: 5,
+      actual_unit_price: 25000,
+      actual_subtotal: 125000
     });
     await Purchase.create({
       purchase_number: 'TRX-20260401-0002',
@@ -87,9 +96,25 @@ const run = async () => {
     assert.strictEqual(result.summary.mismatch_percentage, 57.14);
     assert.strictEqual(result.rows[0].status, 'matched');
     assert.strictEqual(result.rows[0].purchase.purchase_id, String(directPurchase._id));
+    assert.strictEqual(result.rows[0].purchase.invoice_reference, 'INV-778');
+    assert.deepStrictEqual(result.rows[0].purchase.checks, {
+      supplier_name: true,
+      supplier_reference: true,
+      amount: true
+    });
+    assert.deepStrictEqual(result.rows[0].purchase.items, [{
+      name: 'Biji Kopi Arabika',
+      unit: 'kg',
+      quantity: 5,
+      unit_price: 25000,
+      subtotal: 125000
+    }]);
     assert.strictEqual(result.rows[2].status, 'matched');
     assert.strictEqual(result.rows[3].status, 'amount_mismatch');
+    assert.strictEqual(result.rows[3].candidates[0].checks.supplier_reference, true);
+    assert.strictEqual(result.rows[3].candidates[0].checks.amount, false);
     assert.strictEqual(result.rows[4].status, 'ambiguous');
+    assert.strictEqual(result.rows[4].candidates[0].checks.supplier_reference, false);
     assert.strictEqual(result.rows[5].status, 'invalid_amount');
     assert.strictEqual(result.rows[6].status, 'invalid_direction');
 

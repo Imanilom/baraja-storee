@@ -171,7 +171,8 @@ export default function PurchaseReconciliationModal({ onClose }) {
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs leading-relaxed text-blue-900">
-            Pencocokan otomatis hanya dilakukan jika nominal sama persis dan nama supplier atau referensi transaksi cocok.
+            Pencocokan otomatis memeriksa nama supplier, referensi/no. nota, dan nominal. Rincian barang dari transaksi
+            ditampilkan untuk diperiksa; mutasi rekening tidak memuat rincian barang sehingga kecocokan item perlu diverifikasi.
             Kandidat ganda dan selisih nominal tidak dipasangkan otomatis. Persentase tidak cocok dihitung dari baris debit.
           </div>
 
@@ -335,11 +336,36 @@ export default function PurchaseReconciliationModal({ onClose }) {
                                 <>
                                   <p className="font-semibold text-slate-800">{candidate.supplier_name || 'Supplier'}</p>
                                   <p className="text-[10px] text-slate-500">{candidate.purchase_number} · {candidate.type}</p>
+                                  {candidate.invoice_reference && (
+                                    <p className="text-[10px] text-slate-500">No. ref supplier: {candidate.invoice_reference}</p>
+                                  )}
                                   <p className="mt-1 text-[10px] font-bold text-slate-700">{formatRupiah(candidate.amount)}</p>
+                                  <div className="mt-1 space-y-0.5 text-[10px] text-slate-600">
+                                    <p>Nama supplier: {candidate.checks?.supplier_name ? 'cocok' : 'tidak terdeteksi'}</p>
+                                    <p>No. ref supplier: {candidate.checks?.supplier_reference ? 'cocok' : 'tidak terdeteksi'}</p>
+                                    <p>Nominal mutasi: {candidate.checks?.amount ? 'cocok' : 'berbeda'}</p>
+                                  </div>
+                                  {candidate.purchase_total !== candidate.amount && (
+                                    <p className="text-[10px] text-slate-500">
+                                      Total transaksi pembelian: {formatRupiah(candidate.purchase_total)}
+                                    </p>
+                                  )}
                                   {candidate.amount_difference !== undefined && (
                                     <p className="text-[10px] text-amber-700">
                                       Selisih {candidate.amount_difference > 0 ? '+' : ''}{formatRupiah(candidate.amount_difference)}
                                     </p>
+                                  )}
+                                  {candidate.items?.length > 0 && (
+                                    <div className="mt-2 border-t border-slate-100 pt-2">
+                                      <p className="mb-1 text-[10px] font-bold text-slate-700">Item dalam pembelian (periksa manual)</p>
+                                      <ul className="space-y-1">
+                                        {candidate.items.map((item, itemIndex) => (
+                                          <li key={`${item.name}-${itemIndex}`} className="text-[10px] text-slate-600">
+                                            {item.name || 'Item tanpa nama'} · {item.quantity} {item.unit} × {formatRupiah(item.unit_price)} = {formatRupiah(item.subtotal)}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
                                   )}
                                 </>
                               ) : <span className="text-slate-400">-</span>}
