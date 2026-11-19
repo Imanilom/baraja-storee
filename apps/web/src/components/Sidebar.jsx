@@ -21,7 +21,8 @@ import {
   ChevronLeft,
   Landmark,
   ClipboardCheck,
-  Clock3
+  Clock3,
+  FileBarChart
 } from 'lucide-react';
 import { clearStoredAuth, getStoredUser } from '../lib/api';
 import { useEffect, useState } from 'react';
@@ -87,6 +88,12 @@ const navigation = [
     name: 'Arus Kas & Bank',
     href: '/cash-flow',
     icon: Landmark,
+    roles: ['admin', 'management', 'accounting', 'purchasing', 'leader']
+  },
+  {
+    name: 'Laporan Arus Kas',
+    href: '/cash-flow-report',
+    icon: FileBarChart,
     roles: ['admin', 'management', 'accounting', 'purchasing', 'leader']
   },
   {
