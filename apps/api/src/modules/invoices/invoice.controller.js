@@ -1,6 +1,7 @@
 const invoiceService = require('./invoice.service');
 const invoicePdfService = require('./invoice-pdf.service');
 const overheadService = require('../overheads/overhead.service');
+const purchaseService = require('../purchases/purchase.service');
 const { sendSuccess, sendError, sendPaginated } = require('../../utils/response');
 
 class InvoiceController {
@@ -89,11 +90,12 @@ class InvoiceController {
   async downloadWeeklyPdf(req, res) {
     try {
       const { startDate, endDate } = req.query;
-      const [invoices, overheadSummary] = await Promise.all([
+      const [invoices, overheadSummary, purchaseSummary] = await Promise.all([
         invoiceService.getInvoicesForWeek(startDate, endDate),
-        overheadService.getOverheadSummary({ startDate, endDate })
+        overheadService.getOverheadSummary({ startDate, endDate }),
+        purchaseService.getPurchases({ startDate, endDate, limit: 1 })
       ]);
-      if (invoices.length === 0) {
+      if (invoices.length === 0 && !purchaseSummary.total_amount && !overheadSummary.total_expense) {
         return sendError(res, 'No invoices found for the selected week', null, 404);
       }
 
@@ -106,7 +108,8 @@ class InvoiceController {
         invoices,
         res,
         { startDate, endDate },
-        overheadSummary.total_expense
+        overheadSummary.total_expense,
+        purchaseSummary.total_amount
       );
     } catch (error) {
       return sendError(
@@ -121,20 +124,24 @@ class InvoiceController {
   async weeklySummary(req, res) {
     try {
       const { startDate, endDate } = req.query;
-      const [invoices, overheadSummary] = await Promise.all([
+      const [invoices, overheadSummary, purchaseSummary] = await Promise.all([
         invoiceService.getInvoicesForWeek(startDate, endDate),
-        overheadService.getOverheadSummary({ startDate, endDate })
+        overheadService.getOverheadSummary({ startDate, endDate }),
+        purchaseService.getPurchases({ startDate, endDate, limit: 1 })
       ]);
       const invoiceTotal = invoices.reduce(
         (total, invoice) => total + (Number(invoice.grand_total) || 0),
         0
       );
+      const purchaseTotal = Number(purchaseSummary.total_amount) || 0;
       const overheadTotal = Number(overheadSummary.total_expense) || 0;
       return sendSuccess(res, 'Weekly invoice summary retrieved', {
         invoice_count: invoices.length,
         invoice_total: invoiceTotal,
+        purchase_total: purchaseTotal,
+        invoice_difference: purchaseTotal - invoiceTotal,
         overhead_total: overheadTotal,
-        total_amount: invoiceTotal + overheadTotal
+        total_amount: purchaseTotal + overheadTotal
       });
     } catch (error) {
       return sendError(

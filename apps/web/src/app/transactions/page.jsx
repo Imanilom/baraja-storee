@@ -5,7 +5,7 @@ import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
 import { getDateRange, formatDateInput } from '../../lib/date-range';
 import {
-  ShoppingCart, Plus, Eye, X, Package, Calendar, CreditCard,
+  ShoppingCart, Plus, Eye, X, Package, Calendar, CreditCard, ChevronLeft,
   FileText, Store, ClipboardList, AlertTriangle, CheckCircle2,
   Wallet, AlertOctagon, Clock, TrendingDown, ChevronRight, Banknote,
   Truck, RotateCcw, Sparkles, Check, Pencil, Trash2, PackagePlus, Download
@@ -219,7 +219,11 @@ export default function TransactionsPage() {
   const [filterDate, setFilterDate] = useState(() => formatDateInput(new Date()));
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [purchasePage, setPurchasePage] = useState(1);
+  const [purchaseTotal, setPurchaseTotal] = useState(0);
+  const [purchaseTotalPages, setPurchaseTotalPages] = useState(1);
   const [purchaseTotalAmount, setPurchaseTotalAmount] = useState(0);
+  const [purchaseError, setPurchaseError] = useState('');
   const [exportingTransactions, setExportingTransactions] = useState(false);
 
   // Default tempo: 7 hari dari tanggal pembelian
@@ -270,23 +274,40 @@ export default function TransactionsPage() {
   const fetchPurchases = useCallback(async () => {
     fetchDailySummary();
     setLoading(true);
+    setPurchaseError('');
     try {
       const params = buildPurchaseQuery({
         filterSupplier,
         filterPeriod,
         filterDate,
         filterStartDate,
-        filterEndDate
+        filterEndDate,
+        page: purchasePage
       });
       const res = await api.getPurchases(params);
-      setPurchases(res.data || []);
+      if (!Array.isArray(res.data)) {
+        throw new Error('Data transaksi pembelian tidak valid.');
+      }
+      const totalPages = Math.max(1, Number(res.totalPages) || 1);
+      setPurchaseTotal(Number(res.total) || 0);
       setPurchaseTotalAmount(Number(res.total_amount) || 0);
+      setPurchaseTotalPages(totalPages);
+      if (purchasePage > totalPages) {
+        setPurchasePage(totalPages);
+        return;
+      }
+      setPurchases(res.data);
     } catch (e) {
       console.error('Gagal memuat transaksi:', e);
+      setPurchases([]);
+      setPurchaseTotal(0);
+      setPurchaseTotalAmount(0);
+      setPurchaseTotalPages(1);
+      setPurchaseError(e.message || 'Gagal memuat transaksi pembelian.');
     } finally {
       setLoading(false);
     }
-  }, [filterSupplier, filterPeriod, filterDate, filterStartDate, filterEndDate, fetchDailySummary]);
+  }, [filterSupplier, filterPeriod, filterDate, filterStartDate, filterEndDate, purchasePage, fetchDailySummary]);
 
   const handleExportTransactions = async () => {
     setExportingTransactions(true);
@@ -1202,7 +1223,10 @@ export default function TransactionsPage() {
               <select
                 aria-label="Filter periode transaksi pembelian"
                 value={filterPeriod}
-                onChange={(e) => setFilterPeriod(e.target.value)}
+                onChange={(e) => {
+                  setPurchasePage(1);
+                  setFilterPeriod(e.target.value);
+                }}
                 className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
               >
                 <option value="all">Semua Periode</option>
@@ -1212,7 +1236,10 @@ export default function TransactionsPage() {
               </select>
               <select
                 value={filterSupplier}
-                onChange={(e) => setFilterSupplier(e.target.value)}
+                onChange={(e) => {
+                  setPurchasePage(1);
+                  setFilterSupplier(e.target.value);
+                }}
                 className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
               >
                 <option value="">Semua Supplier</option>
@@ -1225,7 +1252,10 @@ export default function TransactionsPage() {
                     aria-label={filterPeriod === 'daily' ? 'Pilih tanggal transaksi' : 'Pilih tanggal dalam minggu transaksi'}
                     value={filterDate}
                     onChange={(e) => {
-                      if (e.target.value) setFilterDate(e.target.value);
+                      if (e.target.value) {
+                        setPurchasePage(1);
+                        setFilterDate(e.target.value);
+                      }
                     }}
                     className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
                   />
@@ -1243,14 +1273,20 @@ export default function TransactionsPage() {
                     type="date"
                     aria-label="Tanggal mulai transaksi"
                     value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setPurchasePage(1);
+                      setFilterStartDate(e.target.value);
+                    }}
                     className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
                   />
                   <input
                     type="date"
                     aria-label="Tanggal akhir transaksi"
                     value={filterEndDate}
-                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    onChange={(e) => {
+                      setPurchasePage(1);
+                      setFilterEndDate(e.target.value);
+                    }}
                     className="text-xs p-2 bg-white border border-slate-200 rounded-lg"
                   />
                 </>
@@ -2765,8 +2801,15 @@ export default function TransactionsPage() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h3 className="font-bold text-sm text-slate-800">Riwayat Transaksi Pembelian</h3>
-              <span className="text-xs text-slate-400">{purchases.length} Transaksi ditampilkan</span>
+              <span className="text-xs text-slate-400">
+                {purchases.length} dari {purchaseTotal} transaksi
+              </span>
             </div>
+            {purchaseError && (
+              <p role="alert" className="border-b border-rose-200 bg-rose-50 px-6 py-3 text-xs text-rose-700">
+                {purchaseError}
+              </p>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-200">
@@ -2785,7 +2828,7 @@ export default function TransactionsPage() {
                   {purchases.length === 0 ? (
                     <tr>
                       <td colSpan="8" className="px-6 py-12 text-center text-slate-400">
-                        {loading ? 'Memuat...' : 'Belum ada transaksi pembelian yang dicatat.'}
+                        {loading ? 'Memuat...' : purchaseError || 'Belum ada transaksi pembelian yang dicatat.'}
                       </td>
                     </tr>
                   ) : (
@@ -2848,6 +2891,33 @@ export default function TransactionsPage() {
                 </tbody>
               </table>
             </div>
+            {purchaseTotalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+                <span className="text-xs text-slate-500">
+                  Halaman {purchasePage} dari {purchaseTotalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPurchasePage((page) => Math.max(1, page - 1))}
+                    disabled={loading || purchasePage <= 1}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Sebelumnya
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPurchasePage((page) => Math.min(purchaseTotalPages, page + 1))}
+                    disabled={loading || purchasePage >= purchaseTotalPages}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+                  >
+                    Berikutnya
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* ===== DEBTS TAB ===== */

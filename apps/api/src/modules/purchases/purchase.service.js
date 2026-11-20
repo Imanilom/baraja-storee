@@ -10,6 +10,7 @@ const ActivityLog = require('../audit/activity-log.model');
 const invoiceService = require('../invoices/invoice.service');
 const receivingService = require('../receiving/receiving.service');
 const cashFlowService = require('../cash-flow/cash-flow.service');
+const { buildDateRangeFilter } = require('../../utils/date-range');
 const {
   PURCHASE_STATUS,
   PAYMENT_STATUS,
@@ -487,13 +488,7 @@ class PurchaseService {
     if (payment_status) filter.payment_status = payment_status;
 
     if (startDate || endDate) {
-      filter.purchased_at = {};
-      if (startDate) filter.purchased_at.$gte = new Date(startDate);
-      if (endDate) {
-        const eDate = new Date(endDate);
-        eDate.setHours(23, 59, 59, 999);
-        filter.purchased_at.$lte = eDate;
-      }
+      filter.purchased_at = buildDateRangeFilter(startDate, endDate);
     }
 
     const skip = (Number(page) - 1) * Number(limit);

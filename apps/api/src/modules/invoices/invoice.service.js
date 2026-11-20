@@ -245,7 +245,17 @@ class InvoiceService {
       }
     });
 
-    const candidateItems = mlItems.filter((item) => item.item_status !== 'rejected');
+    const purchasePrices = await this.getPurchaseRecapPrices(marketlistId);
+    const manualPurchaseItems = await this.getManualPurchaseItems(marketlistId);
+    const hasPurchaseRecap = marketlist.purchase_tracking_started || purchasePrices.size > 0 || manualPurchaseItems.length > 0;
+    const purchasedMarketlistItemIds = new Set(
+      [...purchasePrices.entries()]
+        .filter(([, recap]) => recap.quantity > 0)
+        .map(([key]) => key.slice(key.indexOf(':') + 1))
+    );
+    const candidateItems = mlItems.filter((item) =>
+      item.item_status !== 'rejected' || purchasedMarketlistItemIds.has(item._id.toString())
+    );
     const existingInvoices = await Invoice.find({
       marketlist_id: marketlistId,
       marketlist_version: version
@@ -272,9 +282,6 @@ class InvoiceService {
       }
     }
 
-    const purchasePrices = await this.getPurchaseRecapPrices(marketlistId);
-    const manualPurchaseItems = await this.getManualPurchaseItems(marketlistId);
-    const hasPurchaseRecap = marketlist.purchase_tracking_started || purchasePrices.size > 0 || manualPurchaseItems.length > 0;
     const getActualQuantity = (item, supplierId = item.supplier_id.toString()) => {
       const recap = purchasePrices.get(`${supplierId}:${item._id.toString()}`);
       if (hasPurchaseRecap) return recap?.quantity || 0;

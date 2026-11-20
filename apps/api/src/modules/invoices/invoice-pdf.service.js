@@ -123,7 +123,7 @@ class InvoicePdfService {
     doc.end();
   }
 
-  generateInvoicesPdf(invoices, res, dateRange, overheadTotal = 0) {
+  generateInvoicesPdf(invoices, res, dateRange, overheadTotal = 0, purchaseTotal = null) {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     doc.pipe(res);
 
@@ -156,7 +156,11 @@ class InvoicePdfService {
       0
     );
     const totalOverhead = Number(overheadTotal) || 0;
-    const overallTotal = invoiceTotal + totalOverhead;
+    const totalPurchases = purchaseTotal === null
+      ? invoiceTotal
+      : Number(purchaseTotal) || 0;
+    const invoiceDifference = totalPurchases - invoiceTotal;
+    const overallTotal = totalPurchases + totalOverhead;
 
     const drawMarketlistHeader = (y) => {
       doc
@@ -211,10 +215,12 @@ class InvoicePdfService {
       .font('Helvetica-Bold')
       .text(`Total Marketlist / Invoice: ${formatAmount(invoiceTotal)}`, 50, y + 15)
       .font('Helvetica')
-      .text(`Total Overhead: ${formatAmount(totalOverhead)}`, 50, y + 35)
+      .text(`Total Transaksi Pembelian: ${formatAmount(totalPurchases)}`, 50, y + 35)
+      .text(`Selisih Pembelian - Invoice: ${formatAmount(invoiceDifference)}`, 50, y + 55)
+      .text(`Total Overhead: ${formatAmount(totalOverhead)}`, 50, y + 75)
       .fontSize(14)
       .font('Helvetica-Bold')
-      .text(`TOTAL KESELURUHAN: ${formatAmount(overallTotal)}`, 50, y + 58);
+      .text(`TOTAL KESELURUHAN (PEMBELIAN + OVERHEAD): ${formatAmount(overallTotal)}`, 50, y + 98);
 
     invoices.forEach((invoice) => {
       doc.addPage();

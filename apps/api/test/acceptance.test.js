@@ -572,7 +572,6 @@ async function runTests() {
       rejectedItemInvoice.items[0].product_name === correctionAyam.product_snapshot.name,
     'Regenerate invoice menghapus item yang ditolak saat review.'
   );
-
   // 27. Mengoreksi kuantitas ke nol menandai item diperiksa, bukan pending
   const correctedZeroReceipt = await receivingService.updateReceipt(correctionReceipt._id, {
     items: [
@@ -613,6 +612,27 @@ async function runTests() {
       zeroQtyInvoice.grand_total === 0,
     'Regenerate menghapus dan membatalkan invoice generated saat tidak ada barang diterima yang tersisa.'
   );
+  const rejectedItemPurchase = await purchaseService.createPurchase({
+    marketlist_id: invoiceCorrectionMl._id,
+    supplier_id: supplierA._id,
+    items: [{
+      marketlist_item_id: correctionBeras._id,
+      actual_qty: 1,
+      actual_unit_price: 15000
+    }]
+  }, purchasingUser);
+  const purchasedRejectedInvoice = (await invoiceService.generateInvoicesFromMarketlist(
+    invoiceCorrectionMl._id,
+    {},
+    adminUser
+  ))[0];
+  assert(
+    purchasedRejectedInvoice.items.length === 1 &&
+      purchasedRejectedInvoice.items[0].marketlist_item_id.toString() === correctionBeras._id.toString() &&
+      purchasedRejectedInvoice.grand_total === 15000,
+    'Item Marketlist yang ditolak tetap masuk invoice jika ada transaksi pembelian aktual.'
+  );
+  await purchaseService.deletePurchase(rejectedItemPurchase._id, purchasingUser);
 
   // 29. Invoice items can be marked purchased with an actual quantity
   const updatedInvoice = await invoiceService.updateInvoiceItems(marketlistInvoice._id, {

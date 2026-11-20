@@ -10,6 +10,8 @@ const toLocalDateInput = (date) => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 };
 
+const formatAmount = (value) => `Rp ${(Number(value) || 0).toLocaleString('id-ID')}`;
+
 const getCurrentWeekRange = () => {
   const start = new Date();
   start.setDate(start.getDate() - ((start.getDay() + 1) % 7));
@@ -284,8 +286,20 @@ export default function InvoicesPage() {
                 <p className="font-semibold text-slate-700">
                   {weeklySummary.invoice_count} invoice
                 </p>
+                <p className="text-slate-600">
+                  Total invoice: {formatAmount(weeklySummary.invoice_total)}
+                </p>
+                <p className="text-slate-600">
+                  Transaksi pembelian: {formatAmount(weeklySummary.purchase_total)}
+                </p>
+                <p className={weeklySummary.invoice_difference === 0 ? 'text-emerald-700' : 'font-semibold text-amber-700'}>
+                  Selisih pembelian - invoice: {formatAmount(weeklySummary.invoice_difference)}
+                </p>
+                <p className="text-slate-600">
+                  Overhead: {formatAmount(weeklySummary.overhead_total)}
+                </p>
                 <p className="text-lg font-black text-emerald-700">
-                  Total: Rp {(weeklySummary.total_amount || 0).toLocaleString('id-ID')}
+                  Total tagihan: {formatAmount(weeklySummary.total_amount)}
                 </p>
               </div>
             ) : null}
