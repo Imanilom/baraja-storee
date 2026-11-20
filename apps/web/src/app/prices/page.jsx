@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Navbar from '../../components/Navbar';
 import { api } from '../../lib/api';
-import { RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { downloadCsv } from '../../lib/csv-export.mjs';
+import { createLatestPricesExportRows } from '../../lib/catalog-export.mjs';
+import { Download, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 
 const money = (value) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
 
@@ -58,14 +60,27 @@ export default function PricesPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-slate-50">
       <Navbar title="Harga Terbaru & Tren Harga" />
       <main className="p-4 sm:p-6 md:p-8 space-y-5 max-w-7xl w-full mx-auto">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold text-slate-900">Harga Terbaru & Tren Harga</h1>
             <p className="text-xs text-slate-500">Harga beli aktual terakhir dan riwayat perubahan per produk.</p>
           </div>
-          <button onClick={loadPrices} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-slate-700">
-            <RefreshCw className="h-4 w-4" /> Muat ulang
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => downloadCsv(
+                'daftar-harga-terbaru.csv',
+                createLatestPricesExportRows(prices)
+              )}
+              disabled={loading || prices.length === 0}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" /> Export Excel
+            </button>
+            <button onClick={loadPrices} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+              <RefreshCw className="h-4 w-4" /> Muat ulang
+            </button>
+          </div>
         </div>
 
         {error && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}

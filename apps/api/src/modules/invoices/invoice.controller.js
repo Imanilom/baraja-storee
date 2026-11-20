@@ -121,10 +121,20 @@ class InvoiceController {
   async weeklySummary(req, res) {
     try {
       const { startDate, endDate } = req.query;
-      const invoices = await invoiceService.getInvoicesForWeek(startDate, endDate);
+      const [invoices, overheadSummary] = await Promise.all([
+        invoiceService.getInvoicesForWeek(startDate, endDate),
+        overheadService.getOverheadSummary({ startDate, endDate })
+      ]);
+      const invoiceTotal = invoices.reduce(
+        (total, invoice) => total + (Number(invoice.grand_total) || 0),
+        0
+      );
+      const overheadTotal = Number(overheadSummary.total_expense) || 0;
       return sendSuccess(res, 'Weekly invoice summary retrieved', {
         invoice_count: invoices.length,
-        total_amount: invoices.reduce((total, invoice) => total + (Number(invoice.grand_total) || 0), 0)
+        invoice_total: invoiceTotal,
+        overhead_total: overheadTotal,
+        total_amount: invoiceTotal + overheadTotal
       });
     } catch (error) {
       return sendError(

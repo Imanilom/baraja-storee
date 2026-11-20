@@ -16,8 +16,11 @@ import {
   PackagePlus,
   Lock,
   Tag,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
+import { downloadCsv } from '../../lib/csv-export.mjs';
+import { createProductsExportRows } from '../../lib/catalog-export.mjs';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -227,13 +230,27 @@ export default function ProductsPage() {
             </p>
           </div>
 
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors self-start sm:self-auto"
-          >
-            <PackagePlus className="w-4 h-4" />
-            <span>+ Tambah Produk Baru</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => downloadCsv(
+                'daftar-barang.csv',
+                createProductsExportRows(filteredProducts)
+              )}
+              disabled={loading || filteredProducts.length === 0}
+              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export Excel</span>
+            </button>
+            <button
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+            >
+              <PackagePlus className="w-4 h-4" />
+              <span>+ Tambah Produk Baru</span>
+            </button>
+          </div>
         </div>
 
         {/* Metric Badges */}

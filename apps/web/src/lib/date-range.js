@@ -9,8 +9,8 @@ export const getDateRange = (dateValue, period) => {
   start.setHours(0, 0, 0, 0);
 
   if (period === 'weekly') {
-    const daysSinceMonday = (start.getDay() + 6) % 7;
-    start.setDate(start.getDate() - daysSinceMonday);
+    const daysSinceSaturday = (start.getDay() + 1) % 7;
+    start.setDate(start.getDate() - daysSinceSaturday);
   }
 
   const end = new Date(start);
