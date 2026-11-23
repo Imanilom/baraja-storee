@@ -2,6 +2,11 @@ const cashFlowService = require('./cash-flow.service');
 const cashFlowPdfService = require('./cash-flow-pdf.service');
 const { reconcilePurchaseMutations } = require('./purchase-reconciliation.service');
 const { savePurchaseReconciliations } = require('./purchase-reconciliation-persistence.service');
+const {
+  reconcileCashWithdrawals,
+  getCashOverheadOptions,
+  saveCashWithdrawalReconciliations
+} = require('./cash-withdrawal-reconciliation.service');
 
 class CashFlowController {
   async getSummary(req, res, next) {
@@ -65,6 +70,40 @@ class CashFlowController {
       return res.status(200).json({
         success: true,
         message: 'Hasil rekonsiliasi berhasil disimpan.',
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async reconcileCashWithdrawals(req, res, next) {
+    try {
+      const result = await reconcileCashWithdrawals(req.body);
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getCashOverheadOptions(req, res, next) {
+    try {
+      const result = await getCashOverheadOptions(req.params.withdrawalId);
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async saveCashWithdrawalReconciliations(req, res, next) {
+    try {
+      const result = await saveCashWithdrawalReconciliations({
+        ...req.body,
+        user: req.user
+      });
+      return res.status(200).json({
+        success: true,
+        message: 'Rekonsiliasi tarik tunai dan overhead berhasil disimpan.',
         data: result
       });
     } catch (error) {

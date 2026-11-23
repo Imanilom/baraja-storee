@@ -39,6 +39,24 @@ router.post(
   cashFlowController.savePurchaseReconciliations
 );
 
+router.post(
+  '/reconciliation/cash-withdrawals',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.reconcileCashWithdrawals
+);
+
+router.get(
+  '/reconciliation/cash-withdrawals/:withdrawalId/overheads',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.getCashOverheadOptions
+);
+
+router.post(
+  '/reconciliation/cash-withdrawals/save',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.saveCashWithdrawalReconciliations
+);
+
 // Catat uang masuk
 router.post(
   '/in',

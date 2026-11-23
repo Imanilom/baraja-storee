@@ -71,10 +71,28 @@ export default function PurchaseReconciliationModal({ onClose }) {
   const [manualSelectionPending, setManualSelectionPending] = useState(false);
   const [beneficiaryNames, setBeneficiaryNames] = useState({});
   const [savedResult, setSavedResult] = useState(null);
+  const [withdrawalResult, setWithdrawalResult] = useState(null);
+  const [withdrawalSelections, setWithdrawalSelections] = useState({});
+  const [overheadOptions, setOverheadOptions] = useState({});
+  const [overheadHasMore, setOverheadHasMore] = useState({});
+  const [selectedOverheads, setSelectedOverheads] = useState({});
+  const [loadingOverheads, setLoadingOverheads] = useState({});
+  const [withdrawalSaveResult, setWithdrawalSaveResult] = useState(null);
   const [error, setError] = useState('');
   const [loadingFile, setLoadingFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingWithdrawals, setSavingWithdrawals] = useState(false);
+
+  const resetWithdrawalReconciliation = () => {
+    setWithdrawalResult(null);
+    setWithdrawalSelections({});
+    setOverheadOptions({});
+    setOverheadHasMore({});
+    setSelectedOverheads({});
+    setLoadingOverheads({});
+    setWithdrawalSaveResult(null);
+  };
 
   const handleFile = async (event) => {
     const file = event.target.files?.[0];
@@ -85,6 +103,7 @@ export default function PurchaseReconciliationModal({ onClose }) {
     setManualSelectionPending(false);
     setBeneficiaryNames({});
     setSavedResult(null);
+    resetWithdrawalReconciliation();
 
     if (file.size > MAX_FILE_BYTES) {
       setError('Ukuran file maksimal 10 MB.');
@@ -137,6 +156,7 @@ export default function PurchaseReconciliationModal({ onClose }) {
     setManualSelections({});
     setManualSelectionPending(false);
     setSavedResult(null);
+    resetWithdrawalReconciliation();
   };
 
   const handleReconcile = async (event, applyManual = false) => {
@@ -148,6 +168,7 @@ export default function PurchaseReconciliationModal({ onClose }) {
 
     setError('');
     setSubmitting(true);
+    resetWithdrawalReconciliation();
     try {
       const rows = statement.dataRows.map((row, index) => ({
         rowNumber: index + 2,
@@ -160,16 +181,25 @@ export default function PurchaseReconciliationModal({ onClose }) {
       const selectionsToSubmit = Object.fromEntries(
         Object.entries(manualSelections).filter(([, keys]) => Array.isArray(keys) && keys.length > 0)
       );
-      const response = await api.reconcilePurchaseMutations({
-        rows,
-        debitMode,
-        manualSelections: applyManual ? selectionsToSubmit : {}
-      });
-      setResult(response.data);
+      const [purchaseResponse, withdrawalResponse] = await Promise.all([
+        api.reconcilePurchaseMutations({
+          rows,
+          debitMode,
+          manualSelections: applyManual ? selectionsToSubmit : {}
+        }),
+        api.reconcileCashWithdrawals({ rows, debitMode })
+      ]);
+      setResult(purchaseResponse.data);
+      setWithdrawalResult(withdrawalResponse.data);
       setManualSelections(applyManual ? selectionsToSubmit : {});
       setManualSelectionPending(false);
       setBeneficiaryNames({});
       setSavedResult(null);
+      setWithdrawalSelections({});
+      setOverheadOptions({});
+      setOverheadHasMore({});
+      setSelectedOverheads({});
+      setWithdrawalSaveResult(null);
     } catch (requestError) {
       setError(requestError.message || 'Rekonsiliasi gagal dijalankan.');
     } finally {
@@ -216,6 +246,61 @@ export default function PurchaseReconciliationModal({ onClose }) {
     }
   };
 
+  const handleWithdrawalSelection = async (rowNumber, candidateId) => {
+    setWithdrawalSaveResult(null);
+    setError('');
+    setWithdrawalSelections((current) => ({ ...current, [rowNumber]: candidateId }));
+    setOverheadOptions((current) => ({ ...current, [rowNumber]: [] }));
+    setOverheadHasMore((current) => ({ ...current, [rowNumber]: false }));
+    setSelectedOverheads((current) => ({ ...current, [rowNumber]: [] }));
+    if (!candidateId) return;
+
+    setLoadingOverheads((current) => ({ ...current, [rowNumber]: true }));
+    try {
+      const response = await api.getCashWithdrawalOverheads(candidateId);
+      setOverheadOptions((current) => ({ ...current, [rowNumber]: response.data.options }));
+      setOverheadHasMore((current) => ({ ...current, [rowNumber]: response.data.has_more }));
+      setSelectedOverheads((current) => ({
+        ...current,
+        [rowNumber]: response.data.selected_keys
+      }));
+    } catch (requestError) {
+      setError(requestError.message || 'Daftar overhead tunai gagal dimuat.');
+    } finally {
+      setLoadingOverheads((current) => ({ ...current, [rowNumber]: false }));
+    }
+  };
+
+  const handleSaveWithdrawalResults = async () => {
+    if (!withdrawalResult) return;
+    const rows = withdrawalResult.rows
+      .filter((row) => withdrawalSelections[row.rowNumber])
+      .map((row) => ({
+        rowNumber: row.rowNumber,
+        date: row.date,
+        description: row.description,
+        reference: row.reference,
+        amount: row.amount,
+        cashTransactionId: withdrawalSelections[row.rowNumber],
+        allocationKeys: selectedOverheads[row.rowNumber] || []
+      }));
+    if (rows.length === 0) {
+      setError('Pilih transaksi tarik tunai yang cocok terlebih dahulu.');
+      return;
+    }
+
+    setError('');
+    setSavingWithdrawals(true);
+    try {
+      const response = await api.saveCashWithdrawalReconciliations({ rows });
+      setWithdrawalSaveResult(response.data);
+    } catch (requestError) {
+      setError(requestError.message || 'Rekonsiliasi tarik tunai gagal disimpan.');
+    } finally {
+      setSavingWithdrawals(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6">
       <section
@@ -228,10 +313,10 @@ export default function PurchaseReconciliationModal({ onClose }) {
           <div>
             <h2 id="purchase-reconciliation-title" className="flex items-center gap-2 text-lg font-black text-slate-900">
               <FileSearch className="h-5 w-5 text-indigo-600" />
-              Rekonsiliasi Mutasi Pembelian
+              Rekonsiliasi Mutasi Bank
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Cocokkan debit rekening koran dengan pembelian, termasuk beberapa belanja tunai yang direimburse sekaligus.
+              Cocokkan debit dengan pembelian, tarik tunai, dan overhead tunai yang dibelanjakan selama beberapa hari.
             </p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Tutup">
@@ -611,6 +696,166 @@ export default function PurchaseReconciliationModal({ onClose }) {
                   </table>
                 </div>
               </div>
+              <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Tarik tunai dan alokasi overhead beberapa hari</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    Cocokkan mutasi bank ke transaksi tarik tunai yang sudah dicatat. Lalu tautkan overhead tunai
+                    sampai maksimal sebesar dana tarik tunai, dalam 30 hari sejak penarikan. Sisa dana tetap menjadi
+                    saldo kas; tautan ini tidak membuat pengeluaran baru.
+                  </p>
+                </div>
+                {withdrawalResult?.summary.rows_with_withdrawal_candidates === 0 ? (
+                  <p className="rounded-lg bg-white p-3 text-xs text-slate-600">
+                    Tidak ada transaksi tarik tunai tersimpan dengan nominal yang sama. Catat transaksi bank ke kas
+                    terlebih dahulu, lalu jalankan rekonsiliasi lagi.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {withdrawalResult?.rows
+                      .filter((row) => row.candidates.length > 0)
+                      .map((row) => {
+                        const selectedWithdrawal = row.candidates.find(
+                          (candidate) => candidate.id === withdrawalSelections[row.rowNumber]
+                        );
+                        const options = overheadOptions[row.rowNumber] || [];
+                        const selectedKeys = selectedOverheads[row.rowNumber] || [];
+                        const allocated = options.reduce(
+                          (total, option) => total + (selectedKeys.includes(option.key) ? option.amount : 0),
+                          0
+                        );
+                        return (
+                          <div key={row.rowNumber} className="rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="flex flex-wrap items-start justify-between gap-2 text-xs">
+                              <div>
+                                <p className="font-bold text-slate-800">
+                                  Baris {row.rowNumber} · {formatRupiah(row.amount)}
+                                </p>
+                                <p className="mt-0.5 text-slate-600">{row.description}</p>
+                                <p className="mt-0.5 text-[10px] text-slate-500">{row.date || 'Tanggal tidak tersedia'}</p>
+                              </div>
+                              <label className="w-full max-w-md text-[10px] font-bold text-slate-700">
+                                Transaksi tarik tunai internal
+                                <select
+                                  value={withdrawalSelections[row.rowNumber] || ''}
+                                  onChange={(event) => handleWithdrawalSelection(row.rowNumber, event.target.value)}
+                                  className="mt-1 w-full rounded-md border border-slate-200 bg-white p-2 text-xs font-normal"
+                                >
+                                  <option value="">Pilih transaksi tarik tunai</option>
+                                  {row.candidates.map((candidate) => (
+                                    <option key={candidate.id} value={candidate.id}>
+                                      {candidate.transaction_number} · {formatCandidateDate(candidate.date)} · {formatRupiah(candidate.amount)}
+                                      {candidate.saved ? ' · sudah pernah disimpan' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            {row.has_more_candidates && (
+                              <p className="mt-1 text-[10px] text-amber-700">
+                                Ada lebih dari 30 kandidat tarik tunai; daftar menampilkan 30 yang terdekat tanggalnya.
+                              </p>
+                            )}
+                            {selectedWithdrawal && (
+                              <div className="mt-3 border-t border-slate-100 pt-3">
+                                {loadingOverheads[row.rowNumber] ? (
+                                  <p className="flex items-center gap-2 text-xs text-slate-500">
+                                    <LoaderCircle className="h-4 w-4 animate-spin" /> Memuat overhead tunai...
+                                  </p>
+                                ) : (
+                                  <>
+                                    <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs">
+                                      <p className="font-semibold text-slate-700">
+                                        Pilih overhead tunai (tanggal penarikan sampai 30 hari sesudahnya)
+                                      </p>
+                                      <p className="font-bold text-slate-800">
+                                        Dialokasikan {formatRupiah(allocated)} · Sisa kas {formatRupiah(selectedWithdrawal.amount - allocated)}
+                                      </p>
+                                    </div>
+                                    {options.length === 0 ? (
+                                      <p className="rounded bg-slate-50 p-2 text-[10px] text-slate-500">
+                                        Belum ada overhead tunai yang tersedia dalam rentang tanggal ini.
+                                      </p>
+                                    ) : (
+                                      <div className="max-h-48 space-y-1 overflow-y-auto">
+                                        {options.map((option) => {
+                                          const checked = selectedKeys.includes(option.key);
+                                          const overBudget = !checked &&
+                                            allocated + option.amount > selectedWithdrawal.amount;
+                                          return (
+                                            <label
+                                              key={option.key}
+                                              className={`flex items-start gap-2 rounded p-2 text-xs ${overBudget ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-slate-50'}`}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                disabled={overBudget}
+                                                onChange={(event) => {
+                                                  const nextKeys = event.target.checked
+                                                    ? [...selectedKeys, option.key]
+                                                    : selectedKeys.filter((key) => key !== option.key);
+                                                  setWithdrawalSaveResult(null);
+                                                  setSelectedOverheads((current) => ({
+                                                    ...current,
+                                                    [row.rowNumber]: nextKeys
+                                                  }));
+                                                }}
+                                                className="mt-0.5"
+                                              />
+                                              <span className="min-w-0 flex-1">
+                                                <span className="block font-semibold text-slate-800">
+                                                  {option.title} {option.category ? `· ${option.category}` : ''}
+                                                </span>
+                                                <span className="block text-[10px] text-slate-500">
+                                                  {formatCandidateDate(option.date)} · {formatRupiah(option.amount)}
+                                                  {option.source_type === 'overhead_payment' ? ' · pembayaran hutang overhead' : ''}
+                                                </span>
+                                              </span>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                    {overheadHasMore[row.rowNumber] && (
+                                      <p className="mt-1 text-[10px] text-amber-700">
+                                        Ada lebih dari 500 overhead dalam rentang tanggal; daftar menampilkan 500 data pertama.
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+                {withdrawalResult?.summary.rows_with_withdrawal_candidates > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-200 pt-3">
+                    <div className="text-xs text-slate-700">
+                      {withdrawalResult.summary.rows_with_withdrawal_candidates} baris mutasi memiliki kandidat tarik tunai.
+                      {withdrawalSaveResult && (
+                        <p role="status" className="mt-1 font-semibold text-emerald-800">
+                          Tersimpan {withdrawalSaveResult.saved_count} mutasi; {withdrawalSaveResult.allocation_count} overhead
+                          dialokasikan {formatRupiah(withdrawalSaveResult.allocated_amount)}; sisa dana {formatRupiah(withdrawalSaveResult.remaining_amount)}.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveWithdrawalResults}
+                      disabled={savingWithdrawals || submitting ||
+                        Object.values(loadingOverheads).some(Boolean) ||
+                        !Object.values(withdrawalSelections).some(Boolean)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2 text-xs font-bold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingWithdrawals && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                      {savingWithdrawals ? 'Menyimpan...' : 'Simpan tarik tunai & overhead'}
+                    </button>
+                  </div>
+                )}
+              </section>
               <p className="flex items-start gap-2 text-[10px] leading-relaxed text-slate-500">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-indigo-500" />
                 Hasil ini hanya laporan rekonsiliasi; tidak mengubah transaksi, saldo, atau status pembayaran.

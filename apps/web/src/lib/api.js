@@ -275,6 +275,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  reconcileCashWithdrawals: (data) =>
+    fetchApi('/cash-flow/reconciliation/cash-withdrawals', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getCashWithdrawalOverheads: (withdrawalId) =>
+    fetchApi(`/cash-flow/reconciliation/cash-withdrawals/${withdrawalId}/overheads`),
+  saveCashWithdrawalReconciliations: (data) =>
+    fetchApi('/cash-flow/reconciliation/cash-withdrawals/save', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   recordCashIn: (data) =>
     fetchApi('/cash-flow/in', {
       method: 'POST',
