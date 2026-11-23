@@ -21,5 +21,11 @@ module.exports = {
   ),
   updateRecipe: respond(
     (req) => coffeeInventoryService.updateCoffeeRecipe(req.params.recipeId, req.body || {})
+  ),
+  adjustIngredientStock: respond(
+    (req) => coffeeInventoryService.adjustCoffeeIngredientStock(
+      req.params.productId,
+      req.body || {}
+    )
   )
 };

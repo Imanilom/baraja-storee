@@ -91,6 +91,7 @@ export const api = {
   getWasteRecords: (params = '') => fetchApi(`/waste${params}`),
   getDailyInventoryReconciliation: (params) =>
     fetchApi(`/inventory/daily?${params}`),
+  getCoffeeInventory: () => fetchApi('/integration/coffee/inventory'),
   createWasteRecord: (data) =>
     fetchApi('/waste', {
       method: 'POST',

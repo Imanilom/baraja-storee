@@ -48,6 +48,18 @@ async function run() {
     );
     assert.equal(requests[2].options.method, 'PUT');
 
+    await coffeeInventoryService.adjustCoffeeIngredientStock('coffee-product-id', {
+      warehouseId: 'coffee-warehouse-id',
+      actualStock: 12,
+      handledBy: 'Test Admin',
+      notes: 'Stock opname'
+    });
+    assert.equal(
+      requests[3].url,
+      'https://coffee.test/api/integration/store/ingredients/coffee-product-id/stock'
+    );
+    assert.equal(requests[3].options.method, 'PUT');
+
     global.fetch = async () => ({
       ok: false,
       status: 409,

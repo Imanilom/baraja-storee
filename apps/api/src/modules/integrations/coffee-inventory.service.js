@@ -67,9 +67,17 @@ async function updateCoffeeRecipe(recipeId, body) {
   });
 }
 
+async function adjustCoffeeIngredientStock(productId, body) {
+  return requestCoffee(`ingredients/${encodeURIComponent(productId)}/stock`, {
+    method: 'PUT',
+    body
+  });
+}
+
 module.exports = {
   getCoffeeInventory,
   getCoffeeRecipes,
   createCoffeeRecipe,
-  updateCoffeeRecipe
+  updateCoffeeRecipe,
+  adjustCoffeeIngredientStock
 };

@@ -21,7 +21,7 @@ export default function LabaRugiPage() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [operatingExpense, setOperatingExpense] = useState(2500000);
+  const [operatingExpense, setOperatingExpense] = useState('');
   const [period, setPeriod] = useState('monthly');
   const [selectedDate, setSelectedDate] = useState(() => formatDateInput(new Date()));
   const [error, setError] = useState(null);
@@ -31,9 +31,9 @@ export default function LabaRugiPage() {
     setError(null);
     try {
       const query = new URLSearchParams({
-        period,
-        operating_expense: operatingExpense
+        period
       });
+      if (operatingExpense !== '') query.set('operating_expense', operatingExpense);
       if (period === 'daily' || period === 'weekly') {
         const range = getDateRange(selectedDate, period);
         query.set('startDate', range.startDate);
@@ -85,13 +85,17 @@ export default function LabaRugiPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-slate-800">Laporan Laba Rugi Terintegrasi</h1>
-              <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                report
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-slate-100 text-slate-600 border-slate-300'
+              }`}>
                 <ShieldCheck className="w-3.5 h-3.5" />
-                OAuth 2.0 Connected
+                {report ? 'OAuth 2.0 Terhubung' : loading ? 'Menghubungkan OAuth 2.0' : 'Data belum tersedia'}
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Data pendapatan ditarik secara terotentikasi via API Route eksternal (OAuth 2 Bearer) dan disandingkan dengan HPP belanja Marketlist.
+              Pendapatan transaksi selesai dan penerimaan ditarik dari Amphitheater via OAuth 2, lalu disandingkan dengan HPP dan overhead Store.
             </p>
           </div>
 
@@ -147,12 +151,12 @@ export default function LabaRugiPage() {
             <div>
               <p className="font-semibold text-white">OAuth 2.0 Route Integration Active</p>
               <p className="text-slate-400 text-[11px]">
-                API Route: <code className="text-emerald-300">/api/v1/external-pos/sales</code> &bull; Token Endpoint: <code className="text-emerald-300">/api/v1/oauth2/token</code> &bull; Scope: <code className="text-emerald-300">read:sales read:revenue</code>
+                API: <code className="text-emerald-300">/api/store/revenue</code> dan <code className="text-emerald-300">/api/store/sales-income</code> &bull; OAuth 2.0 Bearer
               </p>
             </div>
           </div>
           <span className="hidden sm:inline-block text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
-            Status: Token Valid (200 OK)
+            Status: {report ? 'Data berhasil dimuat' : loading ? 'Menghubungkan...' : 'Belum terhubung'}
           </span>
         </div>
 
@@ -246,32 +250,53 @@ export default function LabaRugiPage() {
 
         {/* Operating Expense Adjuster & Breakdown Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Revenue Breakdown by Category */}
+          {/* External payment income breakdown */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-sm text-slate-800">Rincian Penjualan (OAuth 2 API)</h3>
+              <h3 className="font-bold text-sm text-slate-800">Penerimaan per Metode Pembayaran</h3>
               <Layers className="w-4 h-4 text-emerald-600" />
             </div>
+            <p className="text-[11px] text-slate-500">
+              Total penerimaan: Rp {(report?.total_payment_income || 0).toLocaleString('id-ID')}
+            </p>
 
             <div className="space-y-3">
-              {report?.sales_breakdown?.map((item, idx) => (
+              {report?.payment_breakdown?.map((item, idx) => (
                 <div key={idx} className="space-y-1">
                   <div className="flex justify-between text-xs font-semibold text-slate-700">
-                    <span>{item.category}</span>
-                    <span>Rp {item.revenue.toLocaleString('id-ID')}</span>
+                    <span>{item.method}</span>
+                    <span>Rp {item.total_income.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                     <div
                       className="bg-emerald-500 h-full rounded-full"
                       style={{
-                        width: `${Math.min(100, (item.revenue / (summary.total_revenue || 1)) * 100)}%`
+                        width: `${Math.min(100, (item.total_income / (report.total_payment_income || 1)) * 100)}%`
                       }}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 text-right">{item.qty_sold} unit terjual</p>
+                  <p className="text-[10px] text-slate-400 text-right">{item.payment_count} transaksi</p>
                 </div>
               ))}
+              {report && report.payment_breakdown.length === 0 && (
+                <p className="text-xs text-slate-400">Belum ada rincian penerimaan pada periode ini.</p>
+              )}
             </div>
+            {report?.daily_trends?.length > 0 && (
+              <div className="border-t border-slate-100 pt-3 space-y-2">
+                <h4 className="text-[11px] font-semibold text-slate-500">Tren Pendapatan Harian</h4>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {report.daily_trends.map((day) => (
+                    <div key={day.date} className="flex justify-between text-xs">
+                      <span className="text-slate-600">{day.date} · {day.transactions} transaksi</span>
+                      <span className="font-semibold text-slate-800">
+                        Rp {day.revenue.toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Purchasing COGS Breakdown by Supplier */}

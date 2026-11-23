@@ -29,20 +29,42 @@ export default function InventoryPage() {
   const [date, setDate] = useState(() => formatDateInput(new Date()));
   const [period, setPeriod] = useState('daily');
   const [report, setReport] = useState({ totals: {}, items: [], overheads: [] });
+  const [coffeeInventory, setCoffeeInventory] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [coffeeInventoryLoading, setCoffeeInventoryLoading] = useState(true);
   const [error, setError] = useState('');
+  const [coffeeInventoryError, setCoffeeInventoryError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    try {
-      const response = await api.getDailyInventoryReconciliation(reconciliationParams(date, period));
-      setReport(response.data || { totals: {}, items: [], overheads: [] });
-    } catch (requestError) {
-      setError(requestError.message || 'Gagal memuat rekonsiliasi inventori.');
-    } finally {
-      setLoading(false);
+    setCoffeeInventoryLoading(true);
+    setCoffeeInventoryError('');
+    const [reconciliationResult, inventoryResult] = await Promise.allSettled([
+      api.getDailyInventoryReconciliation(reconciliationParams(date, period)),
+      api.getCoffeeInventory()
+    ]);
+
+    if (reconciliationResult.status === 'fulfilled') {
+      setReport(reconciliationResult.value.data || { totals: {}, items: [], overheads: [] });
+    } else {
+      setError(reconciliationResult.reason.message || 'Gagal memuat rekonsiliasi inventori.');
     }
+    setLoading(false);
+
+    if (inventoryResult.status === 'fulfilled') {
+      const inventory = inventoryResult.value.data;
+      if (!inventory || !Array.isArray(inventory.ingredients)) {
+        setCoffeeInventory(null);
+        setCoffeeInventoryError('Amphitheater tidak mengembalikan data stok bahan baku yang valid.');
+      } else {
+        setCoffeeInventory(inventory);
+      }
+    } else {
+      setCoffeeInventory(null);
+      setCoffeeInventoryError(inventoryResult.reason.message || 'Gagal memuat stok aktual Amphitheater.');
+    }
+    setCoffeeInventoryLoading(false);
   }, [date, period]);
 
   useEffect(() => { load(); }, [load]);
@@ -111,6 +133,65 @@ export default function InventoryPage() {
             </section>
           ))}
         </div>
+
+        <section className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Stok Bahan Baku Aktual</h2>
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                Saldo on-hand dari Amphitheater, termasuk penerimaan yang sudah disetujui dan diposting.
+                Diterima baik dikurangi waste saat penerimaan.
+              </p>
+            </div>
+            <span className="text-[10px] text-slate-500">
+              {coffeeInventory?.updated_at ? `Diperbarui ${timestamp(coffeeInventory.updated_at)}` : 'Sumber: Amphitheater'}
+            </span>
+          </div>
+          {coffeeInventoryError ? (
+            <p role="alert" className="p-4 text-sm text-rose-700">{coffeeInventoryError}</p>
+          ) : coffeeInventoryLoading ? (
+            <p className="p-4 text-sm text-slate-500">Memuat stok bahan baku aktual...</p>
+          ) : coffeeInventory?.ingredients.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Bahan Baku</th>
+                    <th className="px-4 py-3">SKU</th>
+                    <th className="px-4 py-3">Stok Aktual</th>
+                    <th className="px-4 py-3">Minimum</th>
+                    <th className="px-4 py-3">Saldo per Gudang</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {coffeeInventory.ingredients.map((ingredient) => (
+                    <tr key={ingredient.product_id}>
+                      <td className="px-4 py-3 font-semibold text-slate-800">{ingredient.name}</td>
+                      <td className="px-4 py-3 text-slate-600">{ingredient.sku || '-'}</td>
+                      <td className="px-4 py-3 font-bold text-emerald-700">
+                        {quantity(ingredient.current_stock, ingredient.unit)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {quantity(ingredient.minimum_stock, ingredient.unit)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {ingredient.warehouses?.length
+                          ? ingredient.warehouses.map((warehouse) => (
+                            <div key={warehouse.warehouse_id}>
+                              {warehouse.warehouse_name}: {quantity(warehouse.current_stock, ingredient.unit)}
+                            </div>
+                          ))
+                          : 'Belum ada saldo gudang'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="p-4 text-sm text-slate-500">Belum ada data bahan baku dari Amphitheater.</p>
+          )}
+        </section>
 
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">

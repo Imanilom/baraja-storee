@@ -17,14 +17,29 @@ class InventoryManagementScreen extends StatefulWidget {
 class _InventoryManagementScreenState extends State<InventoryManagementScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final TextEditingController _ingredientSearchController =
+      TextEditingController();
+  final TextEditingController _menuSearchController = TextEditingController();
+  final TextEditingController _recipeSearchController = TextEditingController();
   bool _isLoading = true;
   Map<String, dynamic>? _inventory;
   Map<String, dynamic>? _recipeData;
   String? _error;
   int _selectedTabIndex = 0;
+  String _ingredientCategory = '';
+  String _menuCategory = '';
+  String _menuStatus = 'all';
+  String _recipeCategory = '';
+  final TextEditingController _ingredientActualStockController =
+      TextEditingController();
+  final TextEditingController _ingredientAdjustmentNoteController =
+      TextEditingController();
 
-  bool get _canManageRecipes => const {'admin', 'management', 'leader'}
-      .contains(widget.user.role.toLowerCase());
+  bool get _canManageRecipes => const {
+    'admin',
+    'management',
+    'leader',
+  }.contains(widget.user.role.toLowerCase());
 
   @override
   void initState() {
@@ -42,6 +57,11 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _ingredientSearchController.dispose();
+    _menuSearchController.dispose();
+    _recipeSearchController.dispose();
+    _ingredientActualStockController.dispose();
+    _ingredientAdjustmentNoteController.dispose();
     super.dispose();
   }
 
@@ -54,7 +74,9 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
   }
 
   Map<String, dynamic> _responseData(dynamic response) {
-    if (response is Map && response['success'] == true && response['data'] is Map) {
+    if (response is Map &&
+        response['success'] == true &&
+        response['data'] is Map) {
       return Map<String, dynamic>.from(response['data'] as Map);
     }
     throw const FormatException('Format data stok Coffee tidak valid.');
@@ -95,9 +117,7 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
     final existingMenuIds = recipes
         .map((entry) {
           final menu = entry['menuItemId'];
-          return menu is Map
-              ? menu['_id']?.toString()
-              : menu?.toString();
+          return menu is Map ? menu['_id']?.toString() : menu?.toString();
         })
         .whereType<String>()
         .toSet();
@@ -128,10 +148,7 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
         : number.toString();
   }
 
-  Widget _infoCard({
-    required IconData icon,
-    required String text,
-  }) {
+  Widget _infoCard({required IconData icon, required String text}) {
     final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
@@ -159,6 +176,149 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
     );
   }
 
+  Future<void> _openIngredientAdjustment(
+    Map<String, dynamic> ingredient,
+  ) async {
+    final warehouses = _list(ingredient['warehouses']);
+    if (warehouses.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bahan ini belum memiliki gudang untuk disesuaikan.'),
+        ),
+      );
+      return;
+    }
+
+    String warehouseId = warehouses.first['warehouse_id']?.toString() ?? '';
+    String actualStock = _formatQuantity(warehouses.first['current_stock']);
+    _ingredientActualStockController.text = actualStock;
+    _ingredientAdjustmentNoteController.clear();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Sesuaikan ${ingredient['name'] ?? 'bahan baku'}'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: warehouseId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Gudang'),
+                      items: warehouses.map((warehouse) {
+                        final id = warehouse['warehouse_id']?.toString() ?? '';
+                        return DropdownMenuItem<String>(
+                          value: id,
+                          child: Text(
+                            warehouse['warehouse_name']?.toString() ?? 'Gudang',
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        final warehouse = warehouses.firstWhere(
+                          (item) => item['warehouse_id']?.toString() == value,
+                          orElse: () => <String, dynamic>{},
+                        );
+                        setDialogState(() {
+                          warehouseId = value;
+                          actualStock = _formatQuantity(
+                            warehouse['current_stock'],
+                          );
+                          _ingredientActualStockController.text = actualStock;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      controller: _ingredientActualStockController
+                        ..text = actualStock,
+                      decoration: InputDecoration(
+                        labelText: 'Stok fisik',
+                        suffixText: ingredient['unit']?.toString() ?? '',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _ingredientAdjustmentNoteController,
+                      decoration: const InputDecoration(
+                        labelText: 'Catatan penyesuaian',
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final value = double.tryParse(
+                      _ingredientActualStockController.text.trim().replaceAll(
+                        ',',
+                        '.',
+                      ),
+                    );
+                    if (value == null || !value.isFinite || value < 0) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('Masukkan stok fisik yang valid.'),
+                        ),
+                      );
+                      return;
+                    }
+                    try {
+                      await ApiService.put(
+                        '/integration/coffee/ingredients/${ingredient['product_id']}/stock',
+                        {
+                          'warehouseId': warehouseId,
+                          'actualStock': value,
+                          'handledBy': widget.user.name,
+                          'notes': _ingredientAdjustmentNoteController.text
+                              .trim(),
+                        },
+                      );
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, true);
+                      }
+                    } catch (error) {
+                      if (dialogContext.mounted) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              error
+                                  .toString()
+                                  .replaceFirst('Exception:', '')
+                                  .trim(),
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (saved == true) await _load();
+  }
+
   Widget _emptyState(String title, String detail) {
     return Center(
       child: Padding(
@@ -183,9 +343,9 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
             Text(
               title,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
@@ -203,8 +363,131 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
     );
   }
 
+  String _categoryName(dynamic category) {
+    if (category is String) return category;
+    if (category is Map) {
+      return category['name']?.toString() ?? '';
+    }
+    if (category is List) {
+      return category
+          .map((item) => _categoryName(item))
+          .where((item) => item.isNotEmpty)
+          .join(', ');
+    }
+    return '';
+  }
+
+  List<String> _categories(List<Map<String, dynamic>> items) {
+    final categories = <String>{};
+    for (final item in items) {
+      for (final category
+          in _categoryName(item['category'])
+              .split(',')
+              .map((item) => item.trim())
+              .where((item) => item.isNotEmpty)) {
+        categories.add(category);
+      }
+    }
+    final result = categories.toList()..sort();
+    return result;
+  }
+
+  Widget _searchFilterBar({
+    required TextEditingController searchController,
+    required String hintText,
+    required List<String> categories,
+    required String selectedCategory,
+    required ValueChanged<String> onCategoryChanged,
+    List<Widget> extraFilters = const [],
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        children: [
+          TextField(
+            controller: searchController,
+            onChanged: (_) => setState(() {}),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: hintText,
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Hapus pencarian',
+                      onPressed: () {
+                        searchController.clear();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: selectedCategory.isEmpty
+                      ? null
+                      : selectedCategory,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Kategori',
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('Semua kategori'),
+                    ),
+                    ...categories.map(
+                      (category) => DropdownMenuItem<String>(
+                        value: category,
+                        child: Text(category),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => onCategoryChanged(value ?? ''),
+                ),
+              ),
+              ...extraFilters,
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildIngredientsTab() {
     final ingredients = _list(_inventory?['ingredients']);
+    final search = _ingredientSearchController.text.trim().toLowerCase();
+    final filteredIngredients = ingredients.where((item) {
+      final name = item['name']?.toString().toLowerCase() ?? '';
+      final sku = item['sku']?.toString().toLowerCase() ?? '';
+      final category = _categoryName(item['category']).toLowerCase();
+      final matchesSearch =
+          search.isEmpty || name.contains(search) || sku.contains(search);
+      final matchesCategory =
+          _ingredientCategory.isEmpty ||
+          category
+              .split(',')
+              .map((item) => item.trim())
+              .contains(_ingredientCategory.toLowerCase());
+      return matchesSearch && matchesCategory;
+    }).toList();
     if (ingredients.isEmpty) {
       return _emptyState(
         'Belum ada bahan baku',
@@ -217,21 +500,41 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-        itemCount: ingredients.length + 1,
+        itemCount: filteredIngredients.isEmpty
+            ? 3
+            : filteredIngredients.length + 2,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           if (index == 0) {
+            return _searchFilterBar(
+              searchController: _ingredientSearchController,
+              hintText: 'Cari nama atau SKU bahan...',
+              categories: _categories(ingredients),
+              selectedCategory: _ingredientCategory,
+              onCategoryChanged: (value) {
+                setState(() => _ingredientCategory = value);
+              },
+            );
+          }
+          if (index == 1) {
             return _infoCard(
               icon: Icons.sync_rounded,
               text:
                   'Stok mengikuti penerimaan yang sudah diposting di Baraja Coffee. Penjualan dan waste akan mengurangi saldo di gudang terkait.',
             );
           }
-          final item = ingredients[index - 1];
+          if (filteredIngredients.isEmpty) {
+            return _emptyState(
+              'Bahan baku tidak ditemukan',
+              'Coba ubah kata pencarian atau kategori.',
+            );
+          }
+          final item = filteredIngredients[index - 2];
           final warehouses = _list(item['warehouses']);
           final unit = item['unit']?.toString() ?? '';
           final quantity = _formatQuantity(item['current_stock']);
-          final isLow = (item['current_stock'] as num? ?? 0) <=
+          final isLow =
+              (item['current_stock'] as num? ?? 0) <=
               (item['minimum_stock'] as num? ?? 0);
           return Card(
             child: Padding(
@@ -301,6 +604,14 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
                           ),
                         ],
                       ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: 'Sesuaikan stok',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _openIngredientAdjustment(item),
+                        icon: const Icon(Icons.tune_rounded),
+                        color: BarajaPalette.forest,
+                      ),
                     ],
                   ),
                   if (warehouses.isNotEmpty) ...[
@@ -329,6 +640,27 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
 
   Widget _buildMenusTab() {
     final menus = _list(_inventory?['menus']);
+    final search = _menuSearchController.text.trim().toLowerCase();
+    final filteredMenus = menus.where((item) {
+      final name = item['name']?.toString().toLowerCase() ?? '';
+      final category = _categoryName(item['category']).toLowerCase();
+      final workstation = item['workstation']?.toString().toLowerCase() ?? '';
+      final matchesSearch =
+          search.isEmpty ||
+          name.contains(search) ||
+          workstation.contains(search);
+      final matchesCategory =
+          _menuCategory.isEmpty ||
+          category
+              .split(',')
+              .map((item) => item.trim())
+              .contains(_menuCategory.toLowerCase());
+      final matchesStatus =
+          _menuStatus == 'all' ||
+          (_menuStatus == 'active' && item['is_active'] == true) ||
+          (_menuStatus == 'inactive' && item['is_active'] != true);
+      return matchesSearch && matchesCategory && matchesStatus;
+    }).toList();
     if (menus.isEmpty) {
       return _emptyState(
         'Belum ada stok menu',
@@ -341,17 +673,63 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-        itemCount: menus.length + 1,
+        itemCount: filteredMenus.isEmpty ? 3 : filteredMenus.length + 2,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           if (index == 0) {
+            return _searchFilterBar(
+              searchController: _menuSearchController,
+              hintText: 'Cari nama atau workstation menu...',
+              categories: _categories(menus),
+              selectedCategory: _menuCategory,
+              onCategoryChanged: (value) {
+                setState(() => _menuCategory = value);
+              },
+              extraFilters: [
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 132,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _menuStatus,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: 'Status',
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'all', child: Text('Semua')),
+                      DropdownMenuItem(value: 'active', child: Text('Aktif')),
+                      DropdownMenuItem(
+                        value: 'inactive',
+                        child: Text('Nonaktif'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _menuStatus = value ?? 'all');
+                    },
+                  ),
+                ),
+              ],
+            );
+          }
+          if (index == 1) {
             return _infoCard(
               icon: Icons.calculate_outlined,
               text:
                   'Jumlah porsi dihitung dari stok bahan utama resep. Jika bahan utama habis, menu nonaktif; bahan pendukung tidak menjadi batas stok menu.',
             );
           }
-          final menu = menus[index - 1];
+          if (filteredMenus.isEmpty) {
+            return _emptyState(
+              'Stok menu tidak ditemukan',
+              'Coba ubah kata pencarian, kategori, atau status.',
+            );
+          }
+          final menu = filteredMenus[index - 2];
           final isActive = menu['is_active'] == true;
           final warehouses = _list(menu['warehouses']);
           return Card(
@@ -445,6 +823,48 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
 
   Widget _buildRecipesTab() {
     final recipes = _list(_recipeData?['recipes']);
+    final menus = _list(_inventory?['menus']);
+    final menuCategories = <String, String>{};
+    for (final menu in menus) {
+      final menuId = menu['menu_item_id']?.toString();
+      if (menuId != null) {
+        menuCategories[menuId] = _categoryName(menu['category']);
+      }
+    }
+    final search = _recipeSearchController.text.trim().toLowerCase();
+    final filteredRecipes = recipes.where((recipe) {
+      final menu = recipe['menuItemId'];
+      final menuId = menu is Map ? menu['_id']?.toString() : menu?.toString();
+      var menuName = menu is Map ? menu['name']?.toString() ?? '' : '';
+      if (menuName.isEmpty) {
+        for (final menuItem in menus) {
+          if (menuItem['menu_item_id']?.toString() == menuId) {
+            menuName = menuItem['name']?.toString() ?? '';
+            break;
+          }
+        }
+      }
+      final ingredients = _list(recipe['baseIngredients']);
+      final ingredientNames = ingredients
+          .map((ingredient) {
+            final product = ingredient['productId'];
+            return product is Map ? product['name']?.toString() ?? '' : '';
+          })
+          .join(' ')
+          .toLowerCase();
+      final category = (menuCategories[menuId] ?? '').toLowerCase();
+      final matchesSearch =
+          search.isEmpty ||
+          menuName.toLowerCase().contains(search) ||
+          ingredientNames.contains(search);
+      final matchesCategory =
+          _recipeCategory.isEmpty ||
+          category
+              .split(',')
+              .map((item) => item.trim())
+              .contains(_recipeCategory.toLowerCase());
+      return matchesSearch && matchesCategory;
+    }).toList();
     if (recipes.isEmpty) {
       return _emptyState(
         'Resep belum tersedia',
@@ -459,10 +879,21 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-        itemCount: recipes.length + 1,
+        itemCount: filteredRecipes.isEmpty ? 3 : filteredRecipes.length + 2,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           if (index == 0) {
+            return _searchFilterBar(
+              searchController: _recipeSearchController,
+              hintText: 'Cari nama menu atau bahan resep...',
+              categories: _categories(menus),
+              selectedCategory: _recipeCategory,
+              onCategoryChanged: (value) {
+                setState(() => _recipeCategory = value);
+              },
+            );
+          }
+          if (index == 1) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -482,7 +913,13 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
               ],
             );
           }
-          final recipe = recipes[index - 1];
+          if (filteredRecipes.isEmpty) {
+            return _emptyState(
+              'Resep tidak ditemukan',
+              'Coba ubah kata pencarian atau kategori.',
+            );
+          }
+          final recipe = filteredRecipes[index - 2];
           final menu = recipe['menuItemId'];
           final menuName = menu is Map
               ? menu['name']?.toString() ?? 'Menu'
@@ -610,10 +1047,7 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
             const SizedBox(height: 6),
             Text(
               _error ?? 'Periksa koneksi dan pengaturan integrasi.',
-              style: TextStyle(
-                color: colors.onSurfaceVariant,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -632,10 +1066,13 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
   Widget build(BuildContext context) {
     final recipes = _list(_recipeData?['recipes']);
     final menus = _list(_recipeData?['menus']);
-    final recipeMenuIds = recipes.map((recipe) {
-      final menu = recipe['menuItemId'];
-      return menu is Map ? menu['_id']?.toString() : menu?.toString();
-    }).whereType<String>().toSet();
+    final recipeMenuIds = recipes
+        .map((recipe) {
+          final menu = recipe['menuItemId'];
+          return menu is Map ? menu['_id']?.toString() : menu?.toString();
+        })
+        .whereType<String>()
+        .toSet();
     final hasMenuWithoutRecipe = menus.any(
       (menu) => !recipeMenuIds.contains(menu['menu_item_id']),
     );
@@ -659,7 +1096,8 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
           ],
         ),
       ),
-      floatingActionButton: _selectedTabIndex == 2 &&
+      floatingActionButton:
+          _selectedTabIndex == 2 &&
               _canManageRecipes &&
               hasMenuWithoutRecipe &&
               !_isLoading

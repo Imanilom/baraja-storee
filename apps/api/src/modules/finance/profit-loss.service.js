@@ -53,7 +53,7 @@ class ProfitLossService {
       range.start.toISOString(),
       range.end.toISOString()
     );
-    const totalRevenue = salesReport.total_sales || 0;
+    const totalRevenue = salesReport.total_sales;
 
     // 2. Fetch HPP from purchasing invoices
     const invoiceFilter = {
@@ -97,7 +97,7 @@ class ProfitLossService {
 
     // Use the adjustable expense when sent; otherwise use recorded overhead.
     let opExpenses = totalRealOverhead;
-    let isRealData = totalRealOverhead > 0;
+    let isRealData = true;
     if (operating_expense !== undefined && operating_expense !== null && operating_expense !== '') {
       opExpenses = Number(operating_expense);
       isRealData = false;
@@ -129,6 +129,8 @@ class ProfitLossService {
         net_margin_percentage: netMarginPercent
       },
       sales_breakdown: salesReport.sales_breakdown || [],
+      payment_breakdown: salesReport.payment_breakdown || [],
+      total_payment_income: salesReport.total_payment_income || 0,
       daily_trends: salesReport.daily_trends || [],
       cogs_breakdown: Object.entries(hppBySupplier).map(([supplier, amount]) => ({
         supplier,

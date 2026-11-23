@@ -40,7 +40,11 @@ class _IngredientDraft {
 
 class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
   final List<_IngredientDraft> _ingredients = [];
+  final TextEditingController _menuSearchController = TextEditingController();
+  final TextEditingController _productSearchController =
+      TextEditingController();
   String? _menuItemId;
+  String _productCategory = '';
   String? _error;
   bool _isSaving = false;
 
@@ -86,6 +90,8 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
     for (final ingredient in _ingredients) {
       ingredient.dispose();
     }
+    _menuSearchController.dispose();
+    _productSearchController.dispose();
     super.dispose();
   }
 
@@ -191,10 +197,68 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
     }
   }
 
+  String _productCategoryName(dynamic category) {
+    if (category is String) return category;
+    if (category is Map) return category['name']?.toString() ?? '';
+    if (category is List) {
+      return category
+          .map((item) => _productCategoryName(item))
+          .where((item) => item.isNotEmpty)
+          .join(', ');
+    }
+    return '';
+  }
+
+  List<Map<String, dynamic>> _filteredProducts() {
+    final search = _productSearchController.text.trim().toLowerCase();
+    return widget.products.where((product) {
+      final name = product['name']?.toString().toLowerCase() ?? '';
+      final sku = product['sku']?.toString().toLowerCase() ?? '';
+      final category = _productCategoryName(product['category']).toLowerCase();
+      final matchesSearch =
+          search.isEmpty || name.contains(search) || sku.contains(search);
+      final matchesCategory =
+          _productCategory.isEmpty ||
+          category
+              .split(',')
+              .map((item) => item.trim())
+              .contains(_productCategory.toLowerCase());
+      return matchesSearch && matchesCategory;
+    }).toList();
+  }
+
+  List<String> _productCategories() {
+    final categories = <String>{};
+    for (final product in widget.products) {
+      for (final category
+          in _productCategoryName(product['category'])
+              .split(',')
+              .map((item) => item.trim())
+              .where((item) => item.isNotEmpty)) {
+        categories.add(category);
+      }
+    }
+    return categories.toList()..sort();
+  }
+
   Widget _buildIngredientCard(int index) {
     final ingredient = _ingredients[index];
     final colors = Theme.of(context).colorScheme;
-    final productItems = widget.products.map((product) {
+    final filteredProducts = _filteredProducts();
+    final selectedProduct = widget.products.where(
+      (product) => product['product_id']?.toString() == ingredient.productId,
+    );
+    final productOptions = <Map<String, dynamic>>[
+      ...filteredProducts,
+      ...selectedProduct.where(
+        (product) => !filteredProducts.any(
+          (filtered) =>
+              filtered['product_id']?.toString() ==
+              product['product_id']?.toString(),
+        ),
+      ),
+    ];
+    final productItems = productOptions.map((product) {
       final id = product['product_id']?.toString() ?? '';
       return DropdownMenuItem<String>(
         value: id,
@@ -303,8 +367,12 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final menus = widget.menus;
-    final selectedMenuExists = menus.any(
+    final menus = widget.menus.where((menu) {
+      final search = _menuSearchController.text.trim().toLowerCase();
+      final name = menu['name']?.toString().toLowerCase() ?? '';
+      return search.isEmpty || name.contains(search);
+    }).toList();
+    final selectedMenuExists = widget.menus.any(
       (menu) => menu['menu_item_id']?.toString() == _menuItemId,
     );
 
@@ -340,6 +408,26 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
             ),
           ),
           const SizedBox(height: 18),
+          TextField(
+            controller: _menuSearchController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: 'Cari menu',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _menuSearchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Hapus pencarian',
+                      onPressed: () {
+                        _menuSearchController.clear();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: selectedMenuExists ? _menuItemId : null,
             isExpanded: true,
@@ -362,6 +450,77 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
                     _error = null;
                   })
                 : null,
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _productSearchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    labelText: 'Cari nama atau SKU bahan',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _productSearchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Hapus pencarian',
+                            onPressed: () {
+                              _productSearchController.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _productCategory.isEmpty
+                      ? null
+                      : _productCategory,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Kategori bahan',
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('Semua kategori'),
+                    ),
+                    ..._productCategories().map(
+                      (category) => DropdownMenuItem<String>(
+                        value: category,
+                        child: Text(category),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _productCategory = value ?? '');
+                  },
+                ),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_filteredProducts().length} dari ${widget.products.length} bahan cocok',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 18),
           Row(
