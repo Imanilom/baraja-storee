@@ -106,3 +106,14 @@ flutter build apk --release
 ```
 File APK siap didistribusikan ke staf outlet/gudang dan langsung terhubung ke server produksi.
 
+## Integrasi inventory Baraja Coffee
+
+Endpoint inventory Store memerlukan dua environment variable pada backend Store:
+
+- `BARAJA_AMPHITHEATER_API_URL`: origin backend Baraja Coffee yang melayani `/api/integration/store/inventory` (tanpa path API atau trailing slash).
+- `BARAJA_STORE_INTEGRATION_SECRET`: secret server-to-server yang sama dengan nilai di backend Baraja Coffee. Jangan commit secret ini.
+
+Untuk deployment PM2, isi keduanya di `apps/api/.env` pada VPS, lalu jalankan `pm2 restart baraja-api`. Untuk Docker Compose, isi keduanya di file `.env` di root repository sebelum menjalankan `docker compose -f docker-compose.prod.yml up -d --build api`. Compose akan menolak start API bila salah satu nilai belum diisi.
+
+Gunakan origin backend Coffee yang benar; jangan mengasumsikan URL OAuth/web Baraja Coffee adalah origin API. Setelah konfigurasi tersimpan, muat ulang aplikasi dan coba endpoint inventory lagi.
+
