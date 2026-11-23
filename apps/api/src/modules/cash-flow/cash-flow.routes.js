@@ -22,6 +22,12 @@ router.get(
 );
 
 router.post(
+  '/export/pdf',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.exportPdf
+);
+
+router.post(
   '/reconciliation/purchases',
   authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
   cashFlowController.reconcilePurchases

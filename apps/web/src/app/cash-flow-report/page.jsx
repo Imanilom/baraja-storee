@@ -12,6 +12,7 @@ import {
   getCashFlowReportMetrics
 } from '../../lib/cash-flow-report.mjs';
 import { downloadCsv } from '../../lib/csv-export.mjs';
+import { downloadCashFlowPdf } from '../../lib/api';
 import {
   AlertCircle,
   Banknote,
@@ -20,7 +21,6 @@ import {
   Download,
   Filter,
   Landmark,
-  Printer,
   RefreshCw,
   ShoppingCart,
   TrendingDown,
@@ -63,6 +63,7 @@ export default function CashFlowReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const dateRange = useMemo(
     () => getDateRange(selectedDate, period),
@@ -164,12 +165,75 @@ export default function CashFlowReportPage() {
   const handleExport = () => {
     setExporting(true);
     try {
-      const rows = createCashFlowReportExportRows(metrics, categoryTotals, filteredMutations);
+      const rows = createCashFlowReportExportRows(
+        metrics,
+        categoryTotals,
+        filteredMutations,
+        dateRange
+      );
       downloadCsv(`laporan-arus-kas-${dateRange.startDate}-${dateRange.endDate}.csv`, rows);
     } catch (exportError) {
       setError(exportError.message || 'Gagal menyiapkan file Excel.');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    setError('');
+    try {
+      const reportRows = filteredMutations.map((mutation) => [
+        formatDate(mutation.date),
+        cashFlowReportCategories.find(
+          (category) => category.id === getCashFlowReportCategory(mutation)
+        )?.label || mutation.category_label || 'Lainnya',
+        mutation.direction === 'in'
+          ? 'Masuk'
+          : mutation.direction === 'transfer'
+            ? 'Transfer'
+            : mutation.direction === 'commitment' ? 'Hutang' : 'Keluar',
+        mutation.account_label || mutation.account || '',
+        mutation.title || '',
+        mutation.reference_number || '',
+        Number(mutation.amount) || 0,
+        mutation.notes || ''
+      ]);
+      await downloadCashFlowPdf({
+        title: 'Laporan Arus Kas',
+        subtitle: `Periode ${dateRange.startDate} sampai ${dateRange.endDate}`,
+        summary: [
+          ['Saldo kas tunai (Rp)', metrics.cashBalance],
+          ['Saldo kas kecil (Rp)', metrics.pettyCashBalance],
+          ['Saldo rekening bank (Rp)', metrics.bankBalance],
+          ['Total dana (Rp)', metrics.totalFunds],
+          ['Total uang masuk periode ini (Rp)', metrics.totalInflow],
+          ['Belanja langsung periode ini (Rp)', metrics.directPurchases],
+          ['Belanja terhutang periode ini (Rp)', metrics.debtCreated],
+          ['Total pengeluaran periode (Rp)', metrics.totalOutflow],
+          ['Pembayaran hutang periode (Rp)', metrics.debtPaid],
+          ['Sisa hutang dari pembelian periode ini (Rp)', metrics.debtRemaining]
+        ],
+        sections: [
+          {
+            title: 'Ringkasan kategori',
+            headers: ['Kategori', 'Jumlah transaksi', 'Total nominal (Rp)'],
+            rows: categoryTotals.map(({ label, count, amount }) => [label, count, amount])
+          },
+          {
+            title: 'Rincian mutasi',
+            headers: [
+              'Tanggal', 'Kategori', 'Jenis', 'Akun', 'Keterangan',
+              'Referensi', 'Nominal (Rp)', 'Catatan'
+            ],
+            rows: reportRows
+          }
+        ]
+      }, `laporan-arus-kas-${dateRange.startDate}-${dateRange.endDate}.pdf`);
+    } catch (exportError) {
+      setError(exportError.message || 'Gagal menyiapkan file PDF.');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -251,16 +315,16 @@ export default function CashFlowReportPage() {
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
             >
               <Download className="h-4 w-4" />
-              {exporting ? 'Menyiapkan...' : 'Export Excel'}
+              {exporting ? 'Menyiapkan...' : 'Unduh CSV'}
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
-              disabled={loading}
+              onClick={handleExportPdf}
+              disabled={loading || exportingPdf}
               className="inline-flex items-center gap-2 rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
             >
-              <Printer className="h-4 w-4" />
-              Cetak / PDF
+              <Download className="h-4 w-4" />
+              {exportingPdf ? 'Menyiapkan PDF...' : 'Unduh PDF'}
             </button>
           </div>
         </section>

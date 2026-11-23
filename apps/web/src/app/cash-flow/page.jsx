@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Navbar from '../../components/Navbar';
 import PurchaseReconciliationModal from '../../components/PurchaseReconciliationModal';
-import { api } from '../../lib/api';
+import { api, downloadCashFlowPdf } from '../../lib/api';
 import { getDateRange } from '../../lib/date-range';
 import { createCashFlowExportRows } from '../../lib/cash-flow-export.mjs';
 import {
@@ -149,7 +149,7 @@ export default function CashFlowPage() {
     }
   }, [activeTab, filterDate, filterPeriod]);
 
-  const handleExportMutations = async () => {
+  const handleExportMutations = async (format = 'csv') => {
     setExportingMutations(true);
     try {
       const { startDate, endDate } = getDateRange(filterDate, filterPeriod);
@@ -174,10 +174,12 @@ export default function CashFlowPage() {
 
       const rangeStart = new Date(`${startDate}T00:00:00`);
       const previousDayEnd = new Date(rangeStart.getTime() - 1);
-      const openingResponse = await api.getCashFlowSummary(
-        `?endDate=${encodeURIComponent(previousDayEnd.toISOString())}`
-      );
+      const [openingResponse, summaryResponse] = await Promise.all([
+        api.getCashFlowSummary(`?endDate=${encodeURIComponent(previousDayEnd.toISOString())}`),
+        api.getCashFlowSummary(`?${dateRangeQuery(startDate, endDate)}`)
+      ]);
       const opening = openingResponse.data || {};
+      const closing = summaryResponse.data || {};
       const rows = createCashFlowExportRows(
         allMutations,
         {
@@ -192,7 +194,27 @@ export default function CashFlowPage() {
         return;
       }
 
-      downloadCsv(`mutasi-${activeTab}-${startDate}-${endDate}.csv`, rows);
+      if (format === 'pdf') {
+        await downloadCashFlowPdf({
+          title: 'Mutasi Arus Kas',
+          subtitle: `Periode ${startDate} sampai ${endDate} · Filter ${activeTab}`,
+          summary: [
+            ['Saldo kas tunai (Rp)', Number(closing.current_cash_balance) || 0],
+            ['Saldo kas kecil (Rp)', Number(closing.current_petty_cash_balance) || 0],
+            ['Saldo rekening bank (Rp)', Number(closing.current_bank_balance) || 0],
+            ['Total dana tersedia (Rp)', Number(closing.total_liquidity) || 0],
+            ['Total uang masuk periode ini (Rp)', Number(closing.total_inflow) || 0],
+            ['Total pengeluaran periode (Rp)', Number(closing.total_outflow) || 0]
+          ],
+          sections: [{
+            title: 'Buku mutasi dan saldo berjalan',
+            headers: rows[0],
+            rows: rows.slice(1)
+          }]
+        }, `mutasi-${activeTab}-${startDate}-${endDate}.pdf`);
+      } else {
+        downloadCsv(`mutasi-${activeTab}-${startDate}-${endDate}.csv`, rows);
+      }
     } catch (error) {
       alert(`Gagal mengekspor mutasi: ${error.message}`);
     } finally {
@@ -617,12 +639,21 @@ export default function CashFlowPage() {
             </span>
             <button
               type="button"
-              onClick={handleExportMutations}
+              onClick={() => handleExportMutations('csv')}
               disabled={exportingMutations}
               className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
-              {exportingMutations ? 'Menyiapkan...' : 'Export Mutasi'}
+              {exportingMutations ? 'Menyiapkan...' : 'Export CSV'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportMutations('pdf')}
+              disabled={exportingMutations}
+              className="px-3 py-2 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exportingMutations ? 'Menyiapkan...' : 'Unduh PDF'}
             </button>
           </div>
         </div>

@@ -44,6 +44,7 @@ app.use(
   })
 );
 app.use('/api/v1/cash-flow/reconciliation/purchases', express.json({ limit: '2mb' }));
+app.use('/api/v1/cash-flow/export/pdf', express.json({ limit: '5mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -70,7 +70,7 @@ export function getCashFlowReportMetrics(summary = {}, purchases = [], mutations
   };
 }
 
-export function createCashFlowReportExportRows(metrics, categoryTotals, mutations) {
+export function createCashFlowReportExportRows(metrics, categoryTotals, mutations, dateRange = {}) {
   const formatDate = (value) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('sv-SE');
@@ -78,9 +78,11 @@ export function createCashFlowReportExportRows(metrics, categoryTotals, mutation
 
   return [
     ['LAPORAN ARUS KAS'],
+    ['Periode', dateRange.startDate || '', dateRange.endDate || ''],
     ['Saldo kas tunai (Rp)', metrics.cashBalance],
     ['Saldo rekening bank (Rp)', metrics.bankBalance],
     ['Total dana (Rp)', metrics.totalFunds],
+    ['Saldo kas kecil (Rp)', metrics.pettyCashBalance],
     ['Total uang masuk periode ini (Rp)', metrics.totalInflow],
     ['Belanja langsung periode ini (Rp)', metrics.directPurchases],
     ['Belanja terhutang periode ini (Rp)', metrics.debtCreated],

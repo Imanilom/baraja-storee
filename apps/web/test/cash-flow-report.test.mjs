@@ -64,9 +64,24 @@ test('cash-flow report category filter and Excel-compatible export include selec
 
   assert.deepEqual(filterCashFlowReportMutations(mutations, 'debt_payment'), [mutations[1]]);
   const rows = createCashFlowReportExportRows(
-    { cashBalance: 0, bankBalance: 0, totalFunds: 0, totalPurchases: 500, debtCreated: 0, debtPaid: 100, debtRemaining: 0 },
+    {
+      cashBalance: 0,
+      bankBalance: 0,
+      pettyCashBalance: 0,
+      totalFunds: 0,
+      totalInflow: 0,
+      totalOutflow: 0,
+      totalPurchases: 500,
+      directPurchases: 500,
+      debtCreated: 0,
+      debtPaid: 100,
+      debtRemaining: 0
+    },
     [{ label: 'Belanja supplier', count: 1, amount: 500 }],
-    [mutations[1]]
+    [mutations[1]],
+    { startDate: '2026-11-16', endDate: '2026-11-22' }
   );
   assert.ok(rows.some((row) => row[4] === 'Bayar hutang'));
+  assert.deepEqual(rows[1], ['Periode', '2026-11-16', '2026-11-22']);
+  assert.equal(typeof rows[2][1], 'number');
 });

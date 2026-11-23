@@ -60,6 +60,33 @@ export async function fetchApi(endpoint, options = {}) {
   return json;
 }
 
+export async function downloadCashFlowPdf(payload, filename = 'laporan-arus-kas.pdf') {
+  const token = getStoredToken();
+  const response = await fetch(`${API_BASE}/cash-flow/export/pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.message || error?.error || `Request failed with status ${response.status}`);
+  }
+
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const api = {
   // Auth & Profile
   login: (email, password) =>

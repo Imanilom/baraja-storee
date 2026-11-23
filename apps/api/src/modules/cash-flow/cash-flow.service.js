@@ -296,12 +296,13 @@ class CashFlowService {
 
     let balance = 0;
     transactions.forEach((transaction) => {
+      const amount = Number(transaction.amount) || 0;
       if (transaction.type === 'petty_transfer') {
         balance += transaction.to_account === 'petty_cash'
-          ? transaction.amount
-          : -transaction.amount;
+          ? amount
+          : -amount;
       } else if (transaction.source_account === 'petty_cash') {
-        balance -= transaction.amount;
+        balance -= amount;
       }
     });
     purchases.forEach((purchase) => {
@@ -331,12 +332,13 @@ class CashFlowService {
     const initialDownPayments = await this.getPurchaseInitialDownPayments(purchases);
     let balance = 0;
     transactions.forEach((transaction) => {
+      const amount = Number(transaction.amount) || 0;
       if (transaction.type === 'petty_transfer') {
         balance += transaction.to_account === 'petty_cash'
-          ? transaction.amount
-          : -transaction.amount;
+          ? amount
+          : -amount;
       } else {
-        balance -= transaction.amount;
+        balance -= amount;
       }
     });
     purchases.forEach((purchase) => {

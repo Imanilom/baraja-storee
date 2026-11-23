@@ -1,4 +1,5 @@
 const cashFlowService = require('./cash-flow.service');
+const cashFlowPdfService = require('./cash-flow-pdf.service');
 const { reconcilePurchaseMutations } = require('./purchase-reconciliation.service');
 
 class CashFlowController {
@@ -25,6 +26,18 @@ class CashFlowController {
         limit: result.limit,
         totalPages: result.totalPages
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async exportPdf(req, res, next) {
+    try {
+      const pdf = await cashFlowPdfService.generate(req.body);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="laporan-arus-kas.pdf"');
+      res.setHeader('Content-Length', pdf.length);
+      return res.status(200).send(pdf);
     } catch (error) {
       next(error);
     }
