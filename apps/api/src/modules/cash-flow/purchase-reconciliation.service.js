@@ -3,6 +3,8 @@ const PurchaseItem = require('../purchases/purchase-item.model');
 const DebtPayment = require('../purchases/debt-payment.model');
 
 const MAX_STATEMENT_ROWS = 2000;
+const MAX_MANUAL_CANDIDATES = 30;
+const MANUAL_DATE_WINDOW_DAYS = 90;
 const INITIAL_DOWN_PAYMENT_NOTE = 'Uang muka / DP saat transaksi';
 
 const normalizePhrase = (value) => String(value || '')
@@ -158,7 +160,22 @@ const getCandidatePool = (row, index) => {
   return [...candidates];
 };
 
-const candidateSummary = (candidate, signals, amountDifference = 0) => ({
+const createManualCandidateIndex = (candidates) => {
+  const byAmount = new Map();
+  const byDate = [];
+  candidates.forEach((candidate) => {
+    const amountCandidates = byAmount.get(candidate.amount) || [];
+    amountCandidates.push(candidate);
+    byAmount.set(candidate.amount, amountCandidates);
+    const date = parseStatementDate(candidate.date);
+    if (date) byDate.push({ candidate, timestamp: date.getTime() });
+  });
+  byDate.sort((first, second) => first.timestamp - second.timestamp);
+  return { byAmount, byDate };
+};
+
+const candidateSummary = (candidate, signals, amountDifference = 0, includeItems = true) => ({
+  key: candidate.key,
   type: candidate.kind,
   purchase_id: candidate.purchaseId,
   purchase_number: candidate.purchaseNumber,
@@ -169,7 +186,7 @@ const candidateSummary = (candidate, signals, amountDifference = 0) => ({
   amount_difference: amountDifference,
   purchase_total: candidate.purchaseTotal,
   invoice_reference: candidate.invoiceReference,
-  items: candidate.items,
+  items: includeItems ? candidate.items : [],
   checks: {
     supplier_name: signals.supplierMatch,
     supplier_reference: signals.invoiceReferenceMatch,
@@ -181,6 +198,52 @@ const candidateSummary = (candidate, signals, amountDifference = 0) => ({
     ...(signals.supplierMatch ? ['nama supplier'] : [])
   ]
 });
+
+const getManualCandidateOptions = (row, candidateIndex, manualIndex) => {
+  const date = parseStatementDate(row.date);
+  const windowMs = MANUAL_DATE_WINDOW_DAYS * 86400000;
+  const options = new Set([
+    ...getCandidatePool(row, candidateIndex),
+    ...(manualIndex.byAmount.get(row.amount) || [])
+  ]);
+  if (date) {
+    let low = 0;
+    let high = manualIndex.byDate.length;
+    const minimum = date.getTime() - windowMs;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (manualIndex.byDate[middle].timestamp < minimum) low = middle + 1;
+      else high = middle;
+    }
+    for (let index = low; index < manualIndex.byDate.length; index += 1) {
+      const entry = manualIndex.byDate[index];
+      if (entry.timestamp > date.getTime() + windowMs) break;
+      options.add(entry.candidate);
+    }
+  }
+
+  return [...options]
+    .map((candidate) => {
+      const signals = scoreCandidate(row, candidate);
+      const candidateDate = parseStatementDate(candidate.date);
+      const daysApart = date && candidateDate
+        ? Math.abs(date.getTime() - candidateDate.getTime()) / 86400000
+        : Number.POSITIVE_INFINITY;
+      return { candidate, signals, daysApart };
+    })
+    .sort((first, second) => (
+      Number(second.candidate.amount === row.amount) - Number(first.candidate.amount === row.amount) ||
+      (second.signals?.score || 0) - (first.signals?.score || 0) ||
+      first.daysApart - second.daysApart
+    ))
+    .slice(0, MAX_MANUAL_CANDIDATES)
+    .map(({ candidate, signals }) => candidateSummary(
+      candidate,
+      signals || { supplierMatch: false, referenceMatch: false, invoiceReferenceMatch: false },
+      row.amount - candidate.amount,
+      false
+    ));
+};
 
 const buildCandidates = async () => {
   const [purchases, debtPayments] = await Promise.all([
@@ -290,7 +353,11 @@ const buildCandidates = async () => {
   return candidates;
 };
 
-const reconcilePurchaseMutations = async ({ rows, debitMode = 'positive' } = {}) => {
+const reconcilePurchaseMutations = async ({
+  rows,
+  debitMode = 'positive',
+  manualSelections = {}
+} = {}) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     const error = new Error('Data baris rekening koran wajib diisi.');
     error.statusCode = 400;
@@ -303,6 +370,11 @@ const reconcilePurchaseMutations = async ({ rows, debitMode = 'positive' } = {})
   }
   if (!['positive', 'negative'].includes(debitMode)) {
     const error = new Error('Mode nominal debit tidak valid.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!manualSelections || typeof manualSelections !== 'object' || Array.isArray(manualSelections)) {
+    const error = new Error('Pilihan transaksi manual tidak valid.');
     error.statusCode = 400;
     throw error;
   }
@@ -351,8 +423,37 @@ const reconcilePurchaseMutations = async ({ rows, debitMode = 'positive' } = {})
 
   const candidates = await buildCandidates();
   const candidateIndex = indexCandidates(candidates);
+  const manualCandidateIndex = createManualCandidateIndex(candidates);
+  const candidatesByKey = new Map(candidates.map((candidate) => [candidate.key, candidate]));
+  const rowsByNumber = new Map(statementRows.map((row) => [String(row.rowNumber), row]));
+  Object.entries(manualSelections).forEach(([rowNumber, candidateKey]) => {
+    const row = rowsByNumber.get(rowNumber);
+    if (!row || row.status !== 'unmatched' || row.amount === null) {
+      const error = new Error('Pilihan manual merujuk ke baris rekening koran yang tidak tersedia.');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (typeof candidateKey !== 'string' || !candidatesByKey.has(candidateKey)) {
+      const error = new Error('Transaksi yang dipilih tidak ditemukan atau bukan transaksi dari rekening bank.');
+      error.statusCode = 400;
+      throw error;
+    }
+  });
   statementRows.forEach((row) => {
     if (row.status !== 'unmatched' || row.amount === null) return;
+    const selectedCandidateKey = manualSelections[String(row.rowNumber)];
+    if (selectedCandidateKey) {
+      const candidate = candidatesByKey.get(String(selectedCandidateKey));
+      row.matchCandidate = candidate;
+      row.matchSignals = scoreCandidate(row, candidate) || {
+        supplierMatch: false,
+        referenceMatch: false,
+        invoiceReferenceMatch: false
+      };
+      row.status = 'manual_matched';
+      row.reason = 'Transaksi dipilih manual; periksa kembali kecocokan identitas dan nominal.';
+      return;
+    }
     const identified = getCandidatePool(row, candidateIndex)
       .map((candidate) => {
         const signals = scoreCandidate(row, candidate);
@@ -393,7 +494,7 @@ const reconcilePurchaseMutations = async ({ rows, debitMode = 'positive' } = {})
 
   const claimed = new Map();
   statementRows.forEach((row) => {
-    if (row.status !== 'matched') return;
+    if (!['matched', 'manual_matched'].includes(row.status)) return;
     const matches = claimed.get(row.matchCandidate.key) || [];
     matches.push(row);
     claimed.set(row.matchCandidate.key, matches);
@@ -410,13 +511,17 @@ const reconcilePurchaseMutations = async ({ rows, debitMode = 'positive' } = {})
   });
 
   const matchedCount = statementRows.filter((row) => row.status === 'matched').length;
-  const unmatchedCount = statementRows.length - matchedCount;
+  const manualMatchedCount = statementRows.filter((row) => row.status === 'manual_matched').length;
+  const unmatchedCount = statementRows.length - matchedCount - manualMatchedCount;
+  const manualAmountMismatchCount = statementRows.filter((row) =>
+    row.status === 'manual_matched' && row.matchCandidate.amount !== row.amount
+  ).length;
   const counts = statementRows.reduce((result, row) => {
     result[row.status] = (result[row.status] || 0) + 1;
     return result;
   }, {});
   const mismatchPercentage = statementRows.length
-    ? Number(((unmatchedCount / statementRows.length) * 100).toFixed(2))
+    ? Number((((unmatchedCount + manualAmountMismatchCount) / statementRows.length) * 100).toFixed(2))
     : 0;
 
   return {
@@ -425,6 +530,7 @@ const reconcilePurchaseMutations = async ({ rows, debitMode = 'positive' } = {})
       debit_rows: statementRows.length,
       excluded_rows: excludedRows,
       matched_rows: matchedCount,
+      manual_matched_rows: manualMatchedCount,
       unmatched_rows: unmatchedCount,
       mismatch_percentage: mismatchPercentage,
       mismatch_denominator: 'baris debit rekening koran',
@@ -436,6 +542,22 @@ const reconcilePurchaseMutations = async ({ rows, debitMode = 'positive' } = {})
         result.purchase = candidateSummary(row.matchCandidate, row.matchSignals);
         delete result.matchCandidate;
         delete result.matchSignals;
+      }
+      if (row.status === 'manual_matched') {
+        result.purchase = candidateSummary(
+          row.matchCandidate,
+          row.matchSignals,
+          row.amount - row.matchCandidate.amount
+        );
+        delete result.matchCandidate;
+        delete result.matchSignals;
+      }
+      if (row.amount !== null && !['invalid_amount', 'invalid_direction'].includes(row.status)) {
+        result.manual_candidates = getManualCandidateOptions(
+          row,
+          candidateIndex,
+          manualCandidateIndex
+        );
       }
       return result;
     })

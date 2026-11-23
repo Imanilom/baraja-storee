@@ -118,6 +118,61 @@ const run = async () => {
     assert.strictEqual(result.rows[5].status, 'invalid_amount');
     assert.strictEqual(result.rows[6].status, 'invalid_direction');
 
+    const davinciSupplier = await Supplier.create({ name: 'DAVINCI', code: 'SUP-DAVINCI' });
+    const toffinSupplier = await Supplier.create({ name: 'TOFFIN', code: 'SUP-TOFFIN' });
+    const davinciPurchase = await Purchase.create({
+      purchase_number: 'TRX-20260412-0018',
+      supplier_id: davinciSupplier._id,
+      payment_method: 'transfer',
+      payment_source: 'bank',
+      total_actual: 372000,
+      purchased_at: new Date('2026-04-12T04:00:00.000Z')
+    });
+    const toffinPurchase = await Purchase.create({
+      purchase_number: 'TRX-20260401-0004',
+      supplier_id: toffinSupplier._id,
+      payment_method: 'transfer',
+      payment_source: 'bank',
+      total_actual: 1170000,
+      purchased_at: new Date('2026-04-01T04:00:00.000Z')
+    });
+    const statementRow = {
+      rowNumber: 511,
+      date: '2026-04-12',
+      description: 'TR TO REMITT OCTOmobile TO ADRIAN CENAIDJA syrup davinci',
+      amount: 'Rp 1.170.000'
+    };
+    const initialResult = await reconcilePurchaseMutations({
+      debitMode: 'positive',
+      rows: [statementRow]
+    });
+    assert.strictEqual(initialResult.rows[0].status, 'amount_mismatch');
+    assert.strictEqual(initialResult.rows[0].candidates[0].amount, 372000);
+    assert.ok(initialResult.rows[0].manual_candidates.some(
+      (candidate) => candidate.key === `purchase:${toffinPurchase._id}`
+    ));
+
+    const manuallyMatched = await reconcilePurchaseMutations({
+      debitMode: 'positive',
+      rows: [statementRow],
+      manualSelections: { 511: `purchase:${toffinPurchase._id}` }
+    });
+    assert.strictEqual(manuallyMatched.rows[0].status, 'manual_matched');
+    assert.strictEqual(manuallyMatched.rows[0].purchase.purchase_id, String(toffinPurchase._id));
+    assert.strictEqual(manuallyMatched.rows[0].purchase.amount_difference, 0);
+    assert.strictEqual(manuallyMatched.summary.manual_matched_rows, 1);
+    assert.strictEqual(manuallyMatched.summary.unmatched_rows, 0);
+    assert.strictEqual(manuallyMatched.summary.mismatch_percentage, 0);
+
+    const manuallySelectedWithDifferentAmount = await reconcilePurchaseMutations({
+      debitMode: 'positive',
+      rows: [statementRow],
+      manualSelections: { 511: `purchase:${davinciPurchase._id}` }
+    });
+    assert.strictEqual(manuallySelectedWithDifferentAmount.rows[0].status, 'manual_matched');
+    assert.strictEqual(manuallySelectedWithDifferentAmount.rows[0].purchase.amount_difference, 798000);
+    assert.strictEqual(manuallySelectedWithDifferentAmount.summary.mismatch_percentage, 100);
+
     const duplicateRows = await reconcilePurchaseMutations({
       debitMode: 'positive',
       rows: [

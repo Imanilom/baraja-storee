@@ -13,9 +13,16 @@ import {
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_DATA_ROWS = 2000;
 const formatRupiah = (value) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+const formatCandidateDate = (value) => {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleDateString('id-ID')
+    : '-';
+};
 
 const statusLabels = {
   matched: 'Cocok otomatis',
+  manual_matched: 'Dipilih manual',
   amount_mismatch: 'Nama/ref cocok, nominal berbeda',
   ambiguous: 'Perlu diperiksa',
   invalid_amount: 'Nominal tidak valid',
@@ -25,6 +32,7 @@ const statusLabels = {
 
 const statusStyles = {
   matched: 'bg-emerald-100 text-emerald-800',
+  manual_matched: 'bg-blue-100 text-blue-800',
   amount_mismatch: 'bg-amber-100 text-amber-800',
   ambiguous: 'bg-orange-100 text-orange-800',
   invalid_amount: 'bg-red-100 text-red-800',
@@ -58,6 +66,7 @@ export default function PurchaseReconciliationModal({ onClose }) {
   const [statement, setStatement] = useState(null);
   const [mapping, setMapping] = useState({ date: -1, description: -1, reference: -1, amount: -1, direction: -1 });
   const [debitMode, setDebitMode] = useState('positive');
+  const [manualSelections, setManualSelections] = useState({});
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [loadingFile, setLoadingFile] = useState(false);
@@ -68,6 +77,7 @@ export default function PurchaseReconciliationModal({ onClose }) {
     if (!file) return;
     setError('');
     setResult(null);
+    setManualSelections({});
 
     if (file.size > MAX_FILE_BYTES) {
       setError('Ukuran file maksimal 10 MB.');
@@ -117,10 +127,11 @@ export default function PurchaseReconciliationModal({ onClose }) {
   const updateMapping = (key, value) => {
     setMapping((current) => ({ ...current, [key]: value }));
     setResult(null);
+    setManualSelections({});
   };
 
-  const handleReconcile = async (event) => {
-    event.preventDefault();
+  const handleReconcile = async (event, applyManual = false) => {
+    event?.preventDefault();
     if (!statement || mapping.description < 0 || mapping.amount < 0) {
       setError('Pilih file, kolom keterangan, dan kolom nominal debit.');
       return;
@@ -137,8 +148,13 @@ export default function PurchaseReconciliationModal({ onClose }) {
         direction: mapping.direction >= 0 ? cellToText(row[mapping.direction]) : '',
         amount: row[mapping.amount] ?? ''
       }));
-      const response = await api.reconcilePurchaseMutations({ rows, debitMode });
+      const response = await api.reconcilePurchaseMutations({
+        rows,
+        debitMode,
+        manualSelections: applyManual ? manualSelections : {}
+      });
       setResult(response.data);
+      setManualSelections({});
     } catch (requestError) {
       setError(requestError.message || 'Rekonsiliasi gagal dijalankan.');
     } finally {
@@ -173,7 +189,8 @@ export default function PurchaseReconciliationModal({ onClose }) {
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs leading-relaxed text-blue-900">
             Pencocokan otomatis memeriksa nama supplier, referensi/no. nota, dan nominal. Rincian barang dari transaksi
             ditampilkan untuk diperiksa; mutasi rekening tidak memuat rincian barang sehingga kecocokan item perlu diverifikasi.
-            Kandidat ganda dan selisih nominal tidak dipasangkan otomatis. Persentase tidak cocok dihitung dari baris debit.
+            Kandidat ganda dan selisih nominal tidak dipasangkan otomatis. Gunakan pilihan manual bila transaksi yang benar
+            sudah tercatat tetapi tidak terdeteksi otomatis. Persentase tidak cocok dihitung dari baris debit.
           </div>
 
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-300 p-4 hover:border-indigo-400 hover:bg-indigo-50/40">
@@ -244,6 +261,7 @@ export default function PurchaseReconciliationModal({ onClose }) {
                   onChange={(event) => {
                     setDebitMode(event.target.value);
                     setResult(null);
+                    setManualSelections({});
                   }}
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"
                 >
@@ -277,10 +295,14 @@ export default function PurchaseReconciliationModal({ onClose }) {
 
           {result && (
             <section aria-live="polite" className="space-y-4 border-t border-slate-200 pt-5">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-800">Cocok otomatis</p>
                   <p className="mt-1 text-2xl font-black text-emerald-700">{result.summary.matched_rows}</p>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-blue-800">Dipilih manual</p>
+                  <p className="mt-1 text-2xl font-black text-blue-700">{result.summary.manual_matched_rows || 0}</p>
                 </div>
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Tidak cocok / perlu cek</p>
@@ -297,6 +319,23 @@ export default function PurchaseReconciliationModal({ onClose }) {
                 </div>
               </div>
 
+              {Object.values(manualSelections).some(Boolean) && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="text-xs text-blue-900">
+                    Pilihan manual belum diterapkan. Periksa kembali transaksi dan nominal sebelum melanjutkan.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(event) => handleReconcile(event, true)}
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50"
+                  >
+                    {submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    Terapkan pilihan manual
+                  </button>
+                </div>
+              )}
+
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <div className="max-h-[22rem] overflow-auto">
                   <table className="w-full min-w-[760px] text-left text-xs">
@@ -311,7 +350,12 @@ export default function PurchaseReconciliationModal({ onClose }) {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {result.rows.map((row, index) => {
-                        const candidate = row.purchase || row.candidates?.[0];
+                        const selectedCandidate = row.manual_candidates?.find(
+                          (option) => option.key === manualSelections[row.rowNumber]
+                        );
+                        const candidate = row.purchase || selectedCandidate || row.candidates?.[0];
+                        const canManuallySelect = row.status !== 'matched' &&
+                          row.manual_candidates?.length > 0;
                         return (
                           <tr key={`${row.rowNumber}-${index}`} className="align-top">
                             <td className="whitespace-nowrap px-3 py-3 text-slate-500">
@@ -369,6 +413,32 @@ export default function PurchaseReconciliationModal({ onClose }) {
                                   )}
                                 </>
                               ) : <span className="text-slate-400">-</span>}
+                              {canManuallySelect && (
+                                <label className="mt-3 block text-[10px] font-bold text-slate-700">
+                                  Pilih transaksi belanja yang sudah diinput
+                                  <select
+                                    aria-label={`Pilih transaksi untuk baris ${row.rowNumber}`}
+                                    value={manualSelections[row.rowNumber] || ''}
+                                    onChange={(event) => setManualSelections((current) => {
+                                      const next = { ...current };
+                                      if (event.target.value) next[row.rowNumber] = event.target.value;
+                                      else delete next[row.rowNumber];
+                                      return next;
+                                    })}
+                                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 font-normal"
+                                  >
+                                    <option value="">Pilih transaksi...</option>
+                                    {row.manual_candidates.map((option) => (
+                                      <option key={option.key} value={option.key}>
+                                        {option.purchase_number || 'Tanpa nomor'} · {option.supplier_name || 'Supplier'} · {formatCandidateDate(option.date)} · {formatRupiah(option.amount)} · {option.type}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <span className="mt-1 block font-normal text-slate-500">
+                                    Kandidat mencakup transaksi dengan nominal sama atau tanggal berdekatan (±90 hari).
+                                  </span>
+                                </label>
+                              )}
                               {row.candidates?.length > 1 && (
                                 <p className="mt-1 text-[10px] text-orange-700">{row.candidates.length} kandidat teratas ditampilkan</p>
                               )}
