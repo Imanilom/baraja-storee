@@ -280,6 +280,7 @@ const buildCandidates = async () => {
   });
 
   const candidates = [];
+  const manualCandidates = [];
   const paymentsByPurchase = new Map();
   debtPayments.forEach((payment) => {
     const purchaseId = payment.purchase_id?._id;
@@ -293,13 +294,12 @@ const buildCandidates = async () => {
   purchases.forEach((purchase) => {
     const paymentSource = purchase.payment_source ||
       (purchase.payment_method === 'transfer' ? 'bank' : 'cash');
-    if (paymentSource !== 'bank') return;
 
     if (purchase.payment_method === 'tempo') {
       const downPayment = Number(purchase.amount_paid) || 0;
       const purchasePayments = paymentsByPurchase.get(String(purchase._id)) || [];
       if (downPayment > 0 && purchasePayments.length === 0) {
-        candidates.push(makeCandidate({
+        const candidate = makeCandidate({
           key: `purchase-down-payment:${purchase._id}`,
           kind: 'Uang muka pembelian',
           purchase,
@@ -307,12 +307,14 @@ const buildCandidates = async () => {
           date: purchase.purchased_at,
           reference: purchase.invoice_ref,
           items: itemsByPurchase.get(String(purchase._id)) || []
-        }));
+        });
+        manualCandidates.push(candidate);
+        if (paymentSource === 'bank') candidates.push(candidate);
       }
       return;
     }
 
-    candidates.push(makeCandidate({
+    const candidate = makeCandidate({
       key: `purchase:${purchase._id}`,
       kind: 'Pembelian langsung',
       purchase,
@@ -320,7 +322,9 @@ const buildCandidates = async () => {
       date: purchase.purchased_at,
       reference: purchase.invoice_ref,
       items: itemsByPurchase.get(String(purchase._id)) || []
-    }));
+    });
+    manualCandidates.push(candidate);
+    if (paymentSource === 'bank') candidates.push(candidate);
   });
 
   debtPayments.forEach((payment) => {
@@ -328,7 +332,7 @@ const buildCandidates = async () => {
     if (!purchase) return;
     if (payment.payment_method !== 'transfer') return;
     if (payment.notes === INITIAL_DOWN_PAYMENT_NOTE) {
-      candidates.push(makeCandidate({
+      const candidate = makeCandidate({
         key: `purchase-down-payment:${payment._id}`,
         kind: 'Uang muka pembelian',
         purchase,
@@ -336,10 +340,12 @@ const buildCandidates = async () => {
         date: payment.paid_at,
         reference: payment.reference_number || purchase.invoice_ref,
         items: itemsByPurchase.get(String(purchase._id)) || []
-      }));
+      });
+      candidates.push(candidate);
+      manualCandidates.push(candidate);
       return;
     }
-    candidates.push(makeCandidate({
+    const candidate = makeCandidate({
       key: `debt-payment:${payment._id}`,
       kind: 'Pembayaran hutang',
       purchase,
@@ -347,10 +353,12 @@ const buildCandidates = async () => {
       date: payment.paid_at,
       reference: payment.reference_number || purchase.invoice_ref,
       items: itemsByPurchase.get(String(purchase._id)) || []
-    }));
+    });
+    candidates.push(candidate);
+    manualCandidates.push(candidate);
   });
 
-  return candidates;
+  return { candidates, manualCandidates };
 };
 
 const reconcilePurchaseMutations = async ({
@@ -421,37 +429,49 @@ const reconcilePurchaseMutations = async ({
     throw error;
   }
 
-  const candidates = await buildCandidates();
+  const { candidates, manualCandidates } = await buildCandidates();
   const candidateIndex = indexCandidates(candidates);
-  const manualCandidateIndex = createManualCandidateIndex(candidates);
-  const candidatesByKey = new Map(candidates.map((candidate) => [candidate.key, candidate]));
+  const manualCandidateTextIndex = indexCandidates(manualCandidates);
+  const manualCandidateIndex = createManualCandidateIndex(manualCandidates);
+  const candidatesByKey = new Map(manualCandidates.map((candidate) => [candidate.key, candidate]));
   const rowsByNumber = new Map(statementRows.map((row) => [String(row.rowNumber), row]));
-  Object.entries(manualSelections).forEach(([rowNumber, candidateKey]) => {
+  const selectionKeysByRow = new Map();
+  Object.entries(manualSelections).forEach(([rowNumber, selectedKeys]) => {
     const row = rowsByNumber.get(rowNumber);
     if (!row || row.status !== 'unmatched' || row.amount === null) {
       const error = new Error('Pilihan manual merujuk ke baris rekening koran yang tidak tersedia.');
       error.statusCode = 400;
       throw error;
     }
-    if (typeof candidateKey !== 'string' || !candidatesByKey.has(candidateKey)) {
-      const error = new Error('Transaksi yang dipilih tidak ditemukan atau bukan transaksi dari rekening bank.');
+    const candidateKeys = Array.isArray(selectedKeys) ? [...new Set(selectedKeys)] : [selectedKeys];
+    if (candidateKeys.length === 0 || candidateKeys.some((key) =>
+      typeof key !== 'string' || !candidatesByKey.has(key)
+    )) {
+      const error = new Error('Transaksi yang dipilih tidak tersedia untuk rekonsiliasi.');
       error.statusCode = 400;
       throw error;
     }
+    selectionKeysByRow.set(rowNumber, candidateKeys);
   });
   statementRows.forEach((row) => {
     if (row.status !== 'unmatched' || row.amount === null) return;
-    const selectedCandidateKey = manualSelections[String(row.rowNumber)];
-    if (selectedCandidateKey) {
-      const candidate = candidatesByKey.get(String(selectedCandidateKey));
-      row.matchCandidate = candidate;
-      row.matchSignals = scoreCandidate(row, candidate) || {
+    const selectedCandidateKeys = selectionKeysByRow.get(String(row.rowNumber));
+    if (selectedCandidateKeys) {
+      row.matchCandidates = selectedCandidateKeys.map((key) => candidatesByKey.get(key));
+      row.matchSignals = row.matchCandidates.map((candidate) => scoreCandidate(row, candidate) || {
         supplierMatch: false,
         referenceMatch: false,
         invoiceReferenceMatch: false
-      };
+      });
+      row.manualPurchaseTotal = row.matchCandidates.reduce(
+        (total, candidate) => total + candidate.amount,
+        0
+      );
+      row.manualAmountDifference = row.amount - row.manualPurchaseTotal;
       row.status = 'manual_matched';
-      row.reason = 'Transaksi dipilih manual; periksa kembali kecocokan identitas dan nominal.';
+      row.reason = row.manualAmountDifference === 0
+        ? 'Transaksi dipilih manual; total pilihan sama dengan nominal mutasi.'
+        : 'Transaksi dipilih manual; periksa kembali selisih nominal.';
       return;
     }
     const identified = getCandidatePool(row, candidateIndex)
@@ -494,19 +514,30 @@ const reconcilePurchaseMutations = async ({
 
   const claimed = new Map();
   statementRows.forEach((row) => {
-    if (!['matched', 'manual_matched'].includes(row.status)) return;
-    const matches = claimed.get(row.matchCandidate.key) || [];
-    matches.push(row);
-    claimed.set(row.matchCandidate.key, matches);
+    if (row.status === 'matched') {
+      const matches = claimed.get(row.matchCandidate.key) || [];
+      matches.push({ row, candidate: row.matchCandidate, signals: row.matchSignals });
+      claimed.set(row.matchCandidate.key, matches);
+    } else if (row.status === 'manual_matched') {
+      row.matchCandidates.forEach((candidate, index) => {
+        const matches = claimed.get(candidate.key) || [];
+        matches.push({ row, candidate, signals: row.matchSignals[index] });
+        claimed.set(candidate.key, matches);
+      });
+    }
   });
-  claimed.forEach((matchingRows) => {
+  claimed.forEach((matchingEntries) => {
+    const matchingRows = [...new Set(matchingEntries.map((entry) => entry.row))];
     if (matchingRows.length < 2) return;
-    matchingRows.forEach((row) => {
+    matchingEntries.forEach(({ row, candidate, signals }) => {
       row.status = 'ambiguous';
       row.reason = 'Beberapa baris mutasi mengarah ke transaksi pembelian yang sama.';
-      row.candidates = [candidateSummary(row.matchCandidate, row.matchSignals)];
+      row.candidates = [candidateSummary(candidate, signals)];
       delete row.matchCandidate;
       delete row.matchSignals;
+      delete row.matchCandidates;
+      delete row.manualPurchaseTotal;
+      delete row.manualAmountDifference;
     });
   });
 
@@ -514,7 +545,7 @@ const reconcilePurchaseMutations = async ({
   const manualMatchedCount = statementRows.filter((row) => row.status === 'manual_matched').length;
   const unmatchedCount = statementRows.length - matchedCount - manualMatchedCount;
   const manualAmountMismatchCount = statementRows.filter((row) =>
-    row.status === 'manual_matched' && row.matchCandidate.amount !== row.amount
+    row.status === 'manual_matched' && row.manualAmountDifference !== 0
   ).length;
   const counts = statementRows.reduce((result, row) => {
     result[row.status] = (result[row.status] || 0) + 1;
@@ -544,18 +575,23 @@ const reconcilePurchaseMutations = async ({
         delete result.matchSignals;
       }
       if (row.status === 'manual_matched') {
-        result.purchase = candidateSummary(
-          row.matchCandidate,
-          row.matchSignals,
-          row.amount - row.matchCandidate.amount
-        );
+        result.purchases = row.matchCandidates.map((candidate, index) => candidateSummary(
+          candidate,
+          row.matchSignals[index]
+        ));
+        result.manual_purchase_total = row.manualPurchaseTotal;
+        result.manual_amount_difference = row.manualAmountDifference;
+        delete result.matchCandidates;
+        delete result.matchSignals;
+        delete result.manualPurchaseTotal;
+        delete result.manualAmountDifference;
         delete result.matchCandidate;
         delete result.matchSignals;
       }
       if (row.amount !== null && !['invalid_amount', 'invalid_direction'].includes(row.status)) {
         result.manual_candidates = getManualCandidateOptions(
           row,
-          candidateIndex,
+          manualCandidateTextIndex,
           manualCandidateIndex
         );
       }

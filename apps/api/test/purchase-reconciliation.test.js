@@ -155,11 +155,11 @@ const run = async () => {
     const manuallyMatched = await reconcilePurchaseMutations({
       debitMode: 'positive',
       rows: [statementRow],
-      manualSelections: { 511: `purchase:${toffinPurchase._id}` }
+      manualSelections: { 511: [`purchase:${toffinPurchase._id}`] }
     });
     assert.strictEqual(manuallyMatched.rows[0].status, 'manual_matched');
-    assert.strictEqual(manuallyMatched.rows[0].purchase.purchase_id, String(toffinPurchase._id));
-    assert.strictEqual(manuallyMatched.rows[0].purchase.amount_difference, 0);
+    assert.strictEqual(manuallyMatched.rows[0].purchases[0].purchase_id, String(toffinPurchase._id));
+    assert.strictEqual(manuallyMatched.rows[0].manual_amount_difference, 0);
     assert.strictEqual(manuallyMatched.summary.manual_matched_rows, 1);
     assert.strictEqual(manuallyMatched.summary.unmatched_rows, 0);
     assert.strictEqual(manuallyMatched.summary.mismatch_percentage, 0);
@@ -167,11 +167,58 @@ const run = async () => {
     const manuallySelectedWithDifferentAmount = await reconcilePurchaseMutations({
       debitMode: 'positive',
       rows: [statementRow],
-      manualSelections: { 511: `purchase:${davinciPurchase._id}` }
+      manualSelections: { 511: [`purchase:${davinciPurchase._id}`] }
     });
     assert.strictEqual(manuallySelectedWithDifferentAmount.rows[0].status, 'manual_matched');
-    assert.strictEqual(manuallySelectedWithDifferentAmount.rows[0].purchase.amount_difference, 798000);
+    assert.strictEqual(manuallySelectedWithDifferentAmount.rows[0].manual_amount_difference, 798000);
     assert.strictEqual(manuallySelectedWithDifferentAmount.summary.mismatch_percentage, 100);
+
+    const sanitasSupplier = await Supplier.create({ name: 'Sanitas', code: 'SUP-SANITAS' });
+    const smallSanitasPurchase = await Purchase.create({
+      purchase_number: 'TRX-20260412-0010',
+      supplier_id: sanitasSupplier._id,
+      payment_method: 'cash',
+      payment_source: 'cash',
+      total_actual: 40000,
+      purchased_at: new Date('2026-04-12T00:00:00.000Z')
+    });
+    const largeSanitasPurchase = await Purchase.create({
+      purchase_number: 'TRX-20260412-0009',
+      supplier_id: sanitasSupplier._id,
+      payment_method: 'cash',
+      payment_source: 'cash',
+      total_actual: 625000,
+      purchased_at: new Date('2026-04-12T00:00:00.000Z')
+    });
+    const reimbursementRow = {
+      rowNumber: 6,
+      date: '2026-04-12',
+      description: 'TR TO REMITT OCTOmobile TO IMAN WIGUNA belanja sanitas',
+      amount: 'Rp 665.000'
+    };
+    const reimbursementPreview = await reconcilePurchaseMutations({
+      debitMode: 'positive',
+      rows: [reimbursementRow]
+    });
+    assert.strictEqual(reimbursementPreview.rows[0].status, 'unmatched');
+    assert.ok(reimbursementPreview.rows[0].manual_candidates.some(
+      (candidate) => candidate.key === `purchase:${smallSanitasPurchase._id}`
+    ));
+    assert.ok(reimbursementPreview.rows[0].manual_candidates.some(
+      (candidate) => candidate.key === `purchase:${largeSanitasPurchase._id}`
+    ));
+
+    const reimbursementMatch = await reconcilePurchaseMutations({
+      debitMode: 'positive',
+      rows: [reimbursementRow],
+      manualSelections: {
+        6: [`purchase:${smallSanitasPurchase._id}`, `purchase:${largeSanitasPurchase._id}`]
+      }
+    });
+    assert.strictEqual(reimbursementMatch.rows[0].status, 'manual_matched');
+    assert.strictEqual(reimbursementMatch.rows[0].purchases.length, 2);
+    assert.strictEqual(reimbursementMatch.rows[0].manual_purchase_total, 665000);
+    assert.strictEqual(reimbursementMatch.rows[0].manual_amount_difference, 0);
 
     const duplicateRows = await reconcilePurchaseMutations({
       debitMode: 'positive',
