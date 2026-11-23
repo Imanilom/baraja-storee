@@ -5,15 +5,23 @@ const Supplier = require('../src/modules/suppliers/supplier.model');
 const Purchase = require('../src/modules/purchases/purchase.model');
 const PurchaseItem = require('../src/modules/purchases/purchase-item.model');
 const DebtPayment = require('../src/modules/purchases/debt-payment.model');
+const PurchaseReconciliation = require('../src/modules/cash-flow/purchase-reconciliation.model');
+const SupplierBankAlias = require('../src/modules/cash-flow/supplier-bank-alias.model');
+const { savePurchaseReconciliations } = require('../src/modules/cash-flow/purchase-reconciliation-persistence.service');
 const {
   reconcilePurchaseMutations,
-  parseAmount
+  parseAmount,
+  getBeneficiarySuggestion
 } = require('../src/modules/cash-flow/purchase-reconciliation.service');
 
 const run = async () => {
   assert.strictEqual(parseAmount('Rp 1.234.567'), 1234567);
   assert.strictEqual(parseAmount('-1,234.50'), -1235);
   assert.strictEqual(parseAmount('nominal tidak valid'), null);
+  assert.strictEqual(
+    getBeneficiarySuggestion('TR TO REMITT OCTOmobile TO ADRIAN BUDIANTO 001461405029 CENAIDJA syrup davinci'),
+    'ADRIAN BUDIANTO'
+  );
 
   const mongod = await MongoMemoryServer.create({
     binary: { version: '7.0.11' }
@@ -99,6 +107,7 @@ const run = async () => {
     assert.strictEqual(result.rows[0].purchase.invoice_reference, 'INV-778');
     assert.deepStrictEqual(result.rows[0].purchase.checks, {
       supplier_name: true,
+      supplier_alias: false,
       supplier_reference: true,
       amount: true
     });
@@ -219,6 +228,74 @@ const run = async () => {
     assert.strictEqual(reimbursementMatch.rows[0].purchases.length, 2);
     assert.strictEqual(reimbursementMatch.rows[0].manual_purchase_total, 665000);
     assert.strictEqual(reimbursementMatch.rows[0].manual_amount_difference, 0);
+
+    const savedResult = await savePurchaseReconciliations({
+      rows: [{
+        rowNumber: 511,
+        date: statementRow.date,
+        description: statementRow.description,
+        reference: '',
+        amount: 1170000,
+        candidateKeys: [`purchase:${toffinPurchase._id}`],
+        matchType: 'manual',
+        beneficiaryName: 'Adrian Budianto'
+      }]
+    });
+    assert.deepStrictEqual(savedResult, {
+      saved_count: 1,
+      alias_saved_count: 1,
+      alias_conflict_count: 0,
+      alias_skipped_count: 0
+    });
+    assert.strictEqual(await PurchaseReconciliation.countDocuments(), 1);
+    const alias = await SupplierBankAlias.findOne({ normalized_alias: 'adrian budianto' }).lean();
+    assert.strictEqual(String(alias.supplier_id), String(toffinSupplier._id));
+
+    const recognizedAlias = await reconcilePurchaseMutations({
+      debitMode: 'positive',
+      rows: [{
+        rowNumber: 512,
+        date: statementRow.date,
+        description: 'TR TO REMITT OCTOmobile TO ADRIAN BUDIANTO 001461405029 CENAIDJA',
+        amount: 1170000
+      }]
+    });
+    assert.strictEqual(recognizedAlias.rows[0].status, 'matched');
+    assert.strictEqual(recognizedAlias.rows[0].purchase.supplier_id, String(toffinSupplier._id));
+    assert.strictEqual(recognizedAlias.rows[0].purchase.checks.supplier_alias, true);
+
+    const aliasConflict = await savePurchaseReconciliations({
+      rows: [{
+        rowNumber: 513,
+        date: '2026-04-12',
+        description: 'TR TO ADRIAN BUDIYANTO',
+        amount: 372000,
+        candidateKeys: [`purchase:${davinciPurchase._id}`],
+        matchType: 'manual',
+        beneficiaryName: 'Adrian Budianto'
+      }]
+    });
+    assert.strictEqual(aliasConflict.alias_conflict_count, 1);
+    assert.strictEqual(String((await SupplierBankAlias.findOne({ normalized_alias: 'adrian budianto' })).supplier_id), String(toffinSupplier._id));
+    assert.strictEqual(await PurchaseReconciliation.countDocuments(), 2);
+
+    const downPayment = await DebtPayment.findOne({ notes: 'Uang muka / DP saat transaksi' });
+    const savedDownPayment = await savePurchaseReconciliations({
+      rows: [{
+        rowNumber: 514,
+        date: '2026-04-01',
+        description: 'PEMBAYARAN UANG MUKA',
+        amount: 50000,
+        candidateKeys: [`purchase-dp-payment:${downPayment._id}`],
+        matchType: 'automatic'
+      }]
+    });
+    assert.strictEqual(savedDownPayment.saved_count, 1);
+    const savedDownPaymentRecord = await PurchaseReconciliation.findOne({
+      statement_description: 'PEMBAYARAN UANG MUKA'
+    }).lean();
+    assert.deepStrictEqual(savedDownPaymentRecord.debt_payment_ids.map(String), [String(downPayment._id)]);
+    assert.deepStrictEqual(savedDownPaymentRecord.purchase_ids.map(String), [String(tempoPurchase._id)]);
 
     const duplicateRows = await reconcilePurchaseMutations({
       debitMode: 'positive',

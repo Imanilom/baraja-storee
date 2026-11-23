@@ -270,6 +270,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  savePurchaseReconciliations: (data) =>
+    fetchApi('/cash-flow/reconciliation/purchases/save', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   recordCashIn: (data) =>
     fetchApi('/cash-flow/in', {
       method: 'POST',

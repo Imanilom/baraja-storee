@@ -69,9 +69,12 @@ export default function PurchaseReconciliationModal({ onClose }) {
   const [manualSelections, setManualSelections] = useState({});
   const [result, setResult] = useState(null);
   const [manualSelectionPending, setManualSelectionPending] = useState(false);
+  const [beneficiaryNames, setBeneficiaryNames] = useState({});
+  const [savedResult, setSavedResult] = useState(null);
   const [error, setError] = useState('');
   const [loadingFile, setLoadingFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const handleFile = async (event) => {
     const file = event.target.files?.[0];
@@ -80,6 +83,8 @@ export default function PurchaseReconciliationModal({ onClose }) {
     setResult(null);
     setManualSelections({});
     setManualSelectionPending(false);
+    setBeneficiaryNames({});
+    setSavedResult(null);
 
     if (file.size > MAX_FILE_BYTES) {
       setError('Ukuran file maksimal 10 MB.');
@@ -131,6 +136,7 @@ export default function PurchaseReconciliationModal({ onClose }) {
     setResult(null);
     setManualSelections({});
     setManualSelectionPending(false);
+    setSavedResult(null);
   };
 
   const handleReconcile = async (event, applyManual = false) => {
@@ -162,10 +168,51 @@ export default function PurchaseReconciliationModal({ onClose }) {
       setResult(response.data);
       setManualSelections(applyManual ? selectionsToSubmit : {});
       setManualSelectionPending(false);
+      setBeneficiaryNames({});
+      setSavedResult(null);
     } catch (requestError) {
       setError(requestError.message || 'Rekonsiliasi gagal dijalankan.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSaveResults = async () => {
+    if (!result || manualSelectionPending) return;
+    const rows = result.rows
+      .filter((row) => row.status === 'matched' || row.status === 'manual_matched')
+      .map((row) => {
+        const selected = row.status === 'manual_matched'
+          ? row.purchases || []
+          : row.purchase
+            ? [row.purchase]
+            : [];
+        return {
+          rowNumber: row.rowNumber,
+          date: row.date,
+          description: row.description,
+          reference: row.reference,
+          amount: row.amount,
+          candidateKeys: selected.map((purchase) => purchase.key),
+          matchType: row.status === 'manual_matched' ? 'manual' : 'automatic',
+          beneficiaryName: beneficiaryNames[row.rowNumber] ?? row.beneficiary_suggestion ?? ''
+        };
+      })
+      .filter((row) => row.candidateKeys.length > 0);
+    if (rows.length === 0) {
+      setError('Belum ada hasil cocok yang dapat disimpan.');
+      return;
+    }
+
+    setError('');
+    setSaving(true);
+    try {
+      const response = await api.savePurchaseReconciliations({ rows });
+      setSavedResult(response.data);
+    } catch (requestError) {
+      setError(requestError.message || 'Hasil rekonsiliasi gagal disimpan.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -344,6 +391,31 @@ export default function PurchaseReconciliationModal({ onClose }) {
                 </div>
               )}
 
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-xs text-emerald-900">
+                  <p className="font-bold">Simpan hasil cocok dan pelajari nama penerima transfer</p>
+                  <p className="mt-1">
+                    {result.rows.filter((row) => row.status === 'matched' || row.status === 'manual_matched').length} baris cocok.
+                    Konfirmasi penyimpanan akan mengingat hubungan nama penerima dengan supplier.
+                  </p>
+                  {savedResult && (
+                    <p role="status" className="mt-1 font-semibold">
+                      Tersimpan: {savedResult.saved_count} baris; alias supplier {savedResult.alias_saved_count} disimpan,
+                      {` ${savedResult.alias_conflict_count} konflik, ${savedResult.alias_skipped_count} dilewati.`}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveResults}
+                  disabled={saving || submitting || manualSelectionPending}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {saving ? 'Menyimpan...' : 'Simpan hasil cocok'}
+                </button>
+              </div>
+
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <div className="max-h-[22rem] overflow-auto">
                   <table className="w-full min-w-[760px] text-left text-xs">
@@ -401,6 +473,9 @@ export default function PurchaseReconciliationModal({ onClose }) {
                                   <p className="mt-1 text-[10px] font-bold text-slate-700">{formatRupiah(candidate.amount)}</p>
                                   <div className="mt-1 space-y-0.5 text-[10px] text-slate-600">
                                     <p>Nama supplier: {candidate.checks?.supplier_name ? 'cocok' : 'tidak terdeteksi'}</p>
+                                    {candidate.checks?.supplier_alias && (
+                                      <p>Nama penerima transfer: cocok dengan alias tersimpan</p>
+                                    )}
                                     <p>No. ref supplier: {candidate.checks?.supplier_reference ? 'cocok' : 'tidak terdeteksi'}</p>
                                     <p>Nominal mutasi: {
                                       row.status === 'manual_matched'
@@ -434,6 +509,25 @@ export default function PurchaseReconciliationModal({ onClose }) {
                                   )}
                                 </>
                               ) : <span className="text-slate-400">-</span>}
+                              {(row.status === 'matched' || row.status === 'manual_matched') && (
+                                <label className="mt-2 block text-[10px] font-semibold text-slate-600">
+                                  Nama penerima transfer (opsional)
+                                  <input
+                                    type="text"
+                                    maxLength={100}
+                                    value={beneficiaryNames[row.rowNumber] ?? row.beneficiary_suggestion ?? ''}
+                                    onChange={(event) => {
+                                      setSavedResult(null);
+                                      setBeneficiaryNames((current) => ({
+                                        ...current,
+                                        [row.rowNumber]: event.target.value
+                                      }));
+                                    }}
+                                    placeholder="Contoh: Adrian Budianto"
+                                    className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1 font-normal"
+                                  />
+                                </label>
+                              )}
                               {row.purchases?.length > 1 && (
                                 <div className="mt-2 border-t border-slate-100 pt-2">
                                   <p className="mb-1 text-[10px] font-bold text-slate-700">

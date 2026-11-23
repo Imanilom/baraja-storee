@@ -1,6 +1,7 @@
 const Purchase = require('../purchases/purchase.model');
 const PurchaseItem = require('../purchases/purchase-item.model');
 const DebtPayment = require('../purchases/debt-payment.model');
+const SupplierBankAlias = require('./supplier-bank-alias.model');
 
 const MAX_STATEMENT_ROWS = 2000;
 const MAX_MANUAL_CANDIDATES = 30;
@@ -18,6 +19,16 @@ const containsPhrase = (text, phrase) => {
   const normalizedPhrase = normalizePhrase(phrase);
   if (normalizedPhrase.length < 4) return false;
   return ` ${normalizePhrase(text)} `.includes(` ${normalizedPhrase} `);
+};
+
+const getBeneficiarySuggestion = (description) => {
+  const segments = String(description || '').split(/\bTO\b/i);
+  if (segments.length < 2) return '';
+  return String(segments[segments.length - 1])
+    .split(/\s+\d{6,}/)[0]
+    .replace(/[|,;]+$/g, '')
+    .trim()
+    .slice(0, 100);
 };
 
 const normalizeDirection = (value) => normalizePhrase(value).replace(/\s/g, '');
@@ -94,6 +105,7 @@ const makeCandidate = ({
   amount: Math.round(Number(amount) || 0),
   date,
   purchaseId: String(purchase._id),
+  supplierId: String(purchase.supplier_id?._id || purchase.supplier_id || ''),
   purchaseNumber: purchase.purchase_number || '',
   invoiceReference: purchase.invoice_ref || '',
   supplierName: purchase.supplier_id?.name || '',
@@ -106,6 +118,8 @@ const makeCandidate = ({
 const scoreCandidate = (row, candidate) => {
   const narrative = `${row.description} ${row.reference}`;
   const supplierMatch = containsPhrase(narrative, candidate.supplierName);
+  const supplierAliasMatch = (candidate.supplierAliases || [])
+    .some((alias) => containsPhrase(narrative, alias));
   const invoiceReferenceMatch = containsPhrase(narrative, candidate.invoiceReference);
   const candidateReferences = [
     candidate.reference,
@@ -113,9 +127,11 @@ const scoreCandidate = (row, candidate) => {
     candidate.invoiceReference
   ].filter(Boolean);
   const referenceMatch = candidateReferences.some((reference) => containsPhrase(narrative, reference));
-  if (!supplierMatch && !referenceMatch) return null;
+  if (!supplierMatch && !supplierAliasMatch && !referenceMatch) return null;
 
-  let score = (referenceMatch ? 100 : 0) + (supplierMatch ? 50 : 0);
+  let score = (referenceMatch ? 100 : 0) +
+    (supplierAliasMatch ? 120 : 0) +
+    (supplierMatch ? 50 : 0);
   const statementDate = parseStatementDate(row.date);
   const candidateDate = parseStatementDate(candidate.date);
   if (statementDate && candidateDate) {
@@ -124,7 +140,7 @@ const scoreCandidate = (row, candidate) => {
     else if (daysApart <= 7) score += 10;
   }
 
-  return { score, supplierMatch, referenceMatch, invoiceReferenceMatch };
+  return { score, supplierMatch, supplierAliasMatch, referenceMatch, invoiceReferenceMatch };
 };
 
 const indexCandidates = (candidates) => {
@@ -132,6 +148,7 @@ const indexCandidates = (candidates) => {
   candidates.forEach((candidate) => {
     const identifiers = [
       candidate.supplierName,
+      ...(candidate.supplierAliases || []),
       candidate.reference,
       candidate.purchaseNumber,
       candidate.invoiceReference
@@ -178,6 +195,7 @@ const candidateSummary = (candidate, signals, amountDifference = 0, includeItems
   key: candidate.key,
   type: candidate.kind,
   purchase_id: candidate.purchaseId,
+  supplier_id: candidate.supplierId,
   purchase_number: candidate.purchaseNumber,
   supplier_name: candidate.supplierName,
   reference: candidate.reference || candidate.invoiceReference,
@@ -189,11 +207,13 @@ const candidateSummary = (candidate, signals, amountDifference = 0, includeItems
   items: includeItems ? candidate.items : [],
   checks: {
     supplier_name: signals.supplierMatch,
+    supplier_alias: signals.supplierAliasMatch,
     supplier_reference: signals.invoiceReferenceMatch,
     amount: amountDifference === 0
   },
   matched_by: [
     ...(signals.invoiceReferenceMatch ? ['no. nota supplier'] : []),
+    ...(signals.supplierAliasMatch ? ['nama penerima transfer'] : []),
     ...(signals.referenceMatch && !signals.invoiceReferenceMatch ? ['referensi transaksi'] : []),
     ...(signals.supplierMatch ? ['nama supplier'] : [])
   ]
@@ -239,14 +259,19 @@ const getManualCandidateOptions = (row, candidateIndex, manualIndex) => {
     .slice(0, MAX_MANUAL_CANDIDATES)
     .map(({ candidate, signals }) => candidateSummary(
       candidate,
-      signals || { supplierMatch: false, referenceMatch: false, invoiceReferenceMatch: false },
+      signals || {
+        supplierMatch: false,
+        supplierAliasMatch: false,
+        referenceMatch: false,
+        invoiceReferenceMatch: false
+      },
       row.amount - candidate.amount,
       false
     ));
 };
 
 const buildCandidates = async () => {
-  const [purchases, debtPayments] = await Promise.all([
+  const [purchases, debtPayments, aliases] = await Promise.all([
     Purchase.find()
       .populate('supplier_id', 'name')
       .select('_id purchase_number invoice_ref payment_method payment_source amount_paid total_actual purchased_at supplier_id')
@@ -257,8 +282,18 @@ const buildCandidates = async () => {
         populate: { path: 'supplier_id', select: 'name' }
       })
       .select('_id purchase_id amount paid_at reference_number payment_method notes')
+      .lean(),
+    SupplierBankAlias.find()
+      .select('normalized_alias supplier_id')
       .lean()
   ]);
+  const aliasesBySupplier = new Map();
+  aliases.forEach((alias) => {
+    const supplierId = String(alias.supplier_id);
+    const supplierAliases = aliasesBySupplier.get(supplierId) || [];
+    supplierAliases.push(alias.normalized_alias);
+    aliasesBySupplier.set(supplierId, supplierAliases);
+  });
 
   const purchaseItems = await PurchaseItem.find({
     purchase_id: { $in: purchases.map((purchase) => purchase._id) }
@@ -300,7 +335,7 @@ const buildCandidates = async () => {
       const purchasePayments = paymentsByPurchase.get(String(purchase._id)) || [];
       if (downPayment > 0 && purchasePayments.length === 0) {
         const candidate = makeCandidate({
-          key: `purchase-down-payment:${purchase._id}`,
+          key: `purchase-dp-purchase:${purchase._id}`,
           kind: 'Uang muka pembelian',
           purchase,
           amount: downPayment,
@@ -333,7 +368,7 @@ const buildCandidates = async () => {
     if (payment.payment_method !== 'transfer') return;
     if (payment.notes === INITIAL_DOWN_PAYMENT_NOTE) {
       const candidate = makeCandidate({
-        key: `purchase-down-payment:${payment._id}`,
+        key: `purchase-dp-payment:${payment._id}`,
         kind: 'Uang muka pembelian',
         purchase,
         amount: payment.amount,
@@ -358,7 +393,14 @@ const buildCandidates = async () => {
     manualCandidates.push(candidate);
   });
 
-  return { candidates, manualCandidates };
+  const attachSupplierAliases = (candidate) => ({
+    ...candidate,
+    supplierAliases: aliasesBySupplier.get(candidate.supplierId) || []
+  });
+  return {
+    candidates: candidates.map(attachSupplierAliases),
+    manualCandidates: manualCandidates.map(attachSupplierAliases)
+  };
 };
 
 const reconcilePurchaseMutations = async ({
@@ -460,6 +502,7 @@ const reconcilePurchaseMutations = async ({
       row.matchCandidates = selectedCandidateKeys.map((key) => candidatesByKey.get(key));
       row.matchSignals = row.matchCandidates.map((candidate) => scoreCandidate(row, candidate) || {
         supplierMatch: false,
+        supplierAliasMatch: false,
         referenceMatch: false,
         invoiceReferenceMatch: false
       });
@@ -569,6 +612,7 @@ const reconcilePurchaseMutations = async ({
     },
     rows: statementRows.map((row) => {
       const result = { ...row };
+      result.beneficiary_suggestion = getBeneficiarySuggestion(row.description);
       if (row.status === 'matched') {
         result.purchase = candidateSummary(row.matchCandidate, row.matchSignals);
         delete result.matchCandidate;
@@ -603,6 +647,9 @@ const reconcilePurchaseMutations = async ({
 module.exports = {
   reconcilePurchaseMutations,
   parseAmount,
+  normalizePhrase,
+  parseStatementDate,
+  getBeneficiarySuggestion,
   scoreCandidate,
   isDebitDirection,
   isCreditDirection,

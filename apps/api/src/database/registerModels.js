@@ -25,3 +25,5 @@ require('../modules/purchases/debt-payment.model');
 require('../modules/overheads/overhead.model');
 require('../modules/overheads/overhead-payment.model');
 require('../modules/waste/waste.model');
+require('../modules/cash-flow/purchase-reconciliation.model');
+require('../modules/cash-flow/supplier-bank-alias.model');

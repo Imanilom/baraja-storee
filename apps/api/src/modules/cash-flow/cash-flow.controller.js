@@ -1,6 +1,7 @@
 const cashFlowService = require('./cash-flow.service');
 const cashFlowPdfService = require('./cash-flow-pdf.service');
 const { reconcilePurchaseMutations } = require('./purchase-reconciliation.service');
+const { savePurchaseReconciliations } = require('./purchase-reconciliation-persistence.service');
 
 class CashFlowController {
   async getSummary(req, res, next) {
@@ -48,6 +49,22 @@ class CashFlowController {
       const result = await reconcilePurchaseMutations(req.body);
       return res.status(200).json({
         success: true,
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async savePurchaseReconciliations(req, res, next) {
+    try {
+      const result = await savePurchaseReconciliations({
+        ...req.body,
+        user: req.user
+      });
+      return res.status(200).json({
+        success: true,
+        message: 'Hasil rekonsiliasi berhasil disimpan.',
         data: result
       });
     } catch (error) {

@@ -33,6 +33,12 @@ router.post(
   cashFlowController.reconcilePurchases
 );
 
+router.post(
+  '/reconciliation/purchases/save',
+  authorize(ROLES.ADMIN, ROLES.PURCHASING, ROLES.ACCOUNTING, ROLES.MANAGEMENT, ROLES.LEADER),
+  cashFlowController.savePurchaseReconciliations
+);
+
 // Catat uang masuk
 router.post(
   '/in',
