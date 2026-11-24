@@ -5,6 +5,13 @@ const authenticate = require('../../middleware/auth');
 const authorize = require('../../middleware/rbac');
 const { ROLES } = require('@purchasing/constants');
 
+router.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 router.use(authenticate);
 
 // Ringkasan saldo & metrik arus kas

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from '../../components/Navbar';
 import PurchaseReconciliationModal from '../../components/PurchaseReconciliationModal';
 import { api, downloadCashFlowPdf } from '../../lib/api';
@@ -60,6 +60,8 @@ export default function CashFlowPage() {
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [bankOpeningBalance, setBankOpeningBalance] = useState(0);
   const [exportingMutations, setExportingMutations] = useState(false);
+  const summaryRequestId = useRef(0);
+  const mutationsRequestId = useRef(0);
 
   // Filters
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'cash' | 'bank' | 'in' | 'withdrawal' | 'purchase'
@@ -87,6 +89,7 @@ export default function CashFlowPage() {
     date: toLocalDateTimeInput(),
     notes: ''
   });
+  const [confirmIncomeSource, setConfirmIncomeSource] = useState(false);
 
   const [withdrawForm, setWithdrawForm] = useState({
     amount: '',
@@ -108,6 +111,7 @@ export default function CashFlowPage() {
 
   // Fetch summary
   const fetchSummary = useCallback(async () => {
+    const requestId = ++summaryRequestId.current;
     setLoadingSummary(true);
     try {
       const { startDate, endDate } = getDateRange(filterDate, filterPeriod);
@@ -119,17 +123,22 @@ export default function CashFlowPage() {
         api.getCashFlowSummary(params),
         api.getCashFlowSummary(openingParams)
       ]);
+      if (requestId !== summaryRequestId.current) return true;
       setSummary(res.data || {});
       setBankOpeningBalance(openingRes.data?.current_bank_balance || 0);
+      return true;
     } catch (e) {
+      if (requestId !== summaryRequestId.current) return true;
       console.error('Gagal memuat ringkasan kas:', e);
+      return false;
     } finally {
-      setLoadingSummary(false);
+      if (requestId === summaryRequestId.current) setLoadingSummary(false);
     }
   }, [filterDate, filterPeriod]);
 
   // Fetch mutations
   const fetchMutations = useCallback(async () => {
+    const requestId = ++mutationsRequestId.current;
     setLoading(true);
     try {
       const { startDate, endDate } = getDateRange(filterDate, filterPeriod);
@@ -141,11 +150,15 @@ export default function CashFlowPage() {
       }
 
       const res = await api.getCashFlowMutations(params);
+      if (requestId !== mutationsRequestId.current) return true;
       setMutations(res.data || []);
+      return true;
     } catch (e) {
+      if (requestId !== mutationsRequestId.current) return true;
       console.error('Gagal memuat mutasi kas:', e);
+      return false;
     } finally {
-      setLoading(false);
+      if (requestId === mutationsRequestId.current) setLoading(false);
     }
   }, [activeTab, filterDate, filterPeriod]);
 
@@ -262,6 +275,10 @@ export default function CashFlowPage() {
       alert('Keterangan uang masuk wajib diisi.');
       return;
     }
+    if (!confirmIncomeSource) {
+      alert('Konfirmasi bahwa ini dana baru masuk dari luar, bukan tarik tunai atau transfer antar akun.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -285,6 +302,7 @@ export default function CashFlowPage() {
         date: toLocalDateTimeInput(),
         notes: ''
       });
+      setConfirmIncomeSource(false);
       fetchSummary();
       fetchMutations();
     } catch (err) {
@@ -408,14 +426,22 @@ export default function CashFlowPage() {
 
   // Hapus transaksi manual
   const handleDeleteTransaction = async (id, title) => {
-    if (!confirm(`Apakah Anda yakin ingin membatalkan/menghapus transaksi "${title}"?`)) {
+    if (!confirm(`Hapus transaksi manual "${title}"? Saldo arus kas akan dihitung ulang dari transaksi yang tersisa.`)) {
       return;
     }
     try {
-      await api.deleteCashTransaction(id);
-      alert('✅ Transaksi berhasil dihapus.');
-      fetchSummary();
-      fetchMutations();
+      const deletion = await api.deleteCashTransaction(id);
+      const [summaryReloaded, mutationsReloaded] = await Promise.all([
+        fetchSummary(),
+        fetchMutations()
+      ]);
+      if (!summaryReloaded || !mutationsReloaded) {
+        alert('Transaksi sudah dihapus, tetapi data saldo belum berhasil dimuat ulang. Segarkan halaman untuk memastikan saldo terbaru.');
+        return;
+      }
+      alert(deletion.warning
+        ? `Transaksi dihapus dan saldo berhasil dihitung ulang. ${deletion.warning}`
+        : '✅ Transaksi dihapus dan saldo berhasil dihitung ulang.');
     } catch (err) {
       alert(`Gagal menghapus transaksi: ${err.message}`);
     }
@@ -565,7 +591,10 @@ export default function CashFlowPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setShowInModal(true)}
+              onClick={() => {
+                setConfirmIncomeSource(false);
+                setShowInModal(true);
+              }}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-sm"
             >
               <Plus className="w-4 h-4" />
@@ -872,6 +901,13 @@ export default function CashFlowPage() {
               </div>
 
               <form onSubmit={handleSubmitIn} className="p-6 space-y-4 text-xs">
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950">
+                  <p className="font-bold">Pastikan jenis transaksi</p>
+                  <p className="mt-1 leading-relaxed">
+                    Uang masuk hanya untuk dana baru dari luar. Tarik tunai dari rekening ke kas bukan uang masuk;
+                    gunakan menu <strong>Catat Tarik Tunai</strong> agar saldo bank berkurang dan kas bertambah.
+                  </p>
+                </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Nominal Uang Masuk (Rp) *
@@ -975,6 +1011,17 @@ export default function CashFlowPage() {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                   />
                 </div>
+
+                <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={confirmIncomeSource}
+                    onChange={(event) => setConfirmIncomeSource(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>Saya memastikan ini dana masuk baru, bukan tarik tunai atau perpindahan antar akun.</span>
+                </label>
 
                 <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
                   <button

@@ -84,6 +84,14 @@ class CashFlowService {
     if (!description || !description.trim()) {
       throw new Error('Keterangan uang masuk wajib diisi.');
     }
+    if (
+      String(category).trim().toLowerCase() === 'tarik_tunai' ||
+      /\b(?:tarik\s*tunai|penarikan\s*tunai|withdrawal)\b/i.test(description)
+    ) {
+      const error = new Error('Keterangan menunjukkan tarik tunai. Gunakan menu Tarik Tunai agar saldo bank dan kas tercatat seimbang.');
+      error.statusCode = 400;
+      throw error;
+    }
 
     const transactionNumber = await this.generateTransactionNumber('KM');
 
@@ -358,24 +366,42 @@ class CashFlowService {
 
   // Hapus transaksi manual jika salah input
   async deleteTransaction(id, user) {
-    const trx = await CashTransaction.findById(id);
-    if (!trx) throw new Error('Data transaksi arus kas tidak ditemukan.');
+    const trx = await CashTransaction.findByIdAndDelete(id);
+    if (!trx) {
+      const error = new Error('Data transaksi arus kas tidak ditemukan.');
+      error.statusCode = 404;
+      throw error;
+    }
 
-    await CashTransaction.findByIdAndDelete(id);
+    let auditWarning;
+    try {
+      await ActivityLog.create({
+        entity_type: 'cash_transaction',
+        entity_id: trx._id,
+        action: 'deleted',
+        performed_by: user?._id,
+        old_value: {
+          transaction_number: trx.transaction_number,
+          type: trx.type,
+          source_account: trx.source_account,
+          to_account: trx.to_account,
+          amount: trx.amount,
+          category: trx.category,
+          description: trx.description,
+          reference_number: trx.reference_number,
+          date: trx.date
+        },
+        description: `Transaksi arus kas ${trx.transaction_number} dihapus.`
+      });
+    } catch (error) {
+      console.error('[CashFlow] Gagal mencatat audit penghapusan transaksi:', error);
+      auditWarning = 'Transaksi terhapus, tetapi riwayat audit gagal dicatat.';
+    }
 
-    await ActivityLog.create({
-      user_id: user?._id,
-      action: 'CASH_TRANSACTION_DELETED',
-      entity: 'CashTransaction',
-      entity_id: id,
-      meta_data: {
-        transaction_number: trx.transaction_number,
-        amount: trx.amount,
-        type: trx.type
-      }
-    }).catch(() => null);
-
-    return { message: `Transaksi ${trx.transaction_number} berhasil dihapus.` };
+    return {
+      message: `Transaksi ${trx.transaction_number} berhasil dihapus.`,
+      warning: auditWarning
+    };
   }
 
   // 4. Ringkasan Saldo & Arus Kas (Realtime Dashboard)

@@ -4,7 +4,7 @@ const ActivityLogSchema = new mongoose.Schema({
   entity_type: {
     type: String,
     required: true,
-    enum: ['marketlist', 'goods_receipt', 'invoice', 'product', 'supplier', 'note', 'user', 'overhead']
+    enum: ['marketlist', 'goods_receipt', 'invoice', 'product', 'supplier', 'note', 'user', 'overhead', 'cash_transaction']
   },
   entity_id: {
     type: mongoose.Schema.Types.ObjectId,
