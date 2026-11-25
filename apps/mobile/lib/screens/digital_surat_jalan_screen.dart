@@ -117,6 +117,7 @@ class _ItemReceivingState {
 class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
   final List<_ItemReceivingState> _checkItems = [];
   final _noteController = TextEditingController();
+  final _itemSearchController = TextEditingController();
   final List<String> _photos = [];
 
   bool _isLoadingNote = true;
@@ -138,6 +139,7 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
       it.dispose();
     }
     _noteController.dispose();
+    _itemSearchController.dispose();
     super.dispose();
   }
 
@@ -457,6 +459,13 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
   @override
   Widget build(BuildContext context) {
     final ml = widget.marketlist;
+    final query = _itemSearchController.text.trim().toLowerCase();
+    final filteredItems = _checkItems.asMap().entries.where((entry) {
+      final item = entry.value;
+      return query.isEmpty ||
+          item.productName.toLowerCase().contains(query) ||
+          item.unitName.toLowerCase().contains(query);
+    }).toList();
     final code = ml['marketlist_number'] ?? ml['code'] ?? 'SURAT-JALAN';
     final dateStr = ml['date'] != null
         ? ml['date'].toString().split('T')[0]
@@ -537,570 +546,764 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-            // Header Info Dokumen
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDF4),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFBBF7D0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Header Info Dokumen
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'DOKUMEN PENERIMAAN FISIK',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF15803D),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF16A34A),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'SIAP VERIFIKASI',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Marketlist: $code',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                  Text(
-                    'Tanggal Permintaan: $dateStr',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF475569),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Item Checklist Section
-            Text(
-              'Pemeriksaan Fisik Barang (${_checkItems.length})',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Gunakan tombol [-] / [+] atau opsi cepat jika barang yang dikirim kurang dari target.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-            ),
-            const SizedBox(height: 10),
-
-            ..._checkItems.asMap().entries.map((entry) {
-              final idx = entry.key;
-              final ci = entry.value;
-
-              final isShortage = ci.receivedQty < ci.requestedQty;
-              final isExact = ci.receivedQty == ci.requestedQty;
-              final isOverage = ci.receivedQty > ci.requestedQty;
-              final diff = (ci.requestedQty - ci.receivedQty).abs();
-              final diffStr = diff % 1 == 0
-                  ? diff.toInt().toString()
-                  : diff.toStringAsFixed(1);
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isShortage
-                        ? const Color(0xFFFBBF24)
-                        : (ci.isChecked
-                              ? const Color(0xFF86EFAC)
-                              : const Color(0xFFE2E8F0)),
-                    width: isShortage || ci.isChecked ? 1.5 : 1,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header Nama Barang & Checkbox
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${idx + 1}. ${ci.productName}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                        ),
-                        Checkbox(
-                          value: ci.isChecked,
-                          activeColor: const Color(0xFF16A34A),
-                          onChanged: (val) {
-                            setState(() => ci.isChecked = val ?? false);
-                          },
-                        ),
-                      ],
-                    ),
-
-                    // Status Badge Target vs Aktual
-                    Row(
-                      children: [
-                        Text(
-                          'Target: ${_ItemReceivingState._formatNum(ci.requestedQty)} ${ci.unitName}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (isShortage)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFD1FAE5),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: const Color(0xFFFCD34D),
-                              ),
-                            ),
-                            child: Text(
-                              '⚠️ Kurang $diffStr ${ci.unitName}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF047857),
-                              ),
-                            ),
-                          )
-                        else if (isExact)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDCFCE7),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              '✅ Sesuai Target',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF15803D),
-                              ),
-                            ),
-                          )
-                        else if (isOverage)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE0F2FE),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '➕ Lebih $diffStr ${ci.unitName}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0369A1),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Input Row: Stepper Diterima, Diterima Baik, Ditolak
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Kolom Diterima dengan tombol - dan +
-                        Expanded(
-                          flex: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Diterima Fisik',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF475569),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        ci.adjustReceived(-1);
-                                      });
-                                    },
-                                    icon: const Icon(
-                                      Icons.remove_circle_outline,
-                                      color: Color(0xFFDC2626),
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 32,
-                                      minHeight: 32,
-                                    ),
-                                    iconSize: 24,
-                                    tooltip: 'Kurangi 1',
-                                  ),
-                                  Expanded(
-                                    child: TextFormField(
-                                      controller: ci.receivedController,
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                            decimal: true,
-                                          ),
-                                      textAlign: TextAlign.center,
-                                      decoration: InputDecoration(
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 8,
-                                            ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        isDense: true,
-                                      ),
-                                      onChanged: (val) {
-                                        setState(() {
-                                          ci.updateReceived(
-                                            _ItemReceivingState._parseQty(val),
-                                            updateInput: false,
-                                          );
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        ci.adjustReceived(1);
-                                      });
-                                    },
-                                    icon: const Icon(
-                                      Icons.add_circle_outline,
-                                      color: Color(0xFF16A34A),
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 32,
-                                      minHeight: 32,
-                                    ),
-                                    iconSize: 24,
-                                    tooltip: 'Tambah 1',
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-
-                        // Kolom Diterima Baik
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Baik',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF15803D),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              TextFormField(
-                                controller: ci.acceptedController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                textAlign: TextAlign.center,
-                                decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 8,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  isDense: true,
-                                ),
-                                onChanged: (val) {
-                                  setState(() {
-                                    ci.acceptedQty =
-                                        _ItemReceivingState._parseQty(val);
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-
-                        // Kolom Ditolak / Rusak
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Rusak',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFB91C1C),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              TextFormField(
-                                controller: ci.rejectedController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                textAlign: TextAlign.center,
-                                decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 8,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  isDense: true,
-                                ),
-                                onChanged: (val) {
-                                  setState(() {
-                                    ci.updateRejected(
-                                      _ItemReceivingState._parseQty(val),
-                                      updateInput: false,
-                                    );
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Quick Action Buttons (Shortcut Kurangi / Pas)
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          OutlinedButton(
-                            onPressed: () {
-                              setState(() {
-                                ci.updateReceived(ci.requestedQty);
-                              });
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              minimumSize: const Size(50, 26),
-                              side: const BorderSide(color: Color(0xFFCBD5E1)),
-                            ),
-                            child: Text(
-                              'Pas (${_ItemReceivingState._formatNum(ci.requestedQty)})',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF0F172A),
-                              ),
+                          const Text(
+                            'DOKUMEN PENERIMAAN FISIK',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF15803D),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          OutlinedButton(
-                            onPressed: () {
-                              setState(() {
-                                ci.adjustReceived(-1);
-                              });
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              minimumSize: const Size(40, 26),
-                              side: const BorderSide(color: Color(0xFFFCA5A5)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF16A34A),
+                              borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(
-                              '-1',
+                              'SIAP VERIFIKASI',
                               style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFFDC2626),
+                                fontSize: 9,
+                                color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          OutlinedButton(
-                            onPressed: () {
-                              setState(() {
-                                ci.adjustReceived(-5);
-                              });
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              minimumSize: const Size(40, 26),
-                              side: const BorderSide(color: Color(0xFFFCA5A5)),
-                            ),
-                            child: const Text(
-                              '-5',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFFDC2626),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          OutlinedButton(
-                            onPressed: () {
-                              setState(() {
-                                ci.updateReceived(0);
-                              });
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              minimumSize: const Size(45, 26),
-                              side: const BorderSide(color: Color(0xFFCBD5E1)),
-                            ),
-                            child: const Text(
-                              '0 (Kosong)',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF64748B),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Dropdown Kondisi Barang
-                    DropdownButtonFormField<String>(
-                      value: ci.condition,
-                      decoration: const InputDecoration(
-                        labelText: 'Kondisi Fisik Barang',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
+                      const SizedBox(height: 6),
+                      Text(
+                        'Marketlist: $code',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
                       ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'good',
-                          child: Text('✅ Baik & Sesuai'),
+                      Text(
+                        'Tanggal Permintaan: $dateStr',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF475569),
                         ),
-                        DropdownMenuItem(
-                          value: 'shortage',
-                          child: Text('⚠️ Kurang (Shortage)'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Item Checklist Section
+                Text(
+                  'Pemeriksaan Fisik Barang (${_checkItems.length})',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Gunakan tombol [-] / [+] atau opsi cepat jika barang yang dikirim kurang dari target.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 10),
+                if (_checkItems.isNotEmpty) ...[
+                  TextField(
+                    controller: _itemSearchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Cari nama barang atau satuan...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _itemSearchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Hapus pencarian',
+                              onPressed: () {
+                                _itemSearchController.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                if (_checkItems.isNotEmpty && filteredItems.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(child: Text('Barang tidak ditemukan.')),
+                  ),
+                ...filteredItems.map((entry) {
+                  final idx = entry.key;
+                  final ci = entry.value;
+
+                  final isShortage = ci.receivedQty < ci.requestedQty;
+                  final isExact = ci.receivedQty == ci.requestedQty;
+                  final isOverage = ci.receivedQty > ci.requestedQty;
+                  final diff = (ci.requestedQty - ci.receivedQty).abs();
+                  final diffStr = diff % 1 == 0
+                      ? diff.toInt().toString()
+                      : diff.toStringAsFixed(1);
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isShortage
+                            ? const Color(0xFFFBBF24)
+                            : (ci.isChecked
+                                  ? const Color(0xFF86EFAC)
+                                  : const Color(0xFFE2E8F0)),
+                        width: isShortage || ci.isChecked ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header Nama Barang & Checkbox
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${idx + 1}. ${ci.productName}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                            ),
+                            Checkbox(
+                              value: ci.isChecked,
+                              activeColor: const Color(0xFF16A34A),
+                              onChanged: (val) {
+                                setState(() => ci.isChecked = val ?? false);
+                              },
+                            ),
+                          ],
                         ),
-                        DropdownMenuItem(
-                          value: 'overage',
-                          child: Text('➕ Lebih (Overage)'),
+
+                        // Status Badge Target vs Aktual
+                        Row(
+                          children: [
+                            Text(
+                              'Target: ${_ItemReceivingState._formatNum(ci.requestedQty)} ${ci.unitName}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (isShortage)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD1FAE5),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: const Color(0xFFFCD34D),
+                                  ),
+                                ),
+                                child: Text(
+                                  '⚠️ Kurang $diffStr ${ci.unitName}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF047857),
+                                  ),
+                                ),
+                              )
+                            else if (isExact)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDCFCE7),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  '✅ Sesuai Target',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                ),
+                              )
+                            else if (isOverage)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE0F2FE),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '➕ Lebih $diffStr ${ci.unitName}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0369A1),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        DropdownMenuItem(
-                          value: 'damaged',
-                          child: Text('❌ Rusak / Cacat'),
+                        const SizedBox(height: 12),
+
+                        // Input Row: Stepper Diterima, Diterima Baik, Ditolak
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Kolom Diterima dengan tombol - dan +
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Diterima Fisik',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            ci.adjustReceived(-1);
+                                          });
+                                        },
+                                        icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          color: Color(0xFFDC2626),
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 32,
+                                          minHeight: 32,
+                                        ),
+                                        iconSize: 24,
+                                        tooltip: 'Kurangi 1',
+                                      ),
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: ci.receivedController,
+                                          keyboardType:
+                                              const TextInputType.numberWithOptions(
+                                                decimal: true,
+                                              ),
+                                          textAlign: TextAlign.center,
+                                          decoration: InputDecoration(
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 8,
+                                                ),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            isDense: true,
+                                          ),
+                                          onChanged: (val) {
+                                            setState(() {
+                                              ci.updateReceived(
+                                                _ItemReceivingState._parseQty(
+                                                  val,
+                                                ),
+                                                updateInput: false,
+                                              );
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            ci.adjustReceived(1);
+                                          });
+                                        },
+                                        icon: const Icon(
+                                          Icons.add_circle_outline,
+                                          color: Color(0xFF16A34A),
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 32,
+                                          minHeight: 32,
+                                        ),
+                                        iconSize: 24,
+                                        tooltip: 'Tambah 1',
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Kolom Diterima Baik
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Baik',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF15803D),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  TextFormField(
+                                    controller: ci.acceptedController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    textAlign: TextAlign.center,
+                                    decoration: InputDecoration(
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 8,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      isDense: true,
+                                    ),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        ci.acceptedQty =
+                                            _ItemReceivingState._parseQty(val);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+
+                            // Kolom Ditolak / Rusak
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Rusak',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFB91C1C),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  TextFormField(
+                                    controller: ci.rejectedController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    textAlign: TextAlign.center,
+                                    decoration: InputDecoration(
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 8,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      isDense: true,
+                                    ),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        ci.updateRejected(
+                                          _ItemReceivingState._parseQty(val),
+                                          updateInput: false,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Quick Action Buttons (Shortcut Kurangi / Pas)
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              OutlinedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    ci.updateReceived(ci.requestedQty);
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: const Size(50, 26),
+                                  side: const BorderSide(
+                                    color: Color(0xFFCBD5E1),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Pas (${_ItemReceivingState._formatNum(ci.requestedQty)})',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              OutlinedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    ci.adjustReceived(-1);
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: const Size(40, 26),
+                                  side: const BorderSide(
+                                    color: Color(0xFFFCA5A5),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '-1',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFFDC2626),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              OutlinedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    ci.adjustReceived(-5);
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: const Size(40, 26),
+                                  side: const BorderSide(
+                                    color: Color(0xFFFCA5A5),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '-5',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFFDC2626),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              OutlinedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    ci.updateReceived(0);
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: const Size(45, 26),
+                                  side: const BorderSide(
+                                    color: Color(0xFFCBD5E1),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '0 (Kosong)',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Dropdown Kondisi Barang
+                        DropdownButtonFormField<String>(
+                          value: ci.condition,
+                          decoration: const InputDecoration(
+                            labelText: 'Kondisi Fisik Barang',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'good',
+                              child: Text('✅ Baik & Sesuai'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'shortage',
+                              child: Text('⚠️ Kurang (Shortage)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'overage',
+                              child: Text('➕ Lebih (Overage)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'damaged',
+                              child: Text('❌ Rusak / Cacat'),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setState(() => ci.condition = val ?? 'good');
+                          },
                         ),
                       ],
-                      onChanged: (val) {
-                        setState(() => ci.condition = val ?? 'good');
-                      },
                     ),
-                  ],
-                ),
-              );
-            }),
+                  );
+                }),
 
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-            // Lampiran & Bukti Foto Penerimaan
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Lampiran & Bukti Foto Penerimaan
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Icon(
-                            Icons.camera_alt_outlined,
-                            size: 20,
-                            color: Color(0xFF0284C7),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.camera_alt_outlined,
+                                size: 20,
+                                color: Color(0xFF0284C7),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Bukti Foto / Nota (${_photos.length})',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1E293B),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: _showAddPhotoDialog,
+                            icon: const Icon(Icons.add_a_photo, size: 16),
+                            label: const Text(
+                              '+ Foto',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Upload foto nota, surat jalan fisik tertandatangan, atau kondisi fisik barang tiba.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      if (_photos.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFFE2E8F0),
+                              style: BorderStyle.solid,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.photo_camera_back_outlined,
+                                size: 36,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Belum ada bukti foto ditambahkan',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Column(
+                          children: _photos.asMap().entries.map((entry) {
+                            final pIdx = entry.key;
+                            final pUrl = entry.value;
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(0xFFCBD5E1),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(
+                                      Icons.image,
+                                      size: 20,
+                                      color: Color(0xFF0284C7),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      pUrl,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                    onPressed: () {
+                                      setState(() => _photos.removeAt(pIdx));
+                                    },
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // One Marketlist Note Section
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.notes, size: 18, color: Color(0xFF059669)),
+                          SizedBox(width: 6),
                           Text(
-                            'Bukti Foto / Nota (${_photos.length})',
-                            style: const TextStyle(
+                            'One Marketlist Note (Catatan Penerima)',
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF1E293B),
@@ -1108,180 +1311,31 @@ class _DigitalSuratJalanScreenState extends State<DigitalSuratJalanScreen> {
                           ),
                         ],
                       ),
-                      ElevatedButton.icon(
-                        onPressed: _showAddPhotoDialog,
-                        icon: const Icon(Icons.add_a_photo, size: 16),
-                        label: const Text(
-                          '+ Foto',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Upload foto nota, surat jalan fisik tertandatangan, atau kondisi fisik barang tiba.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                  ),
-                  const SizedBox(height: 10),
-
-                  if (_photos.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFFE2E8F0),
-                          style: BorderStyle.solid,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.photo_camera_back_outlined,
-                            size: 36,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Belum ada bukti foto ditambahkan',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Column(
-                      children: _photos.asMap().entries.map((entry) {
-                        final pIdx = entry.key;
-                        final pUrl = entry.value;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFCBD5E1)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Icon(
-                                  Icons.image,
-                                  size: 20,
-                                  color: Color(0xFF0284C7),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  pUrl,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF1E293B),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  setState(() => _photos.removeAt(pIdx));
-                                },
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // One Marketlist Note Section
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.notes, size: 18, color: Color(0xFF059669)),
-                      SizedBox(width: 6),
-                      Text(
-                        'One Marketlist Note (Catatan Penerima)',
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Catatan terpusat untuk Surat Jalan ini (tercatat di log audit penerimaan).',
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      _isLoadingNote
+                          ? const Center(child: CircularProgressIndicator())
+                          : TextField(
+                              controller: _noteController,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                hintText:
+                                    'Tuliskan catatan kondisi pengiriman atau alasan selisih kuantitas...',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Catatan terpusat untuk Surat Jalan ini (tercatat di log audit penerimaan).',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                  ),
-                  const SizedBox(height: 10),
-                  _isLoadingNote
-                      ? const Center(child: CircularProgressIndicator())
-                      : TextField(
-                          controller: _noteController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            hintText:
-                                'Tuliskan catatan kondisi pengiriman atau alasan selisih kuantitas...',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 30),
-          ],
+                ),
+                const SizedBox(height: 30),
+              ],
             ),
           ),
         ),

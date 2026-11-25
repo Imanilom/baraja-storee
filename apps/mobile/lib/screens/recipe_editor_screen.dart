@@ -38,13 +38,174 @@ class _IngredientDraft {
   }
 }
 
+class _IngredientProductPickerSheet extends StatefulWidget {
+  final List<String> categories;
+  final String? selectedProductId;
+  final String Function(dynamic) categoryName;
+  final List<Map<String, dynamic>> Function(String, String) filterProducts;
+
+  const _IngredientProductPickerSheet({
+    required this.categories,
+    required this.selectedProductId,
+    required this.categoryName,
+    required this.filterProducts,
+  });
+
+  @override
+  State<_IngredientProductPickerSheet> createState() =>
+      _IngredientProductPickerSheetState();
+}
+
+class _IngredientProductPickerSheetState
+    extends State<_IngredientProductPickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedCategory = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final bottomInset = media.viewInsets.bottom;
+    final availableHeight =
+        media.size.height - bottomInset - media.padding.bottom - 16;
+    final pickerHeight = availableHeight < media.size.height * 0.78
+        ? availableHeight
+        : media.size.height * 0.78;
+    final products = widget.filterProducts(
+      _searchController.text,
+      _selectedCategory,
+    );
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 16),
+        child: SizedBox(
+          height: pickerHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Pilih bahan baku',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _searchController,
+                onChanged: (_) => setState(() {}),
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  isDense: true,
+                  labelText: 'Cari nama atau SKU',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Hapus pencarian',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedCategory,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'Kategori',
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: '',
+                    child: Text('Semua kategori'),
+                  ),
+                  ...widget.categories.map(
+                    (category) => DropdownMenuItem<String>(
+                      value: category,
+                      child: Text(category),
+                    ),
+                  ),
+                ],
+                onChanged: (value) =>
+                    setState(() => _selectedCategory = value ?? ''),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${products.length} bahan ditemukan',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: products.isEmpty
+                    ? const Center(child: Text('Bahan baku tidak ditemukan.'))
+                    : ListView.separated(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        itemCount: products.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final product = products[index];
+                          final id = product['product_id']?.toString() ?? '';
+                          final category = widget.categoryName(
+                            product['category'],
+                          );
+                          final unit = product['unit']?.toString() ?? '';
+                          final sku = product['sku']?.toString() ?? '';
+                          final details = [
+                            if (sku.isNotEmpty) 'SKU $sku',
+                            if (category.isNotEmpty) category,
+                            if (unit.isNotEmpty) 'Stok: $unit',
+                          ];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.grain_rounded),
+                            ),
+                            title: Text(
+                              product['name']?.toString() ?? 'Bahan baku',
+                            ),
+                            subtitle: details.isEmpty
+                                ? null
+                                : Text(details.join(' • ')),
+                            trailing: id == widget.selectedProductId
+                                ? Icon(
+                                    Icons.check_circle_rounded,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  )
+                                : null,
+                            onTap: () => Navigator.pop(context, id),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
   final List<_IngredientDraft> _ingredients = [];
   final TextEditingController _menuSearchController = TextEditingController();
-  final TextEditingController _productSearchController =
-      TextEditingController();
   String? _menuItemId;
-  String _productCategory = '';
   String? _error;
   bool _isSaving = false;
 
@@ -91,22 +252,23 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
       ingredient.dispose();
     }
     _menuSearchController.dispose();
-    _productSearchController.dispose();
     super.dispose();
   }
 
-  void _addIngredient() {
+  Future<void> _addIngredient() async {
+    final ingredient = _IngredientDraft(
+      productId: null,
+      quantity: '1',
+      unit: '',
+      isMain: _ingredients.isEmpty,
+    );
     setState(() {
-      _ingredients.add(
-        _IngredientDraft(
-          productId: null,
-          quantity: '1',
-          unit: '',
-          isMain: _ingredients.isEmpty,
-        ),
-      );
+      _ingredients.add(ingredient);
       _error = null;
     });
+    if (widget.products.isNotEmpty) {
+      await _chooseProduct(ingredient);
+    }
   }
 
   void _removeIngredient(int index) {
@@ -126,11 +288,31 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
     }
     setState(() {
       ingredient.productId = productId;
-      if (product != null && ingredient.unitController.text.trim().isEmpty) {
-        ingredient.unitController.text = product['unit']?.toString() ?? '';
+      if (product != null) {
+        ingredient.unitController.text =
+            product['recipe_unit']?.toString() ??
+            product['unit']?.toString() ??
+            '';
       }
       _error = null;
     });
+  }
+
+  Future<void> _chooseProduct(_IngredientDraft ingredient) async {
+    final productId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _IngredientProductPickerSheet(
+        categories: _productCategories(),
+        selectedProductId: ingredient.productId,
+        categoryName: _productCategoryName,
+        filterProducts: _filteredProducts,
+      ),
+    );
+    if (productId != null && mounted && _ingredients.contains(ingredient)) {
+      _selectProduct(ingredient, productId);
+    }
   }
 
   Future<void> _save() async {
@@ -209,8 +391,11 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
     return '';
   }
 
-  List<Map<String, dynamic>> _filteredProducts() {
-    final search = _productSearchController.text.trim().toLowerCase();
+  List<Map<String, dynamic>> _filteredProducts(
+    String searchText,
+    String categoryFilter,
+  ) {
+    final search = searchText.trim().toLowerCase();
     return widget.products.where((product) {
       final name = product['name']?.toString().toLowerCase() ?? '';
       final sku = product['sku']?.toString().toLowerCase() ?? '';
@@ -218,11 +403,11 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
       final matchesSearch =
           search.isEmpty || name.contains(search) || sku.contains(search);
       final matchesCategory =
-          _productCategory.isEmpty ||
+          categoryFilter.isEmpty ||
           category
               .split(',')
               .map((item) => item.trim())
-              .contains(_productCategory.toLowerCase());
+              .contains(categoryFilter.toLowerCase());
       return matchesSearch && matchesCategory;
     }).toList();
   }
@@ -244,34 +429,28 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
   Widget _buildIngredientCard(int index) {
     final ingredient = _ingredients[index];
     final colors = Theme.of(context).colorScheme;
-    final filteredProducts = _filteredProducts();
     final selectedProduct = widget.products.where(
       (product) => product['product_id']?.toString() == ingredient.productId,
     );
-    final productOptions = <Map<String, dynamic>>[
-      ...filteredProducts,
-      ...selectedProduct.where(
-        (product) => !filteredProducts.any(
-          (filtered) =>
-              filtered['product_id']?.toString() ==
-              product['product_id']?.toString(),
-        ),
-      ),
-    ];
-    final productItems = productOptions.map((product) {
-      final id = product['product_id']?.toString() ?? '';
-      return DropdownMenuItem<String>(
-        value: id,
-        child: Text(
-          product['name']?.toString() ?? 'Bahan baku',
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
-    }).toList();
-
     final selectedProductExists = widget.products.any(
       (product) => product['product_id']?.toString() == ingredient.productId,
     );
+    final selectedProductRecord = selectedProduct.isEmpty
+        ? null
+        : selectedProduct.first;
+    final selectedRecipeUnit =
+        selectedProductRecord?['recipe_unit']?.toString() ??
+        selectedProductRecord?['unit']?.toString() ??
+        '';
+    final selectedStockUnit = selectedProductRecord?['unit']?.toString() ?? '';
+    final conversionFactor =
+        double.tryParse(
+          '${selectedProductRecord?['recipe_conversion_factor'] ?? 1}',
+        ) ??
+        1;
+    final hasConversion =
+        selectedRecipeUnit.toLowerCase() != selectedStockUnit.toLowerCase() ||
+        (conversionFactor - 1).abs() > 0.000000001;
 
     return Card(
       child: Padding(
@@ -301,15 +480,28 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            DropdownButtonFormField<String>(
-              initialValue: selectedProductExists ? ingredient.productId : null,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Produk bahan baku',
-                prefixIcon: Icon(Icons.grain_rounded),
+            OutlinedButton.icon(
+              onPressed: widget.products.isEmpty
+                  ? null
+                  : () => _chooseProduct(ingredient),
+              icon: const Icon(Icons.grain_rounded),
+              label: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  selectedProductExists
+                      ? selectedProductRecord!['name']?.toString() ??
+                            'Pilih bahan baku'
+                      : 'Pilih bahan baku',
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              items: productItems,
-              onChanged: (value) => _selectProduct(ingredient, value),
+              style: OutlinedButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -331,11 +523,32 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
                 Expanded(
                   child: TextField(
                     controller: ingredient.unitController,
-                    decoration: const InputDecoration(labelText: 'Satuan'),
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Satuan resep',
+                    ),
                   ),
                 ),
               ],
             ),
+            if (selectedProductRecord != null && hasConversion) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Konversi stok: 1 $selectedStockUnit = '
+                '${conversionFactor.toString()} $selectedRecipeUnit',
+                style: TextStyle(
+                  color: colors.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (ingredient.unitController.text.trim().toLowerCase() !=
+                  selectedRecipeUnit.toLowerCase())
+                Text(
+                  'Satuan resep bahan ini berbeda. Gunakan $selectedRecipeUnit agar konversi stok diterapkan.',
+                  style: TextStyle(color: colors.error, fontSize: 11),
+                ),
+            ],
             const SizedBox(height: 12),
             SegmentedButton<bool>(
               showSelectedIcon: false,
@@ -450,77 +663,6 @@ class _RecipeEditorScreenState extends State<RecipeEditorScreen> {
                     _error = null;
                   })
                 : null,
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-            ),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _productSearchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    labelText: 'Cari nama atau SKU bahan',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _productSearchController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Hapus pencarian',
-                            onPressed: () {
-                              _productSearchController.clear();
-                              setState(() {});
-                            },
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: _productCategory.isEmpty
-                      ? null
-                      : _productCategory,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    labelText: 'Kategori bahan',
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: '',
-                      child: Text('Semua kategori'),
-                    ),
-                    ..._productCategories().map(
-                      (category) => DropdownMenuItem<String>(
-                        value: category,
-                        child: Text(category),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _productCategory = value ?? '');
-                  },
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${_filteredProducts().length} dari ${widget.products.length} bahan cocok',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 18),
           Row(

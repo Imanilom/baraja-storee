@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/user_model.dart';
-import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/ingredient_conversion_screen.dart';
 import 'screens/inventory_management_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/marketlist_list_screen.dart';
@@ -99,20 +99,31 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  late UserModel _user;
+
+  @override
+  void initState() {
+    super.initState();
+    _user = widget.user;
+  }
 
   @override
   Widget build(BuildContext context) {
     final useRail = MediaQuery.sizeOf(context).width >= 800;
     final screens = [
       HomeScreen(
-        user: widget.user,
+        user: _user,
         onNavigateToMarketlist: () => setState(() => _currentIndex = 1),
-        onNavigateToHistory: () => setState(() => _currentIndex = 3),
+        onNavigateToHistory: () => setState(() => _currentIndex = 4),
       ),
       const MarketlistListScreen(),
-      InventoryManagementScreen(user: widget.user),
-      const HistoryScreen(),
-      ProfileScreen(user: widget.user, onLogout: widget.onLogout),
+      InventoryManagementScreen(user: _user),
+      IngredientConversionScreen(isActive: _currentIndex == 3),
+      ProfileScreen(
+        user: _user,
+        onUserUpdated: (user) => setState(() => _user = user),
+        onLogout: widget.onLogout,
+      ),
     ];
 
     return Scaffold(
@@ -172,14 +183,14 @@ class _MainShellState extends State<MainShell> {
                   label: Text('Stok & Resep'),
                 ),
                 NavigationRailDestination(
-                  icon: Icon(Icons.history_outlined),
-                  selectedIcon: Icon(Icons.history),
-                  label: Text('Riwayat'),
+                  icon: Icon(Icons.swap_horiz_rounded),
+                  selectedIcon: Icon(Icons.swap_horiz_rounded),
+                  label: Text('Konversi'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.person_outline),
                   selectedIcon: Icon(Icons.person),
-                  label: Text('Akun'),
+                  label: Text('Profil'),
                 ),
               ],
             ),
@@ -213,14 +224,14 @@ class _MainShellState extends State<MainShell> {
                   label: 'Stok & Resep',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.history_outlined),
-                  selectedIcon: Icon(Icons.history_rounded),
-                  label: 'Riwayat',
+                  icon: Icon(Icons.swap_horiz_rounded),
+                  selectedIcon: Icon(Icons.swap_horiz_rounded),
+                  label: 'Konversi',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline_rounded),
                   selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Akun',
+                  label: 'Profil',
                 ),
               ],
             ),

@@ -77,6 +77,19 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  static Future<dynamic> delete(String endpoint) async {
+    final baseUrl = await ApiConfig.getBaseUrl();
+    final url = Uri.parse('$baseUrl$endpoint');
+    final headers = await _getHeaders(hasBody: false);
+
+    final response = await http.delete(url, headers: headers).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('Koneksi timeout ke server ($url)'),
+    );
+
+    return _handleResponse(response);
+  }
+
   static dynamic _handleResponse(http.Response response) {
     dynamic decoded;
     try {

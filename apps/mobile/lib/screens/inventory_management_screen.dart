@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'ingredient_editor_screen.dart';
 import 'recipe_editor_screen.dart';
 
 class InventoryManagementScreen extends StatefulWidget {
@@ -39,6 +40,15 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
     'admin',
     'management',
     'leader',
+  }.contains(widget.user.role.toLowerCase());
+
+  bool get _canManageIngredients => const {
+    'admin',
+    'management',
+    'leader',
+    'purchasing',
+    'receiver',
+    'accounting',
   }.contains(widget.user.role.toLowerCase());
 
   @override
@@ -138,6 +148,59 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
       ),
     );
     if (saved == true) await _load();
+  }
+
+  Future<void> _openIngredientEditor({Map<String, dynamic>? ingredient}) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => IngredientEditorScreen(ingredient: ingredient),
+      ),
+    );
+    if (saved == true) await _load();
+  }
+
+  Future<void> _deleteIngredient(Map<String, dynamic> ingredient) async {
+    final productId = ingredient['product_id']?.toString();
+    if (productId == null || productId.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus bahan baku?'),
+        content: Text(
+          'Hapus ${ingredient['name'] ?? 'bahan baku'} dari master Coffee? '
+          'Bahan yang masih dipakai resep atau memiliki riwayat stok tidak dapat dihapus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ApiService.delete('/integration/coffee/ingredients/$productId');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bahan baku berhasil dihapus.')),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception:', '').trim()),
+        ),
+      );
+    }
   }
 
   String _formatQuantity(dynamic value) {
@@ -532,6 +595,15 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
           final item = filteredIngredients[index - 2];
           final warehouses = _list(item['warehouses']);
           final unit = item['unit']?.toString() ?? '';
+          final recipeUnit =
+              item['recipe_unit']?.toString().trim().isNotEmpty == true
+              ? item['recipe_unit'].toString()
+              : unit;
+          final conversionFactor =
+              double.tryParse('${item['recipe_conversion_factor'] ?? 1}') ?? 1;
+          final hasConversion =
+              recipeUnit.toLowerCase() != unit.toLowerCase() ||
+              (conversionFactor - 1).abs() > 0.000000001;
           final quantity = _formatQuantity(item['current_stock']);
           final isLow =
               (item['current_stock'] as num? ?? 0) <=
@@ -578,6 +650,17 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
                                 fontSize: 11,
                               ),
                             ),
+                            if (hasConversion) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Resep: 1 $unit = ${_formatQuantity(conversionFactor)} $recipeUnit',
+                                style: const TextStyle(
+                                  color: BarajaPalette.forest,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -612,6 +695,35 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
                         icon: const Icon(Icons.tune_rounded),
                         color: BarajaPalette.forest,
                       ),
+                      if (_canManageIngredients)
+                        PopupMenuButton<String>(
+                          tooltip: 'Kelola bahan baku',
+                          onSelected: (action) {
+                            if (action == 'edit') {
+                              _openIngredientEditor(ingredient: item);
+                            } else if (action == 'delete') {
+                              _deleteIngredient(item);
+                            }
+                          },
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(
+                              value: 'edit',
+                              child: ListTile(
+                                leading: Icon(Icons.edit_outlined),
+                                title: Text('Edit bahan'),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: ListTile(
+                                leading: Icon(Icons.delete_outline),
+                                title: Text('Hapus bahan'),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                   if (warehouses.isNotEmpty) ...[
@@ -1097,11 +1209,22 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen>
         ),
       ),
       floatingActionButton:
-          _selectedTabIndex == 2 &&
-              _canManageRecipes &&
-              hasMenuWithoutRecipe &&
-              !_isLoading
+          _selectedTabIndex == 0 &&
+              _canManageIngredients &&
+              !_isLoading &&
+              _inventory != null
           ? FloatingActionButton.extended(
+              heroTag: 'inventory-add-ingredient',
+              onPressed: () => _openIngredientEditor(),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Tambah bahan baku'),
+            )
+          : _selectedTabIndex == 2 &&
+                _canManageRecipes &&
+                hasMenuWithoutRecipe &&
+                !_isLoading
+          ? FloatingActionButton.extended(
+              heroTag: 'inventory-add-recipe',
               onPressed: () => _openRecipeEditor(),
               icon: const Icon(Icons.add_rounded),
               label: const Text('Buat resep'),

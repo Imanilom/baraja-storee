@@ -13,11 +13,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool _isSyncing = false;
   List<Map<String, dynamic>> _queue = [];
   List<Map<String, dynamic>> _history = [];
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -64,6 +71,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final query = _searchController.text.trim().toLowerCase();
+    final filteredHistory = _history.where((entry) {
+      if (query.isEmpty) return true;
+      return entry.values
+          .map((value) => value.toString())
+          .join(' ')
+          .toLowerCase()
+          .contains(query);
+    }).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -97,156 +114,206 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                    // Offline Queue Card
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: _queue.isEmpty ? Colors.white : const Color(0xFFD1FAE5),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _queue.isEmpty
-                              ? const Color(0xFFE2E8F0)
-                              : const Color(0xFFFDE68A),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        // Offline Queue Card
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _queue.isEmpty
+                                ? Colors.white
+                                : const Color(0xFFD1FAE5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _queue.isEmpty
+                                  ? const Color(0xFFE2E8F0)
+                                  : const Color(0xFFFDE68A),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(
-                                    Icons.cloud_upload_outlined,
-                                    color: _queue.isEmpty
-                                        ? const Color(0xFF64748B)
-                                        : const Color(0xFF059669),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.cloud_upload_outlined,
+                                        color: _queue.isEmpty
+                                            ? const Color(0xFF64748B)
+                                            : const Color(0xFF059669),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Antrean Sinkronisasi',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Antrean Sinkronisasi',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _queue.isEmpty
+                                          ? const Color(0xFFF1F5F9)
+                                          : const Color(0xFF059669),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${_queue.length} Tertunda',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: _queue.isEmpty
+                                            ? const Color(0xFF64748B)
+                                            : Colors.white,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
+                              const SizedBox(height: 8),
+                              Text(
+                                _queue.isEmpty
+                                    ? 'Semua data surat jalan tersinkronkan ke server pusat.'
+                                    : 'Ada ${_queue.length} tanda terima tersimpan offline saat jaringan terputus.',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
                                 ),
-                                decoration: BoxDecoration(
-                                  color: _queue.isEmpty
-                                      ? const Color(0xFFF1F5F9)
-                                      : const Color(0xFF059669),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '${_queue.length} Tertunda',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: _queue.isEmpty
-                                        ? const Color(0xFF64748B)
-                                        : Colors.white,
+                              ),
+                              if (_queue.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                ElevatedButton.icon(
+                                  onPressed: _isSyncing ? null : _handleSync,
+                                  icon: _isSyncing
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(Icons.sync, size: 16),
+                                  label: const Text('Sinkronkan Sekarang'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF059669),
+                                    foregroundColor: Colors.white,
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _queue.isEmpty
-                                ? 'Semua data surat jalan tersinkronkan ke server pusat.'
-                                : 'Ada ${_queue.length} tanda terima tersimpan offline saat jaringan terputus.',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Riwayat Penerimaan
+                        const Text(
+                          'Riwayat Verifikasi Tersimpan',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
                           ),
-                          if (_queue.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: _isSyncing ? null : _handleSync,
-                              icon: _isSyncing
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(Icons.sync, size: 16),
-                              label: const Text('Sinkronkan Sekarang'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF059669),
-                                foregroundColor: Colors.white,
+                        ),
+                        const SizedBox(height: 8),
+
+                        if (_history.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
                               ),
                             ),
-                          ],
+                            child: const Center(
+                              child: Text(
+                                'Belum ada riwayat penerimaan di perangkat ini.',
+                                style: TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          )
+                        else ...[
+                          TextField(
+                            controller: _searchController,
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              hintText: 'Cari ID marketlist atau tanggal...',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon: _searchController.text.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Hapus pencarian',
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {});
+                                      },
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          if (filteredHistory.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Center(
+                                child: Text('Riwayat tidak ditemukan.'),
+                              ),
+                            )
+                          else
+                            ...filteredHistory.map((h) {
+                              final reqId = h['client_request_id'] ?? '-';
+                              final date = h['created_at'] != null
+                                  ? h['created_at'].toString().split('T')[0]
+                                  : '-';
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  side: const BorderSide(
+                                    color: Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                elevation: 0,
+                                child: ListTile(
+                                  leading: const CircleAvatar(
+                                    backgroundColor: Color(0xFFDCFCE7),
+                                    child: Icon(
+                                      Icons.check,
+                                      color: Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    'Penerimaan ML #${h['marketlist_id']?.toString().substring(0, 8) ?? ''}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    'ID: $reqId\nWaktu: $date',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
                         ],
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 20),
-
-                    // Riwayat Penerimaan
-                    const Text(
-                      'Riwayat Verifikasi Tersimpan',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    if (_history.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Belum ada riwayat penerimaan di perangkat ini.',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                          ),
-                        ),
-                      )
-                    else
-                      ..._history.map((h) {
-                        final reqId = h['client_request_id'] ?? '-';
-                        final date = h['created_at'] != null
-                            ? h['created_at'].toString().split('T')[0]
-                            : '-';
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: const BorderSide(color: Color(0xFFE2E8F0)),
-                          ),
-                          elevation: 0,
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Color(0xFFDCFCE7),
-                              child: Icon(Icons.check, color: Color(0xFF16A34A)),
-                            ),
-                            title: Text(
-                              'Penerimaan ML #${h['marketlist_id']?.toString().substring(0, 8) ?? ''}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            subtitle: Text(
-                              'ID: $reqId\nWaktu: $date',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                            ),
-                          ),
-                        );
-                      }),
-                  ],
-                ),
                   ),
                 ),
               ),

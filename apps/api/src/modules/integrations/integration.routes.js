@@ -24,6 +24,9 @@ const recipeManagerRoles = [ROLES.ADMIN, ROLES.MANAGEMENT, ROLES.LEADER];
 
 router.get('/coffee/inventory', authenticate, authorize(...inventoryRoles), coffeeInventoryController.getInventory);
 router.get('/coffee/recipes', authenticate, authorize(...inventoryRoles), coffeeInventoryController.getRecipes);
+router.post('/coffee/ingredients', authenticate, authorize(...inventoryRoles), coffeeInventoryController.createIngredient);
+router.put('/coffee/ingredients/:productId', authenticate, authorize(...inventoryRoles), coffeeInventoryController.updateIngredient);
+router.delete('/coffee/ingredients/:productId', authenticate, authorize(...inventoryRoles), coffeeInventoryController.deleteIngredient);
 router.post('/coffee/recipes', authenticate, authorize(...recipeManagerRoles), coffeeInventoryController.createRecipe);
 router.put('/coffee/recipes/:recipeId', authenticate, authorize(...recipeManagerRoles), coffeeInventoryController.updateRecipe);
 router.put('/coffee/ingredients/:productId/stock', authenticate, authorize(...inventoryRoles), coffeeInventoryController.adjustIngredientStock);

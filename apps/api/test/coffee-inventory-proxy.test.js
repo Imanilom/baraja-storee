@@ -60,6 +60,37 @@ async function run() {
     );
     assert.equal(requests[3].options.method, 'PUT');
 
+    await coffeeInventoryService.createCoffeeIngredient({
+      sku: 'RAW-001',
+      name: 'Coffee Beans',
+      category: 'food',
+      unit: 'gram'
+    });
+    assert.equal(requests[4].url, 'https://coffee.test/api/integration/store/ingredients');
+    assert.equal(requests[4].options.method, 'POST');
+    assert.deepEqual(JSON.parse(requests[4].options.body), {
+      sku: 'RAW-001',
+      name: 'Coffee Beans',
+      category: 'food',
+      unit: 'gram'
+    });
+
+    await coffeeInventoryService.updateCoffeeIngredient('product/1', {
+      name: 'Arabica Beans'
+    });
+    assert.equal(
+      requests[5].url,
+      'https://coffee.test/api/integration/store/ingredients/product%2F1'
+    );
+    assert.equal(requests[5].options.method, 'PUT');
+
+    await coffeeInventoryService.deleteCoffeeIngredient('product/1');
+    assert.equal(
+      requests[6].url,
+      'https://coffee.test/api/integration/store/ingredients/product%2F1'
+    );
+    assert.equal(requests[6].options.method, 'DELETE');
+
     global.fetch = async () => ({
       ok: false,
       status: 409,

@@ -16,6 +16,7 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
   List<dynamic> _prices = [];
   List<dynamic> _history = [];
   Map<String, dynamic>? _selected;
+  final TextEditingController _searchController = TextEditingController();
 
   final _currency = NumberFormat.currency(
     locale: 'id_ID',
@@ -27,6 +28,12 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
   void initState() {
     super.initState();
     _loadPrices();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPrices() async {
@@ -42,7 +49,9 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString().replaceFirst('Exception:', '').trim());
+        setState(
+          () => _error = error.toString().replaceFirst('Exception:', '').trim(),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -81,12 +90,27 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final query = _searchController.text.trim().toLowerCase();
+    final filteredPrices = _prices.where((entry) {
+      if (entry is! Map) return false;
+      final product = entry['product'];
+      final supplier = entry['supplier'];
+      final searchable = [
+        if (product is Map) product['name'],
+        if (product is Map) product['sku'],
+        if (supplier is Map) supplier['name'],
+        entry['recorded_at'],
+      ].join(' ').toLowerCase();
+      return searchable.contains(query);
+    }).toList();
     final selectedProduct = _selected?['product'];
     final selectedName = selectedProduct is Map
         ? (selectedProduct['name'] ?? 'Tren harga produk').toString()
         : 'Tren harga produk';
     final newestPrice = _history.isNotEmpty
-        ? (_history.first is Map ? num.tryParse('${_history.first['price']}') : null)
+        ? (_history.first is Map
+              ? num.tryParse('${_history.first['price']}')
+              : null)
         : null;
     final priorPrice = _history.length > 1
         ? (_history[1] is Map ? num.tryParse('${_history[1]['price']}') : null)
@@ -100,54 +124,100 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
       appBar: AppBar(
         title: const Text('Harga Terbaru & Tren'),
         backgroundColor: Colors.white,
-        actions: [IconButton(onPressed: _loadPrices, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _loadPrices, icon: const Icon(Icons.refresh)),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null && _prices.isEmpty
-              ? Center(child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(_error!, textAlign: TextAlign.center),
-                ))
-              : RefreshIndicator(
-                  onRefresh: _loadPrices,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 960),
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(_error!, textAlign: TextAlign.center),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadPrices,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
                         ),
                       const Text(
                         'Harga beli terakhir',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                       const SizedBox(height: 8),
+                      if (_prices.isNotEmpty) ...[
+                        TextField(
+                          controller: _searchController,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama atau SKU produk...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _searchController.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Hapus pencarian',
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {});
+                                    },
+                                    icon: const Icon(Icons.close_rounded),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       if (_prices.isEmpty)
-                        const Card(child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text('Belum ada riwayat harga produk.'),
-                        ))
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('Belum ada riwayat harga produk.'),
+                          ),
+                        )
+                      else if (filteredPrices.isEmpty)
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('Produk tidak ditemukan.'),
+                          ),
+                        )
                       else
-                        ..._prices.map((dynamic entry) {
+                        ...filteredPrices.map((dynamic entry) {
                           if (entry is! Map) return const SizedBox.shrink();
                           final product = entry['product'];
                           final unit = entry['product_unit'] is Map
                               ? (entry['product_unit']['abbreviation'] ??
-                                  entry['product_unit']['name'] ??
-                                  'unit')
+                                    entry['product_unit']['name'] ??
+                                    'unit')
                               : 'unit';
                           final supplier = entry['supplier'];
                           return Card(
                             child: ListTile(
-                              onTap: () => _loadHistory(Map<String, dynamic>.from(entry)),
+                              onTap: () => _loadHistory(
+                                Map<String, dynamic>.from(entry),
+                              ),
                               title: Text(
-                                product is Map ? (product['name'] ?? '-').toString() : '-',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                product is Map
+                                    ? (product['name'] ?? '-').toString()
+                                    : '-',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               subtitle: Text(
                                 '${_date(entry['recorded_at'])} · ${supplier is Map ? supplier['name'] ?? 'Supplier' : 'Pembelian'}',
@@ -164,22 +234,34 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
                         }),
                       if (_selected != null) ...[
                         const SizedBox(height: 20),
-                        Text(selectedName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(
+                          selectedName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         if (_historyLoading)
-                          const Center(child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
-                          ))
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
                         else if (_history.isEmpty)
-                          const Card(child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('Belum ada tren harga.'),
-                          ))
+                          const Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text('Belum ada tren harga.'),
+                            ),
+                          )
                         else ...[
                           Card(
                             child: ListTile(
-                              title: const Text('Perubahan dari harga sebelumnya'),
+                              title: const Text(
+                                'Perubahan dari harga sebelumnya',
+                              ),
                               trailing: difference == null
                                   ? const Text('Data tunggal')
                                   : Text(
@@ -189,15 +271,16 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
                                         color: difference > 0
                                             ? Colors.red
                                             : difference < 0
-                                                ? Colors.green
-                                                : Colors.grey,
+                                            ? Colors.green
+                                            : Colors.grey,
                                       ),
                                     ),
                             ),
                           ),
                           ..._history.map((dynamic entry) {
                             if (entry is! Map) return const SizedBox.shrink();
-                            final value = num.tryParse('${entry['price']}') ?? 0;
+                            final value =
+                                num.tryParse('${entry['price']}') ?? 0;
                             return Card(
                               child: ListTile(
                                 dense: true,
@@ -210,11 +293,11 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
                           }),
                         ],
                       ],
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ),
+              ),
+            ),
     );
   }
 }

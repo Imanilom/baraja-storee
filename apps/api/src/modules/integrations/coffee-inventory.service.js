@@ -60,6 +60,23 @@ async function createCoffeeRecipe(body) {
   return requestCoffee('recipes', { method: 'POST', body });
 }
 
+async function createCoffeeIngredient(body) {
+  return requestCoffee('ingredients', { method: 'POST', body });
+}
+
+async function updateCoffeeIngredient(productId, body) {
+  return requestCoffee(`ingredients/${encodeURIComponent(productId)}`, {
+    method: 'PUT',
+    body
+  });
+}
+
+async function deleteCoffeeIngredient(productId) {
+  return requestCoffee(`ingredients/${encodeURIComponent(productId)}`, {
+    method: 'DELETE'
+  });
+}
+
 async function updateCoffeeRecipe(recipeId, body) {
   return requestCoffee(`recipes/${encodeURIComponent(recipeId)}`, {
     method: 'PUT',
@@ -78,6 +95,9 @@ module.exports = {
   getCoffeeInventory,
   getCoffeeRecipes,
   createCoffeeRecipe,
+  createCoffeeIngredient,
+  updateCoffeeIngredient,
+  deleteCoffeeIngredient,
   updateCoffeeRecipe,
   adjustCoffeeIngredientStock
 };

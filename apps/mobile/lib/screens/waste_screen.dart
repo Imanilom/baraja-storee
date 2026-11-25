@@ -15,6 +15,7 @@ class _WasteScreenState extends State<WasteScreen> {
   final _quantityController = TextEditingController();
   final _reasonController = TextEditingController();
   final _notesController = TextEditingController();
+  final _productSearchController = TextEditingController();
   final _currency = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
@@ -140,6 +141,30 @@ class _WasteScreenState extends State<WasteScreen> {
     return null;
   }
 
+  List<Map<String, dynamic>> get _matchingAvailableProducts {
+    final query = _productSearchController.text.trim().toLowerCase();
+    return _availableProducts.where((product) {
+      final name = product['name']?.toString().toLowerCase() ?? '';
+      final sku = product['sku']?.toString().toLowerCase() ?? '';
+      return query.isEmpty || name.contains(query) || sku.contains(query);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredAvailableProducts {
+    final matches = _matchingAvailableProducts;
+    final selected = _availableProducts.where(
+      (product) => product['_id']?.toString() == _productId,
+    );
+    return [
+      ...matches,
+      ...selected.where(
+        (product) => !matches.any(
+          (match) => match['_id']?.toString() == product['_id']?.toString(),
+        ),
+      ),
+    ];
+  }
+
   Map<String, dynamic>? get _selectedPurchaseItem {
     final marketlistItemId = _selectedProduct?['marketlistItemId']?.toString();
     if (marketlistItemId == null) return null;
@@ -208,6 +233,7 @@ class _WasteScreenState extends State<WasteScreen> {
     _quantityController.dispose();
     _reasonController.dispose();
     _notesController.dispose();
+    _productSearchController.dispose();
     super.dispose();
   }
 
@@ -381,6 +407,7 @@ class _WasteScreenState extends State<WasteScreen> {
   }
 
   Future<void> _chooseMarketlist() async {
+    var marketlistSearch = '';
     final selectedId = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -390,103 +417,155 @@ class _WasteScreenState extends State<WasteScreen> {
         initialChildSize: 0.75,
         minChildSize: 0.45,
         maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Pilih Marketlist penerimaan',
-                        style: TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+        builder: (context, scrollController) => StatefulBuilder(
+          builder: (context, setSheetState) {
+            final query = marketlistSearch.trim().toLowerCase();
+            final filteredMarketlists = _marketlists.where((marketlist) {
+              if (marketlist is! Map) return false;
+              final names = _marketlistProductNames(marketlist);
+              final searchable = [
+                marketlist['marketlist_number'],
+                marketlist['status'],
+                marketlist['date'],
+                marketlist['required_date'],
+                ...names,
+              ].join(' ').toLowerCase();
+              return query.isEmpty || searchable.contains(query);
+            }).toList();
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Pilih Marketlist penerimaan',
+                            style: TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: TextField(
+                      onChanged: (value) =>
+                          setSheetState(() => marketlistSearch = value),
+                      decoration: InputDecoration(
+                        hintText: 'Cari nomor PO, barang, atau status...',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: marketlistSearch.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Hapus pencarian',
+                                onPressed: () =>
+                                    setSheetState(() => marketlistSearch = ''),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                          ),
                         ),
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: _marketlists.isEmpty
-                    ? const Center(
-                        child: Text('Belum ada Marketlist yang bisa dipilih.'),
-                      )
-                    : ListView.separated(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                        itemCount: _marketlists.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final marketlist = Map<String, dynamic>.from(
-                            _marketlists[index],
-                          );
-                          final names = _marketlistProductNames(marketlist);
-                          final selected =
-                              marketlist['_id']?.toString() == _marketlistId;
-                          return Card(
-                            margin: EdgeInsets.zero,
-                            color: selected
-                                ? const Color(0xFFEEF2FF)
-                                : Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(
+                  ),
+                  Expanded(
+                    child: _marketlists.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Belum ada Marketlist yang bisa dipilih.',
+                            ),
+                          )
+                        : filteredMarketlists.isEmpty
+                        ? const Center(
+                            child: Text('Marketlist tidak ditemukan.'),
+                          )
+                        : ListView.separated(
+                            controller: scrollController,
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                            itemCount: filteredMarketlists.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final marketlist = Map<String, dynamic>.from(
+                                filteredMarketlists[index],
+                              );
+                              final names = _marketlistProductNames(marketlist);
+                              final selected =
+                                  marketlist['_id']?.toString() ==
+                                  _marketlistId;
+                              return Card(
+                                margin: EdgeInsets.zero,
                                 color: selected
-                                    ? const Color(0xFFA5B4FC)
-                                    : const Color(0xFFE2E8F0),
-                              ),
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 6,
-                              ),
-                              onTap: () => Navigator.pop(
-                                context,
-                                marketlist['_id']?.toString(),
-                              ),
-                              title: Text(
-                                'PO ${marketlist['marketlist_number'] ?? 'Marketlist'}',
-                                style: const TextStyle(
-                                  color: _indigo,
-                                  fontWeight: FontWeight.bold,
+                                    ? const Color(0xFFEEF2FF)
+                                    : Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: selected
+                                        ? const Color(0xFFA5B4FC)
+                                        : const Color(0xFFE2E8F0),
+                                  ),
                                 ),
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 5),
-                                child: Text(
-                                  'Tanggal PO: ${_formatDate(marketlist['date'])} · Dibutuhkan: ${_formatDate(marketlist['required_date'])}\n'
-                                  'Status: ${_marketlistStatus(marketlist['status'])}\n'
-                                  'Barang: ${names.isEmpty ? 'Belum ada item' : names.join(', ')}',
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 6,
+                                  ),
+                                  onTap: () => Navigator.pop(
+                                    context,
+                                    marketlist['_id']?.toString(),
+                                  ),
+                                  title: Text(
+                                    'PO ${marketlist['marketlist_number'] ?? 'Marketlist'}',
+                                    style: const TextStyle(
+                                      color: _indigo,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 5),
+                                    child: Text(
+                                      'Tanggal PO: ${_formatDate(marketlist['date'])} · Dibutuhkan: ${_formatDate(marketlist['required_date'])}\n'
+                                      'Status: ${_marketlistStatus(marketlist['status'])}\n'
+                                      'Barang: ${names.isEmpty ? 'Belum ada item' : names.join(', ')}',
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  trailing: Icon(
+                                    selected
+                                        ? Icons.radio_button_checked
+                                        : Icons.chevron_right,
+                                    color: _indigo,
+                                  ),
                                 ),
-                              ),
-                              trailing: Icon(
-                                selected
-                                    ? Icons.radio_button_checked
-                                    : Icons.chevron_right,
-                                color: _indigo,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -497,6 +576,7 @@ class _WasteScreenState extends State<WasteScreen> {
         _receipts = [];
         _marketlistPurchases = [];
         _productId = null;
+        _productSearchController.clear();
         _error = null;
       });
       try {
@@ -618,6 +698,7 @@ class _WasteScreenState extends State<WasteScreen> {
                                     _receipts = [];
                                     _marketlistPurchases = [];
                                     _productId = null;
+                                    _productSearchController.clear();
                                     _error = null;
                                   }),
                                 ),
@@ -716,6 +797,7 @@ class _WasteScreenState extends State<WasteScreen> {
                                     onChanged: (value) => setState(() {
                                       _receiptId = value;
                                       _productId = null;
+                                      _productSearchController.clear();
                                     }),
                                     validator: (value) =>
                                         _isReceivingStage && value == null
@@ -804,6 +886,30 @@ class _WasteScreenState extends State<WasteScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                 ],
+                                TextField(
+                                  controller: _productSearchController,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: InputDecoration(
+                                    hintText: 'Cari nama atau SKU produk...',
+                                    prefixIcon: const Icon(
+                                      Icons.search_rounded,
+                                    ),
+                                    suffixIcon:
+                                        _productSearchController.text.isEmpty
+                                        ? null
+                                        : IconButton(
+                                            tooltip: 'Hapus pencarian',
+                                            onPressed: () {
+                                              _productSearchController.clear();
+                                              setState(() {});
+                                            },
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
                                 DropdownButtonFormField<String>(
                                   key: ValueKey('$_marketlistId-$_productId'),
                                   initialValue: _productId,
@@ -812,7 +918,9 @@ class _WasteScreenState extends State<WasteScreen> {
                                     labelText: 'Produk',
                                     border: OutlineInputBorder(),
                                   ),
-                                  items: _availableProducts.map((product) {
+                                  items: _filteredAvailableProducts.map((
+                                    product,
+                                  ) {
                                     return DropdownMenuItem<String>(
                                       value: product['_id'].toString(),
                                       child: Text(
@@ -826,7 +934,11 @@ class _WasteScreenState extends State<WasteScreen> {
                                     _isReceivingStage &&
                                             _selectedReceipt == null
                                         ? 'Pilih penerimaan terlebih dahulu'
-                                        : 'Tidak ada produk pada penerimaan',
+                                        : _availableProducts.isEmpty
+                                        ? 'Tidak ada produk untuk dipilih'
+                                        : _matchingAvailableProducts.isEmpty
+                                        ? 'Produk tidak ditemukan'
+                                        : 'Pilih produk',
                                   ),
                                   onChanged: (value) =>
                                       setState(() => _productId = value),

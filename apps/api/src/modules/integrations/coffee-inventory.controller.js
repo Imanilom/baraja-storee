@@ -15,6 +15,16 @@ const respond = (operation, successStatus = 200) => async (req, res) => {
 module.exports = {
   getInventory: respond(() => coffeeInventoryService.getCoffeeInventory()),
   getRecipes: respond(() => coffeeInventoryService.getCoffeeRecipes()),
+  createIngredient: respond(
+    (req) => coffeeInventoryService.createCoffeeIngredient(req.body || {}),
+    201
+  ),
+  updateIngredient: respond(
+    (req) => coffeeInventoryService.updateCoffeeIngredient(req.params.productId, req.body || {})
+  ),
+  deleteIngredient: respond(
+    (req) => coffeeInventoryService.deleteCoffeeIngredient(req.params.productId)
+  ),
   createRecipe: respond(
     (req) => coffeeInventoryService.createCoffeeRecipe(req.body || {}),
     201

@@ -14,12 +14,15 @@ class AuthService {
     });
 
     final data = res['data'] ?? {};
-    final String token = (data['tokens'] != null && data['tokens']['accessToken'] != null)
+    final String token =
+        (data['tokens'] != null && data['tokens']['accessToken'] != null)
         ? data['tokens']['accessToken'].toString()
         : (data['token']?.toString() ?? data['accessToken']?.toString() ?? '');
 
     if (token.isEmpty) {
-      throw Exception('Gagal mendapatkan token autentikasi dari respons server.');
+      throw Exception(
+        'Gagal mendapatkan token autentikasi dari respons server.',
+      );
     }
 
     final userJson = data['user'] is Map<String, dynamic>
@@ -33,6 +36,35 @@ class AuthService {
     await prefs.setString(_userKey, jsonEncode(user.toJson()));
 
     return user;
+  }
+
+  static Future<UserModel> updateProfile({
+    required UserModel currentUser,
+    required String name,
+  }) async {
+    final response = await ApiService.put('/auth/profile', {'name': name});
+    final data = response is Map ? response['data'] : null;
+    if (data is! Map) {
+      throw const FormatException('Format profil dari server tidak valid.');
+    }
+
+    final updatedUser = UserModel.fromJson(
+      Map<String, dynamic>.from(data),
+      token: currentUser.token,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(updatedUser.toJson()));
+    return updatedUser;
+  }
+
+  static Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await ApiService.post('/auth/change-password', {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
   }
 
   static Future<UserModel?> getCurrentUser() async {
@@ -63,4 +95,3 @@ class AuthService {
     await prefs.remove(_userKey);
   }
 }
-
