@@ -1333,7 +1333,7 @@ export default function TransactionsPage() {
         {/* ===== FORM MODAL ===== */}
         {showForm && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-y-auto p-2 sm:py-8 sm:px-4">
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-6xl max-h-[calc(100dvh-1rem)] overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-[96vw] max-h-[calc(100dvh-1rem)] overflow-y-auto">
               <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200">
                 <h3 className="font-bold text-sm text-slate-800">
                   Formulir Pencatatan Transaksi Pembelian
